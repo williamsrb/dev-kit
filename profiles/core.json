@@ -1,0 +1,71 @@
+{
+  "_comment": [
+    "The core profile (plan devkit, A4, D3). Every other profile extends this.",
+    "",
+    "`provides` is the authoritative key, not the package name: a dependency is",
+    "satisfied when the binaries it provides are on PATH, whatever rung of the D11",
+    "ladder supplied them. That is what lets `agentctl tools audit` and bootstrap.sh",
+    "agree across apt, dnf and pacman, where the same tool has three names.",
+    "",
+    "Package names for dnf and pacman are PROPOSED, not verified (R15). The A6",
+    "container matrix is their acceptance test."
+  ],
+
+  "name": "core",
+  "extends": null,
+  "color": { "light": "#2f6feb", "dark": "#1b3a6b" },
+
+  "deps": [
+    { "provides": ["rg"], "apt": "ripgrep", "dnf": "ripgrep", "pacman": "ripgrep" },
+    { "provides": ["jq"], "apt": "jq", "dnf": "jq", "pacman": "jq" },
+    { "provides": ["git"], "apt": "git", "dnf": "git", "pacman": "git" },
+    { "provides": ["python3"], "apt": "python3", "dnf": "python3", "pacman": "python" },
+    { "provides": ["xmllint"], "apt": "libxml2-utils", "dnf": "libxml2", "pacman": "libxml2" },
+    { "provides": ["xmlstarlet"], "apt": "xmlstarlet", "dnf": "xmlstarlet", "pacman": "xmlstarlet" },
+    { "provides": ["shellcheck"], "apt": "shellcheck", "dnf": "ShellCheck", "pacman": "shellcheck" },
+    { "provides": ["shfmt"], "apt": "shfmt", "dnf": "shfmt", "pacman": "shfmt" },
+    { "provides": ["codespell"], "apt": "codespell", "dnf": "codespell", "pacman": "codespell" },
+    { "provides": ["qpdf"], "apt": "qpdf", "dnf": "qpdf", "pacman": "qpdf" },
+    { "provides": ["ocrmypdf"], "apt": "ocrmypdf", "dnf": "ocrmypdf", "pacman": "ocrmypdf" },
+    { "provides": ["tesseract"], "apt": "tesseract-ocr", "dnf": "tesseract", "pacman": "tesseract" },
+    { "provides": ["pdftotext", "pdfinfo", "pdftoppm"], "apt": "poppler-utils", "dnf": "poppler-utils", "pacman": "poppler" },
+    { "provides": ["ffmpeg", "ffprobe"], "apt": "ffmpeg", "dnf": "ffmpeg", "pacman": "ffmpeg",
+      "note": "On RHEL derivatives ffmpeg needs RPM Fusion. D13 forbids enabling a third-party repo silently: prompt, and on decline record it skipped rather than failing the run." },
+    { "provides": ["convert", "identify"], "apt": "imagemagick", "dnf": "ImageMagick", "pacman": "imagemagick",
+      "note": "ImageMagick 7 ships `magick` and may not ship `convert`. Callers must try magick first (4.8)." },
+    { "provides": ["zstd"], "apt": "zstd", "dnf": "zstd", "pacman": "zstd" },
+    { "provides": ["node", "npm"], "installer": "nvm", "version": "22",
+      "note": "nvm rather than the distro node: the distro version lags and the kit needs 22." },
+    { "provides": ["ast-grep"], "installer": "npm", "package": "@ast-grep/cli" },
+    { "provides": ["markdownlint-cli2"], "installer": "npm", "package": "markdownlint-cli2" },
+    { "provides": ["graft"], "installer": "npm", "package": "@nanonets/graft" },
+    { "provides": ["ruff"], "installer": "uv", "package": "ruff" },
+    { "provides": ["semgrep"], "installer": "uv", "package": "semgrep" },
+    { "provides": ["image-diff"], "installer": "uv", "package": "image-diff" },
+    { "provides": ["gitleaks"], "installer": "binary", "repo": "gitleaks/gitleaks" },
+    { "provides": ["yq"], "installer": "binary", "repo": "mikefarah/yq" },
+    { "provides": ["lychee"], "installer": "binary", "repo": "lycheeverse/lychee" },
+    { "provides": ["osv-scanner"], "installer": "binary", "repo": "google/osv-scanner" },
+    { "provides": ["trivy"], "installer": "binary", "repo": "aquasecurity/trivy" },
+    { "provides": ["ollama"], "installer": "binary", "repo": "ollama/ollama", "optional": true,
+      "note": "Models are GB-scale and must never be duplicated per profile. One install, shared." },
+    { "provides": ["libreoffice"], "apt": "libreoffice", "dnf": "libreoffice", "pacman": "libreoffice-still", "optional": true },
+    { "provides": ["skillspector"], "installer": "uv", "package": "skillspector", "optional": true }
+  ],
+
+  "skills": "@allowlist:skills.core",
+  "rules": "@allowlist:rules.core",
+  "kb": "@allowlist:kb.core",
+
+  "mcp": ["context7", "graft"],
+
+  "instances": [
+    { "vendor": "claude", "kind": "cli+desktop" },
+    { "vendor": "codex", "kind": "cli" },
+    { "vendor": "cursor", "kind": "cli+desktop" }
+  ],
+
+  "settings": {
+    "codex_model": "gpt-5.6-terra"
+  }
+}

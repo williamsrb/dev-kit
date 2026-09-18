@@ -1,0 +1,36 @@
+{
+  "_comment": [
+    "The client overlay (plan devkit, D3). This is the layer that carries",
+    "client-identifying material: the Jira evidence rules, kb/testing/<project>/,",
+    "and the real config/client-overlay.json that core skills read.",
+    "",
+    "It exists as a separate profile precisely so a team that is not this client",
+    "never installs any of it. A0/B3 took the client specifics out of the three",
+    "core skills so this overlay is the only place they live."
+  ],
+
+  "name": "client",
+  "extends": "enonic",
+  "color": { "light": "#00a05a", "dark": "#00532f" },
+
+  "deps": [],
+
+  "skills": [],
+  "rules": "@allowlist:rules.client",
+  "kb": "@allowlist:kb.client",
+
+  "mcp": ["context7", "graft", "gitlab", "atlassian-rovo-preview"],
+
+  "client_overlay": {
+    "env_root_host_patterns": ["*k8s.example.com", "web02-stg*.example.com"],
+    "git_host": "git.example.com",
+    "example_project": "acme-group",
+    "example_env_host": "review.acme-group.k8s.example.com"
+  },
+
+  "instances": [
+    { "vendor": "claude", "kind": "cli+desktop" },
+    { "vendor": "codex", "kind": "cli" },
+    { "vendor": "cursor", "kind": "cli+desktop" }
+  ]
+}

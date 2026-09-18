@@ -1,0 +1,32 @@
+{
+  "_comment": [
+    "The Enonic profile (plan devkit, A4). Extends core, so it inherits every",
+    "core dep, skill, rule and kb entry and adds only what XP work needs.",
+    "",
+    "The enonic CLI is absent on the reference machine, which confirmed that",
+    "toolchain deps are already profile-scoped in practice (F6)."
+  ],
+
+  "name": "enonic",
+  "extends": "core",
+  "color": { "light": "#ffcc00", "dark": "#6a0dad" },
+
+  "deps": [
+    { "provides": ["java"], "apt": "openjdk-21-jdk", "dnf": "java-21-openjdk-devel", "pacman": "jdk21-openjdk",
+      "note": "XP 7 and 8 both run on the JVM; the sandbox brings its own but a local build needs a JDK." },
+    { "provides": ["enonic"], "installer": "binary", "repo": "enonic/cli",
+      "note": "Enonic's own installer script also works; the binary rung avoids a curl|sh." }
+  ],
+
+  "skills": "@allowlist:skills.enonic",
+  "rules": "@allowlist:rules.enonic",
+  "kb": "@allowlist:kb.enonic",
+
+  "mcp": ["context7", "graft", "gitlab"],
+
+  "instances": [
+    { "vendor": "claude", "kind": "cli+desktop" },
+    { "vendor": "codex", "kind": "cli" },
+    { "vendor": "cursor", "kind": "cli+desktop" }
+  ]
+}

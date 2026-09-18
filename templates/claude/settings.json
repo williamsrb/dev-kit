@@ -1,0 +1,53 @@
+{
+  "_comment": [
+    "Claude Code settings for one profile instance (plan devkit, A3).",
+    "${PROFILE_*} and ${HOME} are rendered by install.py; nothing here is read raw.",
+    "This file is merged, not clobbered, onto an existing settings.json via",
+    "bin/merge-claude-config.py, so a user's own keys survive an update."
+  ],
+  "includeCoAuthoredBy": false,
+  "attribution": { "coAuthoredBy": false, "generatedWith": false },
+  "permissions": {
+    "additionalDirectories": [
+      "${PROFILE_HARNESS_DIR}",
+      "${PROFILE_CONFIG_DIR}"
+    ]
+  },
+  "statusLine": {
+    "type": "command",
+    "command": "${PROFILE_HARNESS_DIR}/hooks/profile-statusline.sh"
+  },
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 ${PROFILE_HARNESS_DIR}/hooks/claude-history-adapter.py"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 ${PROFILE_HARNESS_DIR}/hooks/claude-history-adapter.py"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${PROFILE_HARNESS_DIR}/hooks/claude-deny-git-push.sh"
+          }
+        ]
+      }
+    ]
+  }
+}

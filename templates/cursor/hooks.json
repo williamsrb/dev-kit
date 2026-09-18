@@ -1,0 +1,13 @@
+{
+  "_comment": [
+    "Cursor hooks for one profile instance (plan devkit, A3).",
+    "Cursor resolves ./hooks/... relative to its config dir, so these stay relative;",
+    "that is what keeps the projection working."
+  ],
+  "version": 1,
+  "hooks": {
+    "beforeSubmitPrompt": [{ "command": "./hooks/history-log-prompt.sh" }],
+    "stop": [{ "command": "./hooks/history-log-stop.sh" }],
+    "sessionStart": [{ "command": "./hooks/memory-recall.sh" }]
+  }
+}

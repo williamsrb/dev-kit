@@ -74,13 +74,18 @@ shellcheck:
 # `provides` binary the profile declares is resolvable, with its rung named.
 .matrix:
   stage: matrix
-  allow_failure: true      # until A7 has run each one green at least once
+  # debian is green: the A7 clean-room build ran bootstrap.sh and install.py
+  # from scratch and resolved every declared tool. The others stay
+  # allow_failure until they have done the same at least once, because the dnf
+  # and pacman package names are still proposed (R15).
+  allow_failure: true
   script:
     - ./bootstrap.sh --profile "${PROFILE:-core}" --apply --third-party no
     - python3 devkit_cli/bootstrap_plan.py --profile "${PROFILE:-core}" --verify
 
 debian:
   extends: .matrix
+  allow_failure: false     # verified by the A7 clean-room build
   image: debian:stable-slim
   before_script:
     - apt-get update -qq && apt-get install -y -qq sudo curl ca-certificates python3

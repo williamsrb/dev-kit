@@ -27,6 +27,24 @@ def run(*args: str) -> subprocess.CompletedProcess:
                           capture_output=True, text=True, check=False)
 
 
+def export_source() -> Path | None:
+    """The harness this kit exports from, when it is present.
+
+    It is absent anywhere that is not a maintainer's machine — CI, a container,
+    a teammate's checkout. Tests that need it skip rather than fail, because
+    "the source is not here" is not a defect in the kit.
+    """
+    allowlist = json.loads((REPO / "export-allowlist.json").read_text())
+    try:
+        return Path(export.resolve_source(None, allowlist))
+    except DevkitError:
+        return None
+
+
+NEEDS_SOURCE = unittest.skipIf(export_source() is None,
+                               "export source not present (not a maintainer machine)")
+
+
 class HelpContractTests(unittest.TestCase):
     """'devkit' and 'devkit --help' must produce identical stdout and exit 0;
     the same for every group. An unknown subcommand must write usage to stderr
@@ -89,16 +107,24 @@ class ExportBoundaryTests(unittest.TestCase):
         self.assertFalse(export._excluded("skills/graft/SKILL.md", hard))
         self.assertTrue(export._excluded("skills/x/__pycache__/a.pyc", hard))
 
+    @NEEDS_SOURCE
     def test_every_skill_on_disk_is_classified(self):
         allowlist = json.loads((REPO / "export-allowlist.json").read_text())
         block = allowlist["skills"]
         listed = set(block["core"]) | set(block["enonic"]) | (set(block["excluded"]) - {"_comment"})
-        source = Path(export.resolve_source(None, allowlist))
+        source = export_source()
         on_disk = {p.name for p in (source / "skills").iterdir() if p.is_dir()}
         self.assertEqual(on_disk - listed, set(), "unclassified skills would ship or vanish silently")
 
+    @NEEDS_SOURCE
     def test_export_is_in_sync(self):
         self.assertEqual(run("export", "--check").returncode, 0)
+
+    def test_core_is_present_and_populated(self):
+        """What CI can check without the source: the committed export exists."""
+        core = REPO / "core"
+        self.assertTrue(core.is_dir(), "core/ is missing; run devkit export --apply")
+        self.assertGreater(len(list((core / "skills").iterdir())), 20)
 
     def test_no_client_identifier_in_a_core_skill(self):
         allowlist = json.loads((REPO / "export-allowlist.json").read_text())

@@ -1,0 +1,14 @@
+---
+description: Do not stage or unstage unless the user asked to commit or stage
+alwaysApply: true
+---
+
+# Git index writes on explicit order
+
+Do not run commands that modify the git index unless the user explicitly asked to stage, unstage, or commit.
+
+Default: leave all agent file edits **unstaged**. The user stages manually. This keeps staged (user baseline) separate from unstaged (new agent changes).
+
+When the user asked to commit (or to stage): `git add` / `git restore --staged` for the paths of that request are allowed.
+
+Do not use `git reset` to unstage unless the user asked for a reset (see `no-git-reset.mdc`).

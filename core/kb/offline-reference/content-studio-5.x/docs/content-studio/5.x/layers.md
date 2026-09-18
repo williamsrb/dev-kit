@@ -1,0 +1,100 @@
+<!-- src:https://developer.enonic.com/docs/content-studio/5.x/layers generated:2026-07-29T03:47:31Z format:llm-dense content-studio-5.x -->
+#DOC docs/content-studio/5.x/layers.md
+
+# Layers and localization
+
+Content Studio offers an advanced concept for localization called Layering
+
+## Concept
+
+Layers are essentially a [Content project](docs/content-studio/5.x/projects.md) that inherits content from a different project.
+
+Inherited content can be edited (localized), renamed, re-organized, published or even archived within a single layer. You may also create new content, just like you would in a regular project.
+
+Layers are created and managed just like any other project, but you must specify a parent project, from where it will inherit content.
+
+## How it works
+
+You may have any number of layers, organized in different ways based on your requirements. Here are some examples
+
+Nested layers
+
+Project **A** has a child project **B** which has a child project **C** (and so on).
+
+Siblings
+
+You may have multiple children, so both **B** and **B'** inherit from project **A**.
+
+## Inheritance model
+
+Changes to content in a parent layer automatically propagate to child layers unless the item has been localized in the specific layer.
+
+Example from the above structure:
+
+Content in project **A** will be automatically propagated to **B**, and from there to **C**. If **B** gets localized, it will no longer receive updates from **A**. The modified content from **B** will, however, still trickle down to **C**.
+
+## Listing view
+
+Inherited content in the navigator list will appear as dimmed, providing a visual difference from content that has been localized or created directly in this layer.
+
+Also, all inherited items will have a small blue cloud icon next to it — regardless of whether it has been localized or not.
+
+Sample structure with a single local item
+
+Here the "Search" item is localized to "Søk". The content name has also been localized to "sok".
+
+> **Tip:** Language shown in brackets after the content’s display name means shows that the language of this content is different from the language of the current layer.
+
+## Inheritance types
+
+To make the inheritance flexible, there are four different kinds of inhertance:
+
+- data (your content)
+
+- sorting (of child items)
+
+- parent (location in tree structure)
+
+- and name (name in tree)
+
+An example of how this works is that you can move a content to a different location in the tree (change parent), but its *data*, *name* and *sorting* will still be inherited from the parent
+
+## Localizing
+
+To localize an inherited item, select it and click **Localize**.
+
+> **Note:** For inherited items **Edit** is replaced with **Localize**
+
+This should open the Content Editor. You may now edit and publish the item as if it was created locally. This process effectively terminates further inheritance from the parent item.
+
+## AI translation
+
+> **Note:** The [Juke AI translator](https://market.enonic.com/vendors/enonic/ai-translator) application must be installed to access the features described in this section
+
+With the Juke AI translator enabled, clicking **Localize** will instantly reveal the translation dialog. Here you may optionally provide detailed instructions or simply hit **Translate**. This will automatically translate all text fields within your content - just watch it go.
+
+### General instructions
+
+Often, it can be useful to provide standard translation instructions for your content. By adding the application to your project or site, you may configure standard translation instructions that will be used throughout the scope of your content.
+
+> **Note:** Changing these settings require `Project Owner` role or higher.
+
+## Reset
+
+You may reset a localized item by clicking **Reset** from within the content editor. This will effectively return the item to its original inherited state.
+
+## Layers Widget
+
+> **Note:** The [Content Studio+](https://market.enonic.com/vendors/enonic/content-studio-plus) application must be installed to access the features described in this section
+
+The Layers widget enables the user to see the status of a specific content item in each of the existing layers in the system.
+
+By default, only direct ancestors and descendants of the current layer are shown, and the current layer is highlighted with a blue border. The content can be opened in any of the displayed layers by expanding the layer box and clicking the action button.
+
+> **Tip:** You can localize content in the current layer directly from the widget.
+
+**Show all** button at the bottom of the widget opens the modal dialog with the full hierarchy of layers in the system where the content exists.
+
+Just like with the Layers widget, you can expand layer boxes in this dialog to either localize or open the content in a specific layer (given your user has sufficient permissions to access the layer).
+
+> **Tip:** Read about the high-level concept of Content Layers [here](https://developer.enonic.com/docs/xp/stable/cms/layers).

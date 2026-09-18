@@ -1,0 +1,1133 @@
+<!-- src:https://developer.enonic.com/docs/platform/stable/endpoints/management generated:2026-07-24T21:49:28Z format:llm-dense xp:8.x -->
+#DOC docs/platform/stable/endpoints/management.md
+
+# Management API (Port 4848)
+
+The Management API provides programmatic access to administrative and operational functions, commonly used by developers and DevOps teams in combination with Enonic CLI.
+
+## Authorization
+
+The management API requires an authenticated user with the Administrator role.
+
+### JWT Authentication
+
+All management endpoints can use [Service accounts JWT authentication](docs/platform/stable/security/service-accounts.md#jwt-authentication). This is the recommended way to authenticate with the management endpoints.
+
+### Basic Authentication
+
+> **Warning:** Use of basic authentication is discouraged due to its security weaknesses. Use JWT authentication instead.
+
+All management endpoints allow basic authentication. Most clients provide an option for authentication, but in case you need to do it manually: basic auth is simply a string of the username and password separated by a colon that is base64 encoded.
+
+Make a source string:
+
+```
+myusername:mysecretpassword
+```
+
+Encode it to base64:
+
+```
+bXl1c2VybmFtZTpteXNlY3JldHBhc3N3b3Jk
+```
+
+Add a header to your request:
+
+| Key | Value |
+| --- | --- |
+| `Authorization` | `Basic bXl1c2VybmFtZTpteXNlY3JldHBhc3N3b3Jk` |
+
+> **Note:** Read the documentation of the client you use for more info on how to add basic authorization header to your request.
+
+## Snapshots
+
+Commands for manipulating repository snapshots
+
+### Create
+
+Create a snapshot of all or a single repository while running. NOTE: The first snapshot only stores markers in the repository for the current state. Subsequent snapshots stores the changes since the last snapshot.
+
+> **Warning:** For a clustered installation, the snapshot-location must be on a shared file-system.
+
+Url
+
+POST repo/snapshot
+
+| Param | Type | Description |
+| --- | --- | --- |
+| `repositoryId` | String | the name of the repository to snapshot. |
+
+Response
+
+```json
+{
+    "taskId": "f8565e19-3960-4bf0-8daa-f4ca77ef338f"
+}
+```
+
+> **Note:** The endpoint returns immediately after the snapshot process is started. Task info can be fetched with a [task](#task) request.
+
+TaskInfo.progress.info value:
+
+```json
+{
+    "Name": "2019-06-13t13-10-51.973z",
+    "Reason": "",
+    "State": "SUCCESS",
+    "Timestamp": "2019-06-13T13:10:52.575Z",
+    "Indices": [
+        "search-com.enonic.cms.default",
+        "storage-com.enonic.cms.default",
+        "search-system-repo",
+        "storage-system-repo"
+    ]
+}
+```
+
+### List
+
+List all the snapshots for the installation.
+
+Url
+
+GET repo/snapshot/list
+
+Response
+
+```json
+{
+    "Results": [
+        {
+            "Name": "2019-06-13t13-10-51.973z",
+            "Reason": "",
+            "State": "SUCCESS",
+            "Timestamp": "2019-06-13T13:10:52.575Z",
+            "Indices": [
+                "search-com.enonic.cms.default",
+                "storage-com.enonic.cms.default",
+                "search-system-repo",
+                "storage-system-repo"
+            ]
+        },
+        {
+            "Name": "2019-06-13t13-36-35.407z",
+            "Reason": "",
+            "State": "SUCCESS",
+            "Timestamp": "2019-06-13T13:36:35.488Z",
+            "Indices": [
+                "search-com.enonic.cms.default",
+                "storage-com.enonic.cms.default",
+                "search-system-repo",
+                "storage-system-repo"
+            ]
+        }
+    ]
+}
+```
+
+### Restore
+
+Url
+
+POST repo/snapshot/restore
+
+| Param | Type | Description |
+| --- | --- | --- |
+| `snapshotName` | String | snapshot name to restore |
+| `repository` | String | the name of the repository to restore |
+| `latest` | Boolean | if that parameter has value `true` then will be restored latest snapshot, in this case to set the `snapshotName` parameter is not required |
+| `force` | Boolean | If `true` then affected indices will be removed before snapshot is applied. It is helpful when Elasticsearch indices are corrupted. Default: `false` |
+
+Response
+
+```json
+{
+    "taskId": "a0b774dd-03f1-48fd-b500-b76a93c6b6fe"
+}
+```
+
+> **Note:** The endpoint returns immediately after the restore process is started. Task info can be fetched with a [task](#task) request.
+
+TaskInfo.progress.info value:
+
+```json
+{
+    "Message": "Restore successfull, 4 shards restored",
+    "Name": "2019-06-13t13-10-51.973z",
+    "Failed": false,
+    "Indices": [
+        "search-com.enonic.cms.default",
+        "storage-com.enonic.cms.default",
+        "search-system-repo",
+        "storage-system-repo"
+    ]
+}
+```
+
+### Delete
+
+Deletes a snapshot by name or date:
+
+Url
+
+POST repo/snapshot/delete
+
+| Param | Type | Description |
+| --- | --- | --- |
+| `before` | Date | date to delete snapshots up to |
+| `snapshotNames` | String[] | List of snapshot names to delete |
+
+Response
+
+```json
+{
+    "DeletedSnapshots": [
+        "2019-06-13t13-36-35.407z"
+    ]
+}
+```
+
+## Dumps
+
+List of command for manipulating all repositories
+
+### Create
+
+Export data from every repository. The result will be stored in the `$XP_HOME/data/dump` directory.
+
+Url
+
+POST system/dump
+
+| Param | Type | Description |
+| --- | --- | --- |
+| `name` | String | dump name |
+| `includeVersions` | Boolean | dump version-history along with current versions |
+| `maxAge` | Number | max age of versions to include, in days, in addition to current version |
+| `maxVersions` | Number | max number of versions to dump in addition to current version |
+
+> **Note:** In XP 8, dumps are always saved as ZIP archives (`{name}.zip`).
+
+Response
+
+```json
+{
+"taskId": "f8565e19-3960-4bf0-8daa-f4ca77ef338f"
+}
+```
+
+> **Note:** Task info can be fetched with [task](#task) request.
+
+TaskInfo.progress.info value:
+
+```json
+{
+    "Repositories": [
+        {
+            "RepositoryId": "com.enonic.cms.default",
+            "Versions": 0,
+            "Branches": [
+                {
+                    "Branch": "master",
+                    "Successful": 3,
+                    "Errors": []
+                },
+                {
+                    "Branch": "draft",
+                    "Successful": 3,
+                    "Errors": []
+                }
+            ]
+        },
+        {
+            "RepositoryId": "system-repo",
+            "Versions": 0,
+            "Branches": [
+                {
+                    "Branch": "master",
+                    "Successful": 22,
+                    "Errors": []
+                }
+            ]
+        }
+    ]
+}
+```
+
+### Upgrade
+
+Upgrade a data dump from a previous version to the current version. The output of the upgrade will be placed alongside the dump that is being upgraded and will have the name `_upgraded_`.
+
+> **Note:** The current version XP installation must be running with the upgraded app deployed.
+
+> **Note:** Upgrade does not work with archived dumps.
+
+Url
+
+POST system/upgrade
+
+| Param | Type | Description |
+| --- | --- | --- |
+| `name` | String | dump name |
+
+Response
+
+```json
+{
+    "taskId": "549c38ac-e20a-4851-8536-3fd2b937e328"
+}
+```
+
+> **Note:** Task info can be fetched with [task](#task) request.
+
+TaskInfo.progress.info value:
+
+```json
+{
+    "InitialVersion": "8.0.0",
+    "UpgradedVersion": "8.0.0"
+}
+```
+
+### Load
+
+Load data from a named system dump into Enonic XP. The dump read has to be stored in the `$XP_HOME/data/dump` directory.
+
+> **Note:** Upgrade does not work with archived dumps.
+
+> **Warning:** A load will delete all existing repositories before loading the repositories present in the system-dump
+
+Url
+
+POST system/load
+
+| Param | Type | Description |
+| --- | --- | --- |
+| `name` | String | dump name to load |
+| `upgrade` | Boolean | upgrade the dump if necessary (default is `false`) |
+
+Response
+
+```json
+{
+    "taskId": "a0b774dd-03f1-48fd-b500-b76a93c6b6fe"
+}
+```
+
+> **Note:** Task info can be fetched with [task](#task) request.
+
+TaskInfo.progress.info value:
+
+```json
+{
+    "Repositories": [
+        {
+            "Repository": "system-repo",
+            "Versions": {
+                "Errors": [],
+                "Successful": 0
+            },
+            "Branches": [
+                {
+                    "Branch": "master",
+                    "Successful": 22,
+                    "Errors": []
+                }
+            ]
+        },
+        {
+            "Repository": "com.enonic.cms.default",
+            "Versions": {
+                "Errors": [],
+                "Successful": 0
+            },
+            "Branches": [
+                {
+                    "Branch": "draft",
+                    "Successful": 3,
+                    "Errors": []
+                },
+                {
+                    "Branch": "master",
+                    "Successful": 3,
+                    "Errors": []
+                }
+            ]
+        }
+    ]
+}
+```
+
+## Export
+
+Export and import data from a given repository, branch and content path.
+
+### Create
+
+Extract data from a given repository, branch and content path. The result will be stored in the `$XP_HOME/data/export` directory as a ZIP archive named `{exportName}.zip`. This is useful to move a part of a site from one installation to another.
+
+> **Warning:** Exporting content will not include the version history of the content, just the current version.
+
+Url
+
+POST repo/export
+
+| Param | Type | Description |
+| --- | --- | --- |
+| `exportName` | String | target name to save export |
+| `sourceRepoPath` | String | path of data to export. Format: `<repo-name>:<branch-name>:<node-path>` e.g. `cms-repo:draft:/some-content` |
+| `batchSize` | Number | number of nodes exported per batch (default: `1000`) |
+
+Response
+
+```json
+{
+"taskId": "2003993f-cf52-4aa0-aca8-66c3911e6b31"
+}
+```
+
+> **Note:** Task info can be fetched with [task](#task) request.
+
+TaskInfo.progress.info value:
+
+```json
+{
+    "ExportedBinaries": [],
+    "ExportedNodes": [
+        "/",
+        "/content",
+        "/issues"
+    ],
+    "Errors": null
+}
+```
+
+### Import
+
+Import data from a named export into Enonic XP at the desired content path. The export read has to be stored in the `$XP_HOME/data/export` directory.
+
+> **Note:** `exportName` must refer to a ZIP archive file (e.g. `myexport` will load `$XP_HOME/data/export/myexport.zip`).
+
+Url
+
+POST repo/import
+
+| Param | Type | Description |
+| --- | --- | --- |
+| `exportName` | String | a named export to import |
+| `targetRepoPath` | String | target path for import. Format: `<repo-name>:<branch-name>:<node-path>` e.g. `cms-repo:draft:/some-content` |
+| `xslSource` | String | path to xsl file (relative to `<XP_HOME>/data/export`) for applying transformations to node.xml before importing |
+| `xslParams` | JSON | parameters to pass to the XSL transformations before importing nodes. Format: `{"applicationId": "com.enonic.myapp"}` |
+| `importWithIds` | Boolean | flag to include or skip ids when importing |
+| `importWithPermissions` | Boolean | flag to include or skip permissions when importing |
+
+Response
+
+```json
+{
+    "taskId": "767dad91-eecd-442b-a9f8-d3a892e1e8c4"
+}
+```
+
+> **Note:** Task info can be fetched with [task](#task) request.
+
+TaskInfo.progress.info value:
+
+```json
+{
+    "AddedNodes": [],
+    "UpdateNodes": [
+        "/",
+        "/content",
+        "/issues"
+    ],
+    "SkippedNodes": [],
+    "ImportedBinaries": [],
+    "ImportErrors": []
+}
+```
+
+> **Tip:** An XSL file and a set of name=value parameters can be optionally passed for applying transformations to each node.xml file, before importing it.
+
+This option could for example be used for renaming types or fields. The .xsl file must be located in the `$XP_HOME/data/export` directory.
+
+## Applications
+
+Commands to manage applications in a running Enonic XP instance.
+
+### Install from file
+
+Installs an application from file on all nodes.
+
+Url
+
+POST app/install
+
+| Param | Type | Description |
+| --- | --- | --- |
+| `file` | File | File of the application |
+
+Response
+
+```json
+{
+    "ApplicationInstalledJson": {
+        "Application": {
+            "DisplayName": "Content Studio",
+            "Key": "com.enonic.app.contentstudio",
+            "Deletable": false,
+            "Editable": false,
+            "Local": false,
+            "MaxSystemVersion": "8.0.0",
+            "MinSystemVersion": "7.0.0",
+            "ModifiedTime": "2019-06-13T14:48:30.314Z",
+            "State": "started",
+            "Url": "",
+            "VendorName": "Enonic AS",
+            "VendorUrl": "https://enonic.com",
+            "Version": "1.0.0.SNAPSHOT"
+        }
+    },
+    "Failure": ""
+}
+```
+
+### Install from URL
+
+Installs an application from url on all nodes.
+
+The URL must match a pattern configured in the [Application management API config](docs/platform/stable/config/system.md#management-app), and a SHA-512 checksum is required by default. Requests violating either policy are rejected with `409 Conflict` before any data is fetched.
+
+Url
+
+POST app/installUrl
+
+| Param | Type | Description |
+| --- | --- | --- |
+| `URL` | String | application URL. Must match one of the patterns configured in `installUrl.allowedUrls`. |
+| `sha512` | String | Application file SHA-512 checksum. Required by default (`installUrl.checksumRequired = true`). If provided and the computed checksum does not match, installation fails. |
+
+Response
+
+```json
+{
+    "ApplicationInstalledJson": {
+        "Application": {
+            "DisplayName": "Content Studio",
+            "Key": "com.enonic.app.contentstudio",
+            "Deletable": false,
+            "Editable": false,
+            "Local": false,
+            "MaxSystemVersion": "8.0.0",
+            "MinSystemVersion": "7.0.0",
+            "ModifiedTime": "2019-06-13T14:50:53.917Z",
+            "State": "started",
+            "Url": "",
+            "VendorName": "Enonic AS",
+            "VendorUrl": "https://enonic.com",
+            "Version": "2.0.0"
+        }
+    },
+    "Failure": ""
+}
+```
+
+### Start
+
+Starts an application with a specific application key.
+
+Url
+
+POST app/start
+
+| Param | Type | Description |
+| --- | --- | --- |
+| `key` | String | Application key, for instance, `com.enonic.app.contentstudio`. |
+
+Response
+
+```plain
+No response body
+```
+
+### Stop
+
+Stops an application with a specific application key.
+
+Url
+
+POST app/stop
+
+| Param | Type | Description |
+| --- | --- | --- |
+| `key` | String | Application key, for instance, `com.enonic.app.contentstudio`. |
+
+Response
+
+```plain
+No response body
+```
+
+### Uninstall
+
+Uninstalls an application with a specific application key.
+
+Url
+
+POST app/uninstall
+
+| Param | Type | Description |
+| --- | --- | --- |
+| `key` | String | Application key, for instance, `com.enonic.app.contentstudio`. |
+
+Response
+
+```plain
+No response body
+```
+
+### Server-Sent Events
+
+The client initiates the SSE connection by using the media type `text/event-stream` in the `Accept` header. Then it gets updates automatically without requesting the server.
+
+Url
+
+GET app/events
+
+This API supports the following events:
+
+- `list` - returns the details of applications which are already installed
+
+- `installed` - returns the details of the last applications that was installed
+
+- `state` - returns the details of the application that was just started or stopped
+
+- `uninstalled` - returns the key of the application that was just removed
+
+Once a client is subscribed, he will receive the first event `list`.
+
+Response of the list event
+
+```plain
+event: list
+id: b0d64cac-811d-4f6b-9aff-50fd4d4a5ae9
+data: {"applications":[{"displayName":"Content Studio","key":"com.enonic.app.contentstudio","local":false,"maxSystemVersion":"8.0.0","minSystemVersion":"7.6.0","modifiedTime":"2020-11-11T08:22:14.080Z","state":"started","url": "", "vendorName": "Enonic AS", "vendorUrl": "https://enonic.com", "version": "2.0.0"}]}
+```
+
+Response of the installed or state events
+
+```plain
+event: installed | state
+id: f84d11ba-88cd-4cd2-9cb3-39dd181eb7e2
+data: {"displayName":"Content Studio","key":"com.enonic.app.contentstudio","local":false,"maxSystemVersion":"8.0.0","minSystemVersion":"7.6.0","modifiedTime":"2020-11-11T08:22:14.080Z","state":"started","url": "", "vendorName": "Enonic AS", "vendorUrl": "https://enonic.com", "version": "2.0.0"}
+```
+
+Response of the uninstalled event
+
+```plain
+event: uninstalled
+id: b7a0f608-631f-4a1d-bda0-5459b87a99a6
+data: {"key":"com.enonic.app.contentstudio"}
+```
+
+## CMS
+
+Content metadata commands.
+
+### Reprocess
+
+Reprocesses content in the repository and **regenerates metadata for the media attachments**. Only content of a media type (super-type = *base:media*) are processed. Unless the `skipChildren` flag is specified, it processes all descendants of the specified content path.
+
+> **Note:** This command should be used after migrating content from Enonic CMS using the cms2xp tool.
+
+Url
+
+POST content/reprocess
+
+| Param | Type | Description |
+| --- | --- | --- |
+| `sourceBranchPath` | String | target content path to be reprocessed. Format: `<branch-name>:<content-path>`. e.g `draft:/` |
+| `skipChildren` | Boolean | flag to skip processing of content children |
+
+Response
+
+```json
+{
+    "Errors": [],
+    "UpdatedContent": []
+}
+```
+
+### Reprocess Task
+
+Calls [reprocess](#reprocess) endpoint as a task.
+
+> **Note:** This command should be used after migrating content from Enonic CMS using the cms2xp tool.
+
+Url
+
+POST content/reprocessTask
+
+| Param | Type | Description |
+| --- | --- | --- |
+| `sourceBranchPath` | String | target content path to be reprocessed. Format: `<branch-name>:<content-path>`. e.g `draft:/` |
+| `skipChildren` | Boolean | flag to skip processing of content children |
+
+Response
+
+```json
+{
+    "taskId": "07500a00-8d60-4084-9657-af6725dc587d"
+}
+```
+
+> **Note:** Task info can be fetched with [task](#task) request.
+
+## Projects
+
+Project related commands.
+
+### List
+
+Lists all projects together with their sites.
+
+Url
+
+GET content/projects/list
+
+Response
+
+```json
+[
+  {
+    "description" : "Testing features for Enonic XP",
+    "displayName" : "Features",
+    "name" : "features",
+    "parent" : "default",
+    "branches" : [
+      {
+        "name" : "draft",
+        "sites" : [
+          {
+            "displayName" : "Features",
+            "language" : "en",
+            "path" : "/features"
+          },
+          {
+            "displayName" : "AuditLogsDemo",
+            "language" : null,
+            "path" : "/features/js-libraries/audit-logs"
+          }
+        ]
+      },
+      {
+        "name" : "master",
+        "sites" : [
+          {
+            "name": "master",
+            "sites": [
+              {
+                "displayName": "Features",
+                "language": null,
+                "path": "/features"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "description" : null,
+    "displayName" : "Default",
+    "name" : "default",
+    "parent" : null,
+    "branches" : [
+      {
+        "name" : "draft",
+        "sites" : []
+      },
+      {
+        "name" : "master",
+        "sites" : []
+      }
+    ]
+  }
+]
+```
+
+### SyncAll
+
+Calls forced content sync for all available projects.
+
+Url
+
+POST content/syncAll
+
+Response
+
+```json
+{
+    "taskId": "767dad91-eecd-442b-a9f8-d3a892e1e8c4"
+}
+```
+
+## ID Providers
+
+Id providers related commands.
+
+### List
+
+Lists all the id providers.
+
+Url
+
+GET idproviders/list
+
+Response
+
+```json
+[
+  {
+    "description" : null,
+    "displayName" : "Auth ID Provider",
+    "key" : "auth-id-provider"
+  },
+  {
+    "description" : "Azure connection",
+    "displayName" : "Azure ID Provider",
+    "key" : "azure-id-provider"
+  },
+  {
+    "description" : null,
+    "displayName" : "System Id Provider",
+    "key" : "system"
+  }
+]
+```
+
+## Webapps
+
+Webapp related commands.
+
+### List
+
+Lists all the webapps.
+
+Url
+
+GET webapps/list
+
+Response
+
+```json
+[
+    {
+      "name": "com.enonic.cloud.console"
+    },
+    {
+      "name": "com.enonic.cloud.api"
+    }
+]
+```
+
+## Repository
+
+Commands for configuring and managing repositories.
+
+### Reindex
+
+Reindex the content in the search indices for the given repository and branches. This is usually required after upgrades and may be useful in many other cases.
+
+Url
+
+POST repo/index/reindex
+
+| Param | Type | Description |
+| --- | --- | --- |
+| `branches` | String | a comma-separated list of branches to be reindexed |
+| `repository` | String | the name of the repository to reindex |
+| `initialize` | Boolean | if true, the indices will be deleted before recreated |
+
+Response
+
+```json
+{
+    "RepositoryId": "com.enonic.cms.default",
+    "Branches": [
+        "draft",
+        "master"
+    ],
+    "NumberReindexed": 3,
+    "StartTime": "2019-06-14T07:58:38.663Z",
+    "EndTime": "2019-06-14T07:58:38.719Z",
+    "Duration": "PT-0.056S"
+}
+```
+
+### Reindex Task
+
+Calls [reindex](#reindex) endpoint as a task.
+
+Url
+
+POST repo/index/reindexTask
+
+| Param | Type | Description |
+| --- | --- | --- |
+| `branches` | String | a comma-separated list of branches to be reindexed |
+| `repository` | String | the name of the repository to reindex |
+| `initialize` | Boolean | if true, the indices will be deleted before recreated |
+
+Response
+
+```json
+{
+    "taskId": "cb1b4e06-22ad-4235-8876-a443c88c290b"
+}
+```
+
+> **Note:** Task info can be fetched with [task](#task) request.
+
+### Settings
+
+Update settings for a specified repository.
+
+Url
+
+POST repo/index/updateSettings
+
+| Param | Type | Description |
+| --- | --- | --- |
+| `repositoryId` | String | single repository to toggle read-only mode for |
+| `settings` | JSON | settings object, see below |
+
+Available settings options
+
+```json
+{
+    "index": {
+        "blocks.write": true,  (1)
+        "number_of_replicas": 3  (2)
+    }
+}
+```
+
+| ****1** | Toggle read-only mode. |
+| --- | --- |
+| ****2** | Set the number of replicas in the cluster. |
+
+Response
+
+```json
+{
+    "UpdatedIndexes": [
+        "search-com.enonic.cms.default",
+        "storage-com.enonic.cms.default",
+        "search-system-repo",
+        "storage-system-repo"
+    ]
+}
+```
+
+### Repository List
+
+List available repositories.
+
+Url
+
+GET repo/list
+
+Response
+
+```json
+{
+    "Repositories": [
+        {
+            "Branches": [
+                "master",
+                "draft"
+            ],
+            "Id": "com.enonic.cms.default"
+        },
+        {
+            "Branches": [
+                "master"
+            ],
+            "Id": "system-repo"
+        }
+    ]
+}
+```
+
+## Vacuum
+
+Deletes unused blobs and binaries from blobstore.
+
+> **Warning:** Make sure you have a backup of the installation available before doing a vacuum.
+
+Url
+
+POST system/vacuum
+
+| Param | Type | Description |
+| --- | --- | --- |
+| `ageThreshold` | String | Age of data to be removed. The format is based on the ISO-8601 duration format PnDTnHnMn.nS with days considered to be exactly 24 hours. Default is defined by `ageThreshold` property in [Vacuum config file](docs/platform/stable/config/system.md#vacuum) |
+| `tasks` | String[] | List of vacuum task to be run. Default : ["SegmentVacuumTask", "VersionTableVacuumTask"] |
+
+This API supports the following tasks:
+
+**SegmentVacuumTask** - removes unused repositories blobs.
+
+**VersionTableVacuumTask** - removes unused and non-commited versions together with its blobs.
+
+**BinaryBlobVacuumTask** - checks all binary blobs and removes unused.
+
+**NodeBlobVacuumTask** - checks all node blobs and removes unused.
+
+**SnapshotsVacuumTask** - deletes snapshots that are older than the specified age threshold.
+
+Response
+
+```json
+{
+    "taskId": "cb1b4e06-22ad-4235-8876-a443c88c290b"
+}
+```
+
+> **Note:** Task info can be fetched with [task](#task) request.
+
+TaskInfo.progress.info value:
+
+```json
+{
+     "TaskResults": [
+        {
+            "Deleted": 0,
+            "Failed": 0,
+            "InUse": 13,
+            "Processed": 13,
+            "TaskName": "SegmentVacuumTask"
+        },
+        {
+            "Deleted": 4,
+            "Failed": 0,
+            "InUse": 96,
+            "Processed": 100,
+            "TaskName": "VersionTableVacuumTask"
+        }
+    ]
+}
+```
+
+## Clean Up Audit Log
+
+Deletes records from audit log repository.
+
+> **Warning:** Make sure you have a backup of the installation available before running a cleanup.
+
+Url
+
+POST auditlog/cleanup
+
+| Param | Type | Description |
+| --- | --- | --- |
+| `ageThreshold` | String | Age of records to be removed. The format based on the ISO-8601 duration format PnDTnHnMn.nS with days considered to be exactly 24 hours. |
+
+Request Body Example
+
+```javascript
+{
+    "ageThreshold" : "PT10H" //all records older than 10 hours will be removed
+}
+```
+
+Response
+
+```json
+{
+    "taskId": "cb1b4e06-22ad-4235-8876-a443c88c290b"
+}
+```
+
+## Task
+
+Fetches particular Task information.
+
+Url
+
+GET task/{taskId}
+
+| Param | Type | Description |
+| --- | --- | --- |
+| `taskId` | String | particular task id |
+
+Response
+
+[`TaskInfo`](https://developer.enonic.com/docs/platform/stable/api/lib-task.ahtml#taskinfo) object.
+
+## Scheduler
+
+Scheduled jobs related commands.
+
+### List
+
+List scheduled jobs.
+
+Url
+
+GET scheduler/list
+
+Response
+
+```json
+[
+  {
+    "calendar": {
+      "cronValue": "* * * * *",
+      "timeZone": "GMT+03:00",
+      "type": "CRON"
+    },
+    "config": [
+      {
+        "name": "string",
+        "type": "String",
+        "values": [
+          {
+            "v": "value"
+          }
+        ]
+      }
+    ],
+    "createdTime": "2010-01-01T00:00:00Z",
+    "creator": "user:system:creator",
+    "description": "description",
+    "descriptor": "com.enonic.app.features:landing",
+    "enabled": true,
+    "lastRun": "2012-01-01T00:00:00Z",
+    "lastTaskId": "task-id",
+    "modifiedTime": "2011-02-01T00:00:00Z",
+    "modifier": "user:system:creator",
+    "name": "test1",
+    "user": "user:system:user"
+  },
+  {
+    "calendar": {
+      "type": "ONE_TIME",
+      "value": "2016-11-02T10:36:00Z"
+    },
+    "config": [],
+    "createdTime": "2010-01-01T00:00:00Z",
+    "creator": "user:system:creator",
+    "description": null,
+    "descriptor": "com.enonic.app.features:landing",
+    "enabled": false,
+    "lastRun": null,
+    "lastTaskId": null,
+    "modifiedTime": "2011-02-01T00:00:00Z",
+    "modifier": "user:system:creator",
+    "name": "test2",
+    "user": null
+  }
+]
+```

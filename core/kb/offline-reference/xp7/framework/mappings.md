@@ -1,0 +1,144 @@
+<!-- src:https://developer.enonic.com/docs/platform/7.x/framework/mappings generated:2026-07-24T21:10:20Z format:llm-dense xp:7.x -->
+#DOC framework/mappings.md
+
+# Mappings
+
+Map controllers or filters to specific content types, site relative URLs, or system services.
+
+> **Note:** Mappings are only available when using the [Site Engine](/docs/platform/7.x/runtime/engines/site-engine)
+
+## Introduction
+
+Mappings are the first processing step in the [site engine](/docs/platform/7.x/runtime/engines/site-engine) - and happens before page rendering starts. You may define mappings for both [controllers](/docs/platform/7.x/framework/controllers) and [filters](/docs/platform/7.x/framework/filters). The use cases are vast.
+
+## Usage
+
+Mappings are defined in the [site descriptor](/docs/platform/7.x/cms/sites#site_xml). Examples of use cases are:
+
+- Map a controller to a specific URL pattern i.e. /mypath
+
+- Map a controller to a specifc set of content through content matches, i.e. only apply to the `portal:fragment` content type
+
+- Map a filter to parts of or the entire site structure
+
+site.xml mapping examples
+
+```xml
+<site>
+  <mappings>
+    <mapping controller="/site/foobar/api.js" order="10"> (1) (2)
+      <pattern>/api/v\d+/.*</pattern>  (3)
+    </mapping>
+    <mapping controller="/site/pages/default/default.js">
+      <match>type:'portal:fragment'</match>  (4)
+    </mapping>
+    <mapping filter="/site/foobar/filter.js" order="10">  (5)
+      <pattern invert="true">/dont-match-me/.*</pattern>
+    </mapping>
+    <mapping filter="/site/services/image.js">  (6)
+      <service>image</pattern>
+    </mapping>
+  </mappings>
+  <form/>
+</site>
+```
+
+| ****1** | **@controller** defines the path to a standard [HTTP controller](/docs/platform/7.x/framework/controllers) |
+| --- | --- |
+| ****2** | **@order** defines the [Execution order](#execution_order) across apps. Default is `50`. A lower number means higher priority. |
+| ****3** | **<pattern>** specifies a regular expression based site contextual URL [[Patterns]](#Patterns). Default is `/.*` |
+| ****4** | **<match>** a property condition to evaluate [[Matches]](#Matches) for the contextual content. |
+| ****5** | **@filter** defines the path to the [HTTP filter](/docs/platform/7.x/framework/filters) |
+| ****6** | **@service** specifies a system service which will be handled by the filter i.e. (`…​/_/image/…​` endpoint). |
+
+> **Note:** Each mapping may exclusively specify a filter OR a controller, and it must define at least one pattern or match setting.
+
+### Execution order
+
+An application may contain multiple mappings, and multiple applications can be added to a site.
+
+If two different apps within a site has the same mapping path or match expression, the mapping with the **lower** `order` value is used.
+
+In case there are several mappings with the same `order` value, the sort order of the applications on the site determines which mapping will be used.
+
+## Pattern mappings
+
+Pattern based mappings can for instance be used to take over the request for a specific URL before it reaches the content rendering. An example use case is exposing an API endpoint on the contextual URL /api, or triggering a filter to execute for every request within the site.
+
+The `` element specifies a regular expression to be matched against the request URL.
+
+The part of the URL that is taken into account for the matching is the path relative to the site where the application is configured. For example, if a site is deployed via the virtual host `example.com/mysite/`, then the pattern `/api/.****`** will match with requests with URL ending in `example.com/mysite/api/.`** The protocol, host and port are not involved in the pattern matching.
+
+If the pattern contains the question mark `?` character, the URL to match will also include query parameters. The query parameters will be normalized, so they are always in alphabetical order.
+
+For example the pattern `/api\?category=foo&key=\d+` will match with both:
+
+- `/api?category=foo&key=123`
+
+- and `/api?key=123&category=foo`
+
+> **Note:** In the previous example the question mark character `?` is escaped with a backslash because the question mark is a quantifier in regular expressions. And also the ampersand character `&` needs to be XML-escaped because the pattern string is in an XML. Another alternative to XML-escape is to wrap the string in a CDATA block, as in the example below.
+
+A pattern element may also contain an **@invert** attribute to indicate that the result of evaluating the regular expression should be negated i.e.: ``
+
+The pattern string must be a valid [regular expression](https://docs.oracle.com/en/java/javase/11/docs/api/java.base/java/util/regex/Pattern.html).
+
+Examples:
+
+- Anything ending with .json within the /api/* path: `/api/.*\.json`
+
+- All items within the site, including site itself: `/.*`
+
+- Regular expression pattern: `/endpoint\?bar=\d+&foo=.*`
+
+- Regular expression encapsulated in CDATA to avoid XML encoding: ``
+
+- Inverted with invert option enabled: `/section/.*`
+
+> **Note:** Before XP 7.8.0 it was not possible to map controller or filter to the site itself.
+
+## Match mappings
+
+Match based mappings can for instance be used to automatically render content types without using page templates or associating content with a controller directly. An example use case is automatic handling of the content type `portal:fragment`.
+
+The `` element specifies a condition related to the content corresponding with the requested URL path.
+
+The condition takes the form of a property path followed by a `:`, and a value.
+
+The property path can be one of the content properties (`_id`, `_name`, `_path`, `type`, `displayName`, `hasChildren`, `language`, `valid`) or any other custom property within the content
+
+Examples:
+
+- Match fragment content type: `type:'portal:fragment'`
+
+- Match content within the features/ path: `_path:'/features/.*'`
+
+- Match custom property with string value `data.employee.type:'developer'`
+
+- Match custom property with a number: `data.product.category:42`
+
+- Match custom property with a boolean: `x.com-enonic-myapp.menuItem.show:true`
+
+- Match any content: `type:'.+'`
+
+The expected value can be either a regular expression to match the property value, or simply a string, number or boolean (`true` | `false`).
+
+> **Note:** XP 7.8.0 Missing/unavailable content does not match any condition. Don’t specify `<match>` if you need to map controller/filter to the URL that does not correspond to any content.
+
+## Service mappings
+
+XP 7.12.0
+
+Service-based mappings can be used to associate service requests with controllers or filters directly.
+
+Supported services: `image`, `attachment`, and `component`.
+
+Examples:
+
+- `component`
+
+Allows to filter or redirect to a controller rendering of contextual page components on URLs like `:/site////_/component/`
+
+- `image`
+
+Allows to filter or redirect to a controller rendering of images on URLs like `:/site////_/image/`

@@ -1,0 +1,150 @@
+{
+  "_comment": [
+    "The path contract (plan devkit, section 4.5, D6), enforced by `devkit lint-paths`.",
+    "",
+    "F10 is the finding behind it: `~` is a shell construct. It expands only in a",
+    "shell, unquoted, at word start. It does NOT expand in a markdown link target,",
+    "a JSON or TOML value, a .desktop Exec= line, a symlink target, cron's command",
+    "position, or a quoted shell string — \"~/x\" stays literal even in bash.",
+    "",
+    "So: ${HOME} is the only home-anchored token in kit source, rendered per context",
+    "at install. A literal /home/<user> never ships. `~/` is allowed only in prose,",
+    "where a human reads it and no program resolves it.",
+    "core/ is linted: it is kit source after export. Vendored upstream docs under core/kb/offline-reference are excluded — they are third-party text the kit copies verbatim and cannot edit.",
+    "The vendored minified diff2html bundle is excluded: a `~` in minified JS is an operator, not a path, and the file is third-party."
+  ],
+  "home_token": "${HOME}",
+  "machine_consumed": {
+    "_comment": "Extensions whose content a program parses. ~/ and literal home paths are errors here.",
+    "suffixes": [
+      ".json",
+      ".toml",
+      ".desktop",
+      ".service",
+      ".cjs",
+      ".js",
+      ".yaml",
+      ".yml",
+      ".ini",
+      ".cfg"
+    ],
+    "names": [
+      "crontab",
+      "config"
+    ]
+  },
+  "prose": {
+    "_comment": "Human-read files. ~/ is fine in prose; a literal home path is still an error because it names one machine.",
+    "suffixes": [
+      ".md",
+      ".mdc",
+      ".txt"
+    ]
+  },
+  "scripts": {
+    "_comment": [
+      "Shell and Python. ~/ is an error inside quotes and in any non-word-start",
+      "position; $HOME and ${HOME} are correct. A literal home path is always an error.",
+      "The ${HOME:-/home/leanon} fallback pattern in the sync scripts is F4's",
+      "specific case: the fallback bakes in one machine's username."
+    ],
+    "suffixes": [
+      ".sh",
+      ".bash",
+      ".py"
+    ]
+  },
+  "rules": [
+    {
+      "id": "literal-home",
+      "severity": "error",
+      "applies_to": "all",
+      "pattern": "(?<![\\w/])/home/[a-z_][a-z0-9_-]*/\\.(agents|claude|claude_personal|cursor|codex|config|local|cache)\\b",
+      "message": "literal home path into a harness directory names one machine",
+      "fix": "use ${HOME} (kit source) or $HOME (shell), never a hardcoded home",
+      "_comment": "Anchored to a harness dotdir on purpose. A bare /home/<x>/ also matches container paths (/enonic-xp/home/, a Dockerfile's /home/builder) which are correct as written and not this machine's home."
+    },
+    {
+      "id": "literal-home-macos",
+      "severity": "error",
+      "applies_to": "all",
+      "pattern": "(?<![\\w/])/Users/[A-Za-z_][A-Za-z0-9_-]*/\\.(agents|claude|claude_personal|cursor|codex|config|local|cache)\\b",
+      "message": "literal macOS home path names one machine",
+      "fix": "use ${HOME}"
+    },
+    {
+      "id": "tilde-in-machine-position",
+      "severity": "error",
+      "applies_to": "machine_consumed",
+      "pattern": "~/",
+      "message": "~ does not expand in a parsed value; it is read as a relative path",
+      "fix": "use ${HOME}, which install.py renders for this context"
+    },
+    {
+      "id": "tilde-in-markdown-link",
+      "severity": "error",
+      "applies_to": "prose",
+      "pattern": "\\]\\(~/",
+      "message": "~ in a link target renders as the relative path ./~/...",
+      "fix": "link a repo-relative path, or write the ~/ form as inline code instead"
+    },
+    {
+      "id": "home-fallback",
+      "severity": "error",
+      "applies_to": "scripts",
+      "pattern": "\\$\\{HOME:-[^}]+\\}",
+      "message": "a HOME fallback bakes one machine's home into every other machine",
+      "fix": "require HOME, or fail with a message naming it"
+    },
+    {
+      "id": "quoted-tilde",
+      "severity": "error",
+      "applies_to": "shell",
+      "pattern": "[\"']~/",
+      "message": "~ inside quotes stays literal even in bash",
+      "fix": "use \"$HOME/...\" instead",
+      "_comment": "Shell only. In Python a \"~/...\" literal is usually prose in a help string, or is about to go through expanduser(), neither of which is the bug this rule describes."
+    }
+  ],
+  "ignore": [
+    ".git/**",
+    "docs/**/*.png",
+    "examples/**",
+    "**/__pycache__/**",
+    "**/*.pyc",
+    "path-contract.json",
+    "core/kb/offline-reference/**",
+    "core/skills/render-diff-patch/diff2html-ui.min.js"
+  ],
+  "allow": {
+    "_comment": [
+      "Exemptions, each with the reason it is safe. An exemption is a claim that a",
+      "human reads that line and no program resolves it."
+    ],
+    "README.md": [
+      "literal-home",
+      "tilde-in-machine-position"
+    ],
+    "devkit_cli/common.py": [
+      "literal-home",
+      "quoted-tilde"
+    ],
+    "devkit_cli/paths.py": [
+      "literal-home",
+      "literal-home-macos",
+      "home-fallback",
+      "quoted-tilde",
+      "tilde-in-machine-position"
+    ],
+    "devkit.yaml": [
+      "tilde-in-machine-position"
+    ]
+  },
+  "shell": {
+    "_comment": "Shell scripts specifically. Quoting defeats ~ expansion here and nowhere else.",
+    "suffixes": [
+      ".sh",
+      ".bash"
+    ]
+  }
+}

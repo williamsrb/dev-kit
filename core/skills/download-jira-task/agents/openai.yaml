@@ -1,0 +1,4 @@
+interface:
+  display_name: "Download Jira Task"
+  short_description: "Save Jira issue details as local Markdown"
+  default_prompt: "Use $download-jira-task to download this Jira issue into the local PRD directory."

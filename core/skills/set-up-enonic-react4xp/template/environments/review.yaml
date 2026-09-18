@@ -1,0 +1,84 @@
+image:
+  repository: enonic/xp
+  pullPolicy: IfNotPresent
+  tag: "7.16.1-ubuntu"
+
+suPassword: mofser8
+
+JarSpecs:
+  prefix: "{PROJECT_SHORT_NAME}-"
+  bucketOptions:
+    secret: minio-bucket
+    url: minio.conductor.example.com
+    suffix: {PROJECT_SHORT_NAME}/review
+
+smtp:
+  enabled: true
+
+volumeSpec:
+  storageClass: "efs-sc"
+  monoVolume: true
+  sizes:
+    monoVolume: 100Gi
+    deploy: 200Mi
+
+ingress:
+  sslIssuer: "letsencrypt-prod"
+  ssl: True
+  redirectFromWWW: true
+  maxBodySize: 10000m
+  hosts:
+    - host: review.{PROJECT_SHORT_NAME}.k8s.example.com
+
+vhosts: |-
+  enabled = true
+
+  mapping.status.host = review.{PROJECT_SHORT_NAME}.k8s.example.com
+  mapping.status.source = /status
+  mapping.status.target = /status
+  mapping.status.idProvider.system = default
+
+  mapping.admin.host = review.{PROJECT_SHORT_NAME}.k8s.example.com
+  mapping.admin.source = /admin
+  mapping.admin.target = /admin
+  mapping.admin.idProvider.system = default
+
+  mapping.site.host = review.{PROJECT_SHORT_NAME}.k8s.example.com
+  mapping.site.source = /
+  mapping.site.target = /site/{PROJECT_SHORT_NAME}-norwegian/master/{PROJECT_SHORT_NAME}
+  mapping.site.idProvider.system = default
+
+customEnonicConfigs:
+  com.enonic.app.contentstudio.cfg: |-
+    contentSecurityPolicy.enabled=false
+
+imagePullSecrets: []
+
+resources:
+  limits:
+    memory: 8Gi
+  requests:
+    memory: 8Gi
+
+probes:
+  initialDelaySeconds: 30
+  periodSeconds: 60
+  failureThreshold: 5
+
+terminationGracePeriodSeconds: 180
+
+replicaCount: 1
+
+nodeSelector:
+  node: workloads
+
+tolerations:
+  - key: "dedicated"
+    operator: "Equal"
+    value: "workloads"
+    effect: "NoSchedule"
+
+keda:
+  enabled: false
+  settings:
+    cooldownPeriod: 64800 # 18 Hours

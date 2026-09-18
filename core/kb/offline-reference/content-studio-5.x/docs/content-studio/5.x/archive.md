@@ -1,0 +1,54 @@
+<!-- src:https://developer.enonic.com/docs/content-studio/5.x/archive generated:2026-07-29T03:47:31Z format:llm-dense content-studio-5.x -->
+#DOC docs/content-studio/5.x/archive.md
+
+# Content Archive
+
+**Archive** is a default action for removing a content that is no longer needed. When content is archived, it will not be physically deleted but moved to a separate storage where it can be restored from. If you need to completely remove the content, use **Delete** action in the "Archive/Delete" dialog.
+
+## Archive content
+
+Archiving is done from the "Archive" dialog. A content item will always be archived along with all of its descendant items to preserve content structure. If any of the content items to be archived/deleted are referenced by another content (which isn’t going to be archived/deleted as well), this will be reflected with a "link" icon over content item’s icon.
+
+To delete content instead of archiving it, select "Delete" from the button’s dropdown menu:
+
+Both for **Archive** and **Delete** operations user will be asked to confirm the action before it’s executed.
+
+> **Important:** Online content will instantly go offline after archiving or deleting. Deleted content will be physically removed and can only be restored via snapshot restore.
+
+## Archive/restore in layers
+
+- A content item will always be automatically archived in all child layers of current project/layer except for those where it’s localised.
+
+- When a new layer is created, it automatically inherits archive of its parent project/layer
+
+- When an inherited (non-localised) content is moved to archive directly in a layer, it will not be recreated in the "main" storage even though it’s there in the parent project/layer. It’s an effective way to "clean up" a layer of unwanted content items inherited from the parent project/layer.
+
+- If content is deleted from a layer’s archive, it will be recreated in the layer’s "main" storage (as long as it still exists in the parent), unless it was originally localised in the layer.
+
+## Archive browser
+
+> **Note:** The Archive browser requires [Content Studio+](https://market.enonic.com/vendors/enonic/content-studio-plus).
+
+Click "Archive" icon in the vertical menu bar on the left side to open the "Archive" section. The view is very similar to the Content Navigator, with some exceptions:
+
+- Only "Restore" and "Delete" actions are available. "Restore" will put selected content back to its original location while **Delete** will physically remove selected content.
+
+- Preview will only work for media items (images, videos etc.)
+
+- Widget selector has only two choices: Details and Version History
+
+In the preview panel on the right you can see who and when archived the item, and what its original path was.
+
+## Restore content
+
+> **Note:** Archived content can only be restored from the Archive browser which requires [Content Studio+](https://market.enonic.com/vendors/enonic/content-studio-plus).
+
+Use **Restore** action to restore selected archived content via "Restore from Archive" dialog. Content will always be restored along with all of its descendant items to preserve content structure.
+
+If a content item is restored directly from a Content layer’s archive, it will be automatically localised/unlinked from the content in parent project/layer.
+
+> **Tip:** If it’s not possible to put content back to its original location (for example, if original path is taken), the system will try to append "-1", "-2" etc. to path of the content being restored.
+
+## Version History
+
+Archive and Restore operations will be reflected in the Version History widget of a content item.

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Use Enonic CLI"
+  short_description: "Operate Enonic XP through the Enonic CLI"
+  default_prompt: "Use $use-enonic-cli to perform this Enonic XP operation with the CLI."

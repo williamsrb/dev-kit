@@ -1,0 +1,12 @@
+{
+  "_comment": [
+    "Example client overlay. Copy to client-overlay.json and fill in.",
+    "Every key is optional; an absent key disables the check or example that uses it.",
+    "env_root_host_patterns: host globs whose bare root URL is useless in an evidence",
+    "comment, so the linter demands a page path instead. '*' matches within one host label run."
+  ],
+  "env_root_host_patterns": ["*k8s.example.com", "web02-stg*.example.com"],
+  "git_host": "git.example.com",
+  "example_project": "acme-group",
+  "example_env_host": "review.acme-group.k8s.example.com"
+}

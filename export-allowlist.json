@@ -1,0 +1,147 @@
+{
+  "_comment": [
+    "What `devkit export` copies from ${HOME}/.agents into core/ (plan devkit, A1).",
+    "JSON rather than YAML per D21: the installer parses this with the stdlib only.",
+    "",
+    "layer is the D3 split. 'core' ships in every profile. 'enonic' and 'client'",
+    "are overlays a profile opts into. Anything absent from this file is not",
+    "exported, and hard_excludes wins over every allowlist entry.",
+    "",
+    "Adding a skill here is a publication decision: run `devkit export --check`",
+    "and read the gitleaks report before trusting it."
+  ],
+
+  "source": "${HOME}/.agents",
+  "target": "core",
+
+  "hard_excludes": [
+    ".auth/", "prds/", "plans/", "history/", "deliverables/", "kb/worklog/",
+    ".cache/", ".packages/", "tmp/", "local-vendor-folders/", ".playwright-mcp/",
+    ".playwright-cli/", "tests/", "backups/", "graft/", "benchmarks/",
+    "**/__pycache__/", "**/*.pyc", "**/.DS_Store", "**/*.lock"
+  ],
+
+  "skills": {
+    "core": [
+      "audit-heavy-report", "blank-space", "color-palette", "context7-mcp",
+      "describe-image", "diff-image", "download-jira-task", "draft-commit-message",
+      "find-skills", "generate-worklogs", "google-translate", "graft",
+      "grill-me", "grilling", "handoff", "humanize-text",
+      "lint-and-draft-generic-commit-message", "multitask-same-repo",
+      "plan-implementation", "plan-task-evidence", "playwright-cli",
+      "ponytail-review", "read-figma", "render-diff-patch", "run-plan",
+      "set-up-worktree", "skillspector", "spawn-playwright-mcp", "tesseract-cli",
+      "validate-impl", "validate-plan", "wait-what", "write-analyst-message"
+    ],
+    "enonic": [
+      "apply-react4xp-practices", "debug-xp-app", "develop-react4xp-v5",
+      "develop-react4xp-v6", "develop-react4xp-v7", "develop-xp7-backend",
+      "develop-xp8", "lint-and-draft-enonic-commit-message",
+      "set-up-enonic-react4xp", "test-xp-apps", "upgrade-xp-app", "use-enonic-cli"
+    ],
+    "excluded": {
+      "_comment": "Personal or unshippable. Reason is recorded so the list is auditable.",
+      "archify": "externally sourced, heavy example/test trees, no recommendedRole",
+      "develop-godot-2d": "personal, not work tooling",
+      "develop-godot-3d": "personal, not work tooling",
+      "dsnote": "personal, not work tooling",
+      "enonic-marketplace": "no SKILL.md; a reference directory, not a skill (S3)",
+      "godot-game-dev-shared": "no SKILL.md; shared assets for the godot skills (S3)",
+      "graphify": "opt-in, heavy, superseded by graft for this kit",
+      "ppt-master": "gitignored multi-hundred-MB asset trees; 14 of the 23 broken links"
+    }
+  },
+
+  "skills_vendor": {
+    "core": ["claude", "codex", "cursor"],
+    "files": ["ROLES.md"]
+  },
+
+  "rules": {
+    "_comment": "AGENTS.md is generated from manifest.json, so the generator and its inputs ship, not a rendered snapshot. `devkit export` runs generate-agents-md.py --layer <profile layers> at install time.",
+    "core": [
+      "manifest.json", "agents.d/", "BASE.md", "BASE.mdc",
+      "browser-downloads.mdc", "browser-mcp-preference.mdc", "graft.mdc",
+      "git-amend-explicit-order.mdc", "history-automatic-logging.mdc",
+      "local-first-deterministic-tools.mdc", "memory-filesystem.mdc",
+      "multitask-same-repo.mdc", "no-commit-co-authors.mdc",
+      "no-git-fast-forward.mdc", "no-git-index-writes.mdc", "no-git-reset.mdc",
+      "no-git-shell-commands.mdc", "orchestrate-cursor-models.mdc",
+      "prefer-python-over-shell.mdc", "session-store-isolation.mdc",
+      "user-scope-exclusions.mdc", "vendor-vision-image-preview.mdc"
+    ],
+    "enonic": [
+      "enonic-thymeleaf-negation.mdc", "enonic-xp-nashorn-template-strings.mdc"
+    ],
+    "client": [
+      "evidence-post-on-failure-ask.mdc", "jira-comment-edit-backup.mdc",
+      "jira-evidence-persistent-content.mdc", "jira-screenshot-consistency.mdc",
+      "token-efficiency-chat.mdc"
+    ],
+    "excluded": {
+      "graphify.mdc": "graphify skill is not exported"
+    }
+  },
+
+  "kb": {
+    "core": [
+      "_shared/**", "validation/**", "implementation/**", "offline-reference/scripts/**"
+    ],
+    "core_excludes": [
+      "implementation/enonic-cli/**", "implementation/xp7-to-xp8-upgrade/**",
+      "implementation/acme-group-multitask/**"
+    ],
+    "enonic": [
+      "offline-reference/xp7/**", "offline-reference/xp8/**",
+      "offline-reference/react4xp-5.x/**", "offline-reference/react4xp-6.x/**",
+      "offline-reference/react4xp-stable/**",
+      "offline-reference/content-studio-5.x/**",
+      "offline-reference/content-studio-stable/**",
+      "implementation/enonic-cli/**", "implementation/xp7-to-xp8-upgrade/**"
+    ],
+    "client": ["testing/**"],
+    "excluded": {
+      "offline-reference/godot-2d/**": "personal",
+      "offline-reference/godot-3d/**": "personal",
+      "worklog/**": "personal, already a hard exclude"
+    }
+  },
+
+  "bin": {
+    "core": [
+      "agentctl", "agentctl_jira.py", "generate-agents-md.py",
+      "merge-claude-config.py", "sync-bin-projections.sh",
+      "sync-skill-projections.sh", "verify-links.sh"
+    ],
+    "excluded": {
+      "actionlint": "vendored binary, gitignored",
+      "review-auth": "reads the harness .auth/<user>.passwd; client credential flow",
+      "recolor-white-black-icons.sh": "generalized into install.py at A5 (4.8)"
+    }
+  },
+
+  "hooks": {
+    "core": [
+      "history.py", "claude-history-adapter.py", "codex-history-adapter.py",
+      "cursor-memory.py", "memory-recall.sh", "kb-router.py",
+      "deny-git-push.sh", "claude-deny-git-push.sh", "git-push-policy.sh",
+      "history-log-prompt.sh", "history-log-response.sh", "history-log-stop.sh",
+      "graft-hooks.cjs", "graft-statusline.cjs", "rtk-codex.py"
+    ]
+  },
+
+  "mcp": {
+    "core": ["catalog.json", "install.py", "playwright.py"]
+  },
+
+  "config": {
+    "core": ["client-overlay.example.json"],
+    "excluded": {
+      "client-overlay.json": "the real client overlay; the client profile ships its own"
+    }
+  },
+
+  "agents": {
+    "core": ["**"]
+  }
+}

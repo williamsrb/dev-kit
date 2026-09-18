@@ -1,0 +1,275 @@
+<!-- src:https://developer.enonic.com/docs/platform/stable/release/upgrade generated:2026-07-24T21:49:28Z format:llm-dense xp:8.x -->
+#DOC docs/platform/stable/release/upgrade.md
+
+# Upgrading to XP8
+
+This procedure applies to feature (8.x.0) and fix upgrades (8.x.y, etc).
+
+## Preparations
+
+Before you start the upgrade process, make sure to read through the entire documentation and understand the steps involved. You should always perform a test upgrade in a staging environment before applying the changes to production.
+
+> **Important:** Before migrating any data, every application running on your installation - both custom-built and 3rd party - must already be available in an XP 8 compatible version. Migration cannot be completed until all applications are ready for XP 8.
+
+## Non-cluster upgrade
+
+Single node deployments cannot be performed without downtime. To upgrade a single instance deployment, follow the instructions below:
+
+- Stop your instance
+
+- Replace your XP7 runtime image with the new XP7 image
+
+- Start the instance.
+
+## Rolling Cluster upgrade
+
+All fix upgrades (i.e. from 8.4.1 to 8.4.8), and most feature upgrades (i.e. from 8.5.x to 8.6.x) support rolling upgrades - with zero downtime. None of Major upgrades (i.e. from 7.x to 8.x) support rolling upgrades, and require a full restart of the cluster.
+
+To safely perform a rolling upgrade, perform the following steps.
+
+> **Warning:** Before you perform a rolling upgrade, verify that all feature version in your upgrade path (from version → to version) support rolling upgrade
+
+- Upgrade only one node at a time. Wait for the node to start and join the cluster before you move on
+
+- Stop, upgrade image and start your master nodes first (We always recommend using dedicated master nodes)
+
+- Stop, upgrade image and start data nodes
+
+- Stop, upgrade image and start remaining nodes
+
+## Full restart Cluster upgrade
+
+Selected feature versions (i.e. when upgrading from 7.6.x to 7.7.x or 7.8.x) may require a full restart in order to guarantee no loss of data and/or state. Releases that require full restart are marked with a special warning section below.
+
+> **Note:** This strategy may safely be applied to upgrading any XP cluster and/or version
+
+Follow the steps below to complete a restart upgrade:
+
+- Stop all cluster nodes
+
+- Replace the xp runtime image with the new for all nodes
+
+- Start all nodes in parallel
+
+> **Note:** It is important to start the nodes at the same time to avoid timeouts, should any upgrade scripts be supplied with the new version.
+
+## Applications
+
+After upgrading to a new feature version of Enonic XP, it’s a good idea to check the Enonic Market - newer versions of the apps you are using may be available there. We generally always recommend updating your apps to the latest version!
+
+## Upgrading to v8.0
+
+### Requirements
+
+This guide focuses on completing an upgrade with zero downtime, and requires you to set up production environment on XP 8 in parallel with existing 7.16 environment. Carefully follow the below steps to upgrade your instance:
+
+> **Note:** For scenarios where downtime cannot be avoided, additional steps, such as setting up a temporary "we are upgrading page", will be required:
+
+Before starting the upgrade process, ensure the following requirements are in place
+
+XP Version
+
+You need to be running at least Enonic XP 7.16.x (if you are running an older version, upgrade to 7.16.x first)
+
+QA environment
+
+Ensure you have a QA environment where you can perform a test upgrade first (highly recommended)
+
+Enonic CLI
+
+Make sure you have the latest version of [Enonic CLI](https://developer.enonic.com/docs/enonic-cli) installed
+
+Disk space
+
+Verify you have enough disk space to facilitate a complete dump of all existing data
+
+Applications ready for XP 8
+
+All applications - 3rd party and custom-built - must be available in XP 8 compatible versions **before** you begin the migration. The migration cannot complete without them.
+
+> **Important:** Updating custom applications is a developer task that must be done ahead of time. Follow the [application upgrade instructions](docs/code/stable/upgrade.md) in the Enonic Dev kit documentation, and confirm with the maintainers of any 3rd party apps that XP 8 versions are available.
+
+### Breaking changes
+
+#### File Application deployments
+
+If you have one or more applications deployed as files, replace them with their respective XP 8 versions
+
+#### Jansi Logback plugin no longer supported
+
+Console appender in distributive used to use Jansi plugin for colorized output. This plugin is no longer supported as logback now natively supports colorized output. Remove the `withJansi` element from your logback.xml file to avoid errors when starting the server.
+
+Old logback.xml
+
+```xml
+  <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
+    <withJansi>true</withJansi>
+    <encoder>
+      <pattern>%date{ISO8601} %highlight(%-5level) %cyan(%logger{36}) - %msg%n</pattern>
+    </encoder>
+  </appender>
+```
+
+Old logback.xml
+
+```xml
+  <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
+    <encoder>
+      <pattern>%date{ISO8601} %highlight(%-5level) %cyan(%logger{36}) - %msg%n</pattern>
+    </encoder>
+  </appender>
+```
+
+#### Default CMS repository
+
+With XP 8, the default CMS repository `com.enonic.cms.default` is no longer created automatically. In fact, there is no default CMS repository at all. Existing `com.enonic.cms.default` repository is converted to a normal one without any special permissions or behavior. During XP 8 startup the repository will be converted to a normal repository. To avoid permission conflicts, it is recommended to migrate the default repository prior migration.
+
+#### Metrics Endpoint
+
+Statistics endpoint [http://:2609/metrics](http://:2609/metrics) is no longer reporting Dropwizard Metrics JSON. Instead, it reports metrics in [OpenMetrics](https://github.com/prometheus/OpenMetrics/blob/main/specification/OpenMetrics.md) format.
+
+#### Management API
+
+POST /repo/export
+
+The following request parameters have been removed:
+
+- `exportWithIds` - previously controlled whether node IDs were included in the export
+
+- `includeVersions` - previously controlled whether all node versions were exported
+
+- `dryRun` - dry-run mode is no longer supported
+
+A new optional `batchSize` parameter has been added to control the number of nodes processed per batch (default: `1000`).
+
+Exports are now stored as ZIP archives named `{exportName}.zip` in the exports directory, replacing the previous folder-based export structure.
+
+POST /repo/import
+
+The `dryRun` request parameter has been removed.
+
+The `exportName` must refer to a ZIP archive present in the exports directory (`.zip` file).
+
+> **Tip:** Folder-based exports from XP 7 should be converted to ZIP format before they can be imported.
+
+POST /system/dump
+
+The `archive` request parameter field has been removed.
+
+Dumps are now always stored as ZIP archives named `{name}.zip` in the dumps directory, replacing the previous folder-based structure.
+
+POST /system/load
+
+The `archive` request parameter field has been removed.
+
+POST /repo/snapshot
+
+No longer waits for the snapshot to complete and returns immediately after the snapshot process is started. The response contains a `taskId` field that can be used to track the progress of the snapshot.
+
+POST /repo/snapshot/restore
+
+No longer waits for the snapshot restore to complete and returns immediately after the restore process is started. The response contains a `taskId` field that can be used to track the progress of the snapshot restore.
+
+#### Admin Dashboard
+
+Default Admin Home path is now `/admin` instead of `/admin/home`.
+
+#### General Admin Tools
+
+All admin tools are now present on the Launcher Menu as it was stated in documentation. In case when admin tool should not be present on the launcher panel convert it to an API.
+
+#### Security changes
+
+xp.suPassword
+
+`md5` and `sha1` hashing algorithms are no longer supported `xp.suPassword` system property as they are no longer considered secure. Plain text password isn’t supported anymore either. Please use stronger hashing algorithms `sha256` or `sha512`. More details about configuring `su` password can be found in [system properties documentation](docs/platform/stable/config/system.md#system-properties).
+
+System `su` user password is no longer read from the database either. If you had a `su` password stored in the database, it will be ignored after the upgrade.
+
+User passwords
+
+User passwords are still supported in XP8, although the hashing algorithm is changed for new passwords.
+
+So far only `pbkdf2-sha512` is supported for new passwords, but new algorithms may be added in future releases. Hash function can be configured in the [security service configuration](docs/platform/stable/config/system.md#security).
+
+The old passwords are *not* automatically converted to the new format. When a user with an old password logs in, the password is verified using the old algorithm. It is strongly recommended to change all passwords after the upgrade to ensure all passwords are stored using the new algorithm.
+
+WebSocket same-origin check
+
+WebSocket handshakes are now subject to a built-in same-origin check. If a WebSocket controller does not supply its own `checkOrigin` function, handshake requests with an `Origin` that does not match the request host are rejected. In XP 7 such requests were accepted from any origin.
+
+If your applications rely on cross-origin WebSocket connections, implement a `checkOrigin` function in the WebSocket controller to explicitly allow trusted origins.
+
+If legitimate same-origin connections are rejected after the upgrade, the usual cause is a reverse proxy that does not propagate the public scheme/host/port to XP — fix the proxy configuration. As a last resort, the check can be disabled with the `websocket.defaultOriginCheck` setting in the [Jetty configuration](docs/platform/stable/config/system.md#jetty).
+
+#### Other configuration
+
+- Migrate other configuration files from 7.16, including custom configurations (app config etc.).
+
+draftBranchAllowedFor
+
+- Portal `draftBranchAllowedFor` configuration is removed. Instead - to access content from the draft branch - user must have any content project role assigned (like `cms.project..viewer`).
+
+deployment configuration
+
+- It is no longer possible to via `com.enonic.xp.server.deploy.cfg` file. This method was not documented, unreliable in cluster installations and insecure.
+
+### 1. Install XP 8
+
+We recommend setting up a new production environment for XP 8, running in parallel with your XP 7 environment. This will virtually eliminate downtime and also be a safety net should the upgrade fail somehow.
+
+Follow the [XP installation instructions](docs/platform/stable/deployment/distro.md#xp_install) to set up an instance matching your requirements
+
+Start your new server and verify everything is working properly.
+
+### 2. Create service accounts
+
+Generate (or download, if already exists) a private key for a service account with Administrator role, one on the existing XP7 instance (to be used for `dump create`), another on the new XP8 instance (to be used for `dump load`). The key will be automatically downloaded to your disk after it’s generated. Read [here](docs/platform/stable/security/service-accounts.md) to learn how to generate keys for service accounts.
+
+### 3. Dump data
+
+We are now ready to dump data from our existing XP7 instance:
+
+```
+enonic dump create -d xp7to8 --archive --cred-file xp7-private-key.json
+```
+
+> **Important:** The `--archive` parameter must be provided, otherwise XP8 will not be able to read the dump. The migration dump must also include version history and all binaries (attachments) — both are included by default; do not pass `--skip-versions`.
+
+### 4. Upgrade and load
+
+Move dump
+
+Transfer the dump archive from the previous step to the new instance. For clustered environments, any server will do.
+
+Load dump
+
+Now, load the dump into your XP 8 environment:
+
+```
+enonic dump load -d xp7to8 --upgrade --cred-file xp8-private-key.json
+```
+
+> **Note:** Don’t worry about the CLI losing connection, this is only related to the system repo (and user) being removed during the operation. Watch the log for progress and don’t start changing data until all the activity in the XP log is finished.
+
+### 5. Update apps
+
+All installed applications must be updated to latest versions compatible with XP 8.
+
+Market apps
+
+For market apps, go to the Applications tool, click "Install" in the menu and click "Upgrade" button for all applications where upgrade is available.
+
+Custom apps
+
+Install XP8-compatible versions of your custom applications either through the "Install App" UI or by using CLI.
+
+### 6. Validate
+
+Validate that your new installation is working as expected. We recommend checking logs, and performing live tests on services.
+
+### 7. Go live
+
+With all lights green, redirect all traffic from your old XP 7 servers to the upgraded XP 8 environment.
+
+Welcome to the XP 8 club!

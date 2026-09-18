@@ -1,0 +1,4 @@
+interface:
+  display_name: "Diff Image"
+  short_description: "Compare evidence images with exact pixel diffs"
+  default_prompt: "Use $diff-image to compare these two evidence images and explain the exact visual differences."

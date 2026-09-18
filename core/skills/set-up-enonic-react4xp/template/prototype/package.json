@@ -1,0 +1,39 @@
+{
+  "name": "@app/{PROJECT_SHORT_NAME}",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "next dev",
+    "buildNext": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "css": "gulp default",
+    "build": "node_modules/.bin/gulp build"
+  },
+  "dependencies": {
+    "@cospired/i18n-iso-languages": "^4.2.0",
+    "@faker-js/faker": "^9.6.0",
+    "@fancyapps/ui": "^6.0.14",
+    "@gsap/react": "^2.1.2",
+    "clsx": "^2.1.1",
+    "dayjs": "^1.11.13",
+    "gsap": "^3.13.0",
+    "match-sorter": "^8.1.0",
+    "next": "14.2.24",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-hook-form": "^7.60.0",
+    "sass-loader": "^16.0.5",
+    "swiper": "^11.2.4"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "@types/react": "^18",
+    "@types/react-dom": "^18",
+    "eslint": "^8",
+    "eslint-config-next": "14.2.24",
+    "sass": "^1.77.8",
+    "typescript": "^5"
+  }
+}

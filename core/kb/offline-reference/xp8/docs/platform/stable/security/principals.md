@@ -1,0 +1,98 @@
+<!-- src:https://developer.enonic.com/docs/platform/stable/security/principals generated:2026-07-24T21:49:28Z format:llm-dense xp:8.x -->
+#DOC docs/platform/stable/security/principals.md
+
+# Principals
+
+Principals are the actors of XP’s security model: users, groups, and roles. Together they answer "who is this?" and "what may they do?".
+
+## Introduction
+
+There are thre types of principal objects:
+
+- **Users:** Represent a person or service account. Always belong to an [ID provider](docs/platform/stable/security/idproviders.md).
+
+- **Groups:** Bundle users (and other groups) together so permissions can be granted in bulk. Also scoped to an ID provider.
+
+- **Roles:** Global access tokens that grant specific privileges in the system. Independent of any ID provider.
+
+> **Tip:** You may manage principals from the[Users Admin tool](docs/platform/stable/admin/users.md).
+
+## Users
+
+Users exist in the scope of an ID provider. Selected ID providers, such as the [Simple ID provider](https://market.enonic.com/vendors/enonic/simple-idprovider) let you create and manage users directly from the XP admin. Other ID providers - such as the [OIDC ID provider](https://market.enonic.com/vendors/enonic/oidc-id-provider) - rely on external systems, where users are managed in the 3rd party system and only appear in XP once they have signed in for the first time.
+
+A user generally consist of the following fields:
+
+- login (username)
+
+- display name (Full name)
+
+- e-mail
+
+### Profiles
+
+Developers may also store custom properties and values in the user object via `profiles`. This information is currently not visible or possible to edit via the Users App.
+
+## Groups
+
+Similar to users, groups are linked to an ID provider. Groups provide a flexible way to create and manage permissions, without assigning them on a per-user-basis.
+
+- You may add users to a group
+
+- Roles may be granted to a group - indirectly assigning the roles to the users of the group
+
+- Groups may be added to a group - causing transitive resolution of permissions
+
+## Roles
+
+Roles provide access to application specific functionality via so-called Role Based Access Control (RBAC).
+
+A role consist of:
+
+- name (unique identifier)
+
+- Display Name (Human friendly name)
+
+- Description (optional)
+
+You are free to manually define custom roles, i.e. by giving it select permissions. In general however, it is recommended that roles are created and managed by applications. The applications then typically also implement the related functionality that the role gives access to.
+
+> **Note:** Unlike groups, a role may not be assigned other roles. It is designed to provide a specific access, and nothing else.
+
+### Permissions
+
+Just like users and groups, a role may be given explicit permissions to content in the CMS via [Content Studio](https://developer.enonic.com/docs/content-studio/stable/workbench/permissions).
+
+### System roles
+
+Enonic XP ships with several built-in roles. Each of which provide specific access and privileges in the system.
+
+**system.admin** Users with this role have full access to all content and admin tools through the user interface.
+
+**system.admin.login** Users with this role can log in to the administration console. These users will also require a role for each of the admin tools that the users need access to.
+
+**system.user.admin** Grants full access to the Users admin tool, including create/edit/delete for ID providers, users, roles, and groups.
+
+**system.user.app** Provides read-only access to the Users admin tool.
+
+**system.schema.admin** Grants permissions to read/write schemas.
+
+### Dynamic roles
+
+The system also includes two special roles which cannot be directly assigned to a user or group, but are conditionally assigned to users automatically.
+
+**system.authenticated** All users that are authenticated gets this role, regardless of ID provider.
+
+**system.everyone** All users, both authenticated and non-authenticated users (The Anonymous user) are assigned this role.
+
+> **Tip:** The role can is typically used to grant read access to public content, thus making it available to - well everyone.
+
+### CMS roles
+
+**cms.admin** Allows full access to Content Studio, including ability to create and delete content projects.
+
+**cms.expert** Grants the ability to view and modify source code in the rich text editor.
+
+When using [Content Projects](docs/cms/stable/projects.md), each project automatically creates a set of [project roles](docs/cms/stable/projects.md#roles) in addition to the built-in roles listed above.
+
+These roles will be prefixed with `cms.projectname.`, and as such be unique to each individual project.

@@ -1,0 +1,16 @@
+version: "3.2"
+services:
+  {PROJECT_SHORT_NAME}-prototype:
+    container_name: {PROJECT_SHORT_NAME}-prototype
+    image: "{PROJECT_SHORT_NAME}-prototype-image"
+    build:
+      context: ../../
+      dockerfile: docker/prototype-local/Dockerfile
+    ports:
+      - "3000:3000"
+    volumes:
+      - ../../prototype:/usr/app/prototype
+      - node_modules:/usr/app/prototype/node_modules
+    command: yarn dev
+volumes:
+  node_modules:

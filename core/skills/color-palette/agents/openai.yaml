@@ -1,0 +1,4 @@
+interface:
+  display_name: "Color Palette"
+  short_description: "Extract palettes and score images against them 0-1"
+  default_prompt: "Use $color-palette to extract a palette from this reference image and score the batch against it."

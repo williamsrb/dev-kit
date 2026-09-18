@@ -1,0 +1,4 @@
+interface:
+  display_name: "Develop Enonic XP 8"
+  short_description: "Use offline Enonic XP 8 documentation"
+  default_prompt: "Use $develop-xp8 to implement this feature with the offline XP 8 documentation."

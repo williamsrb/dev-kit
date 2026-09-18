@@ -1,0 +1,6 @@
+interface:
+  display_name: "Generate Worklogs"
+  short_description: "Create Jira worklogs from local evidence"
+  default_prompt: "Use $generate-worklogs to prepare worklogs for today from available evidence."
+policy:
+  allow_implicit_invocation: false

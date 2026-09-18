@@ -1,0 +1,4 @@
+interface:
+  display_name: "Develop XP 7 Backend"
+  short_description: "Build backend services for Enonic XP 7"
+  default_prompt: "Use $develop-xp7-backend to implement this Enonic XP 7 backend feature."

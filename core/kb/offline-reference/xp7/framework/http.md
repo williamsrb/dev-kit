@@ -1,0 +1,126 @@
+<!-- src:https://developer.enonic.com/docs/platform/7.x/framework/http generated:2026-07-24T21:10:20Z format:llm-dense xp:7.x -->
+#DOC framework/http.md
+
+# HTTP request and response
+
+The JavaScript framework defines the following basic HTTP request and response objects:
+
+## HTTP Request
+
+The following object is passed along with every HTTP request. The object is similar to many traditional request objects, except for two special properties: mode and branch. These properties are specific to the XP Portal, automatically indicating the contextual branch and rendering mode.
+
+The `request` object represents the HTTP request and current context for the controller.
+
+```json
+{
+  "method": "GET",  (1)
+  "scheme": "http",  (2)
+  "host": "enonic.com",  (3)
+  "port": "80",  (4)
+  "path": "/my/page",  (5)
+  "url": "https://enonic.com/my/page?debug=true",  (6)
+  "remoteAddress": "10.0.0.1",  (7)
+  "mode": "edit",  (8)
+  "branch": "master",  (9)
+  "body": null (10)
+  "params": { (11)
+    "debug": "true"
+  },
+  "headers": { (12)
+    "Language": "en",
+    "Cookies": "mycookie=123; other=abc;"
+  },
+  "cookies": { (13)
+    "mycookie": "123",
+    "other": "abc"
+  }
+}
+```
+
+| ****1** | HTTP method of the request |
+| --- | --- |
+| ****2** | Scheme used to make this request i.e. "http" / "https" |
+| ****3** | Host name of the server to which the request was sent. |
+| ****4** | Port of the server to which the request was sent. |
+| ****5** | Path of the request |
+| ****6** | URL of the request. |
+| ****7** | IP address of the client that sent the request. If the X-Forwarded-For [[1](#_footnotedef_1)] header is set, its value will override the client IP. |
+| ****8** | Rendering mode (used in site context) one of: `inline`, `edit`, `preview`, `live`. |
+| ****9** | Contextual repository branch (used in site context), one of: `draft`, `master`. |
+| ****10** | Optional string value |
+| ****11** | Name/value pairs of the query/form parameters from the request. |
+| ****12** | Name/value pairs of the HTTP request headers. |
+| ****13** | Name/value pairs of the HTTP request cookies. |
+
+XP 7.12.0 The `request` object also has `getHeader(name)` function that reads out a header on the request. The name is case-insensitive. Use it instead of accessing `headers` values directly.
+
+> **Note:** Modification of `headers` does not affect the result of `getHeader(name)` calls.
+
+## HTTP Response
+
+The `response` object is the value returned by an HTTP controller - as a response to an :ref:`http_request`.
+
+```json
+{
+  "status": 200,  (1)
+  "body": "Hello World",  (2)
+  "contentType": "text/plain",  (3)
+  "headers": {   (4)
+      "key": "value"
+  },
+  "cookies": {},   (5)
+  "redirect": "/another/page",   (6)
+  "postProcess": true,   (7)
+  "pageContributions": {},   (8)
+  "applyFilters": true   (9)
+}
+```
+
+| ****1** | HTTP response status code (default is `200`). |
+| --- | --- |
+| ****2** | HTTP message body of the response that can either be a string or a JavaScript object. |
+| ****3** | MIME type of the body (defaults to `text/plain; charset=utf-8`). |
+| ****4** | Name/value pairs with the HTTP headers to be added to the response. Starting from XP 7.15.0 value can be `null`/`undefined` to remove a headers added by other controllers/filters. |
+| ****5** | HTTP cookies to be added to the response. Will be described in a later section. |
+| ****6** | URI to redirect to. If specified, the value will be set in the "Location" header and the status will be set to 303. |
+| ****7** | Site engine only: If enabled the response body from a page render is processed to find and render any component tags found. (default is `true`). Set to false to skip post processing of tags. |
+| ****8** | Site engine only: Use to contribute html to the resulting response markup. See [page contributions](/docs/platform/7.x/framework/contributions) for more information. |
+| ****9** | Site engine only: If enabled, any defined [response processors](/docs/platform/7.x/framework/processors) in the pipeline will be executed. |
+
+## HTTP Cookies
+
+There are two ways that Http Cookie values can be set in responses (see examples).
+
+Here’s an example of how the cookies are set:
+
+```javascript
+return {
+    status: 200,
+    body: "Hello World",
+    cookies: {
+        "plain": "value",  (1)
+        "complex": {  (2)
+            value: "value",  (3)
+            path: "/valid/path",  (4)
+            domain: "enonic.com",  (5)
+            comment: "Some cookie comments",  (6)
+            maxAge: 2000,  (7)
+            secure: false,  (8)
+            httpOnly: false,  (9)
+            sameSite: "Lax" (10)
+        }
+    }
+};
+```
+
+| ****1** | If the value is a string then the cookie is created using default settings. |
+| --- | --- |
+| ****2** | If the value is an object, it will try to apply the settings. |
+| ****3** | Value (required) The value to store in the cookie. This example will create a cookie looking like this `complex: value`. |
+| ****4** | The paths on the site where this cookie should be available from (and all containing paths). Defaults to `empty` |
+| ****5** | Add additional sites that should be able to read the cookie. Defaults to `empty` (Only the server that creates the cookie can read it.) |
+| ****6** | A comment describing the cookie. Default to ``null`. Deprecated and will be removed in future versions of XP. |
+| ****7** | Number of **seconds** before the browser is allowed to delete the cookie. Defaults to `-1` (The cookie will live until the browser is shut down.) |
+| ****8** | Control if the cookie should only be accepted to be created and read over https and similar secure protocols. Defaults to `false` |
+| ****9** | Control if the cookie is available for scripts or not. If `true`, only the serverside code can read the cookie. Defaults to `false` (Also client-side scripts can read the cookie.) |
+| ****10** | XP 7.3.0 SameSite flag for the cookie. Can be `lax`, `strict`, `none` or ` ` for "not set". Default is "not set", meaning "browser’s default". |

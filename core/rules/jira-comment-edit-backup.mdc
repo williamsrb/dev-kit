@@ -1,0 +1,16 @@
+---
+description: Before editing any Jira comment, store a local HTML backup of the previous body
+alwaysApply: true
+---
+
+# Jira comment edit backup
+
+Jira cannot revert a comment overwrite.
+
+Before any `addOrEditJiraIssueComment` (or equivalent) **with** `commentId`:
+
+1. Fetch that comment as HTML (`responseContentFormat: html`).
+2. Run `python3 ~/.agents/skills/plan-task-evidence/scripts/backup-jira-comment.py --issue <KEY> --comment-id <ID> --body-file <html>`.
+3. Edit only if the script exits 0. Report the backup path in chat, never in the Jira body.
+
+New comments (no `commentId`) skip this. Do not skip the backup because the comment is same-day, a re-run, or a plan said to edit in place.

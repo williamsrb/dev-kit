@@ -1,0 +1,4 @@
+interface:
+  display_name: "Apply React4XP Practices"
+  short_description: "Apply project React4XP 6 conventions"
+  default_prompt: "Use $apply-react4xp-practices to review this React4XP 6 change against project conventions."

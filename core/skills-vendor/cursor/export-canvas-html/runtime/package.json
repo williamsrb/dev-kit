@@ -1,0 +1,9 @@
+{
+  "name": "export-canvas-html-runtime",
+  "private": true,
+  "version": "3.0.0",
+  "description": "esbuild transform for Cursor canvases. Component styles come from Cursor's canvas-runtime.esm.js.",
+  "dependencies": {
+    "esbuild": "^0.25.9"
+  }
+}

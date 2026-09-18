@@ -1,0 +1,17 @@
+---
+description: acme-group Jira evidence CMS pages are persistent prototype-slug pages, never throwaway ticket-keyed content
+alwaysApply: true
+---
+
+# Creating Jira evidence — persistent content, not disposable pages
+
+When creating or updating CMS content for Jira evidence on **acme-group review**:
+
+1. Path: `/site/test/evidence/<prototype-slug>` (`<slug>` matches `prototype.acme-group.k8s.example.com/components/<slug>` or `/pages/<slug>`).
+2. Display name: the component title only. Real prototype copy and images. Real ContentSelector targets.
+3. Capture desktop 1440 and mobile 390. Reuse the existing evidence **page**. For the Jira comment: edit in place only if that comment was **created today**, or the user strictly asked to edit a named older comment; otherwise post a new comment.
+4. Reuse the existing page when it already exists. Create the `test` / `evidence` folders only if missing.
+
+Do **not** create throwaway evidence pages. Forbidden names and paths: `DELETE-ME`, `delete-me-*`, ticket keys in display name or path (`proj-413-…`), a KB folder named `disposable-content`.
+
+KB write-back: `How-to-*.md` under `~/.agents/kb/testing/acme-group/`. Mechanics: `How-to-create-persistent-part-evidence-content-on-review.md`.

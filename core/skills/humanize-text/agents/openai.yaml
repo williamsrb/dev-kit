@@ -1,0 +1,4 @@
+interface:
+  display_name: "Humanize Text"
+  short_description: "Make AI-written text sound like the writer"
+  default_prompt: "Use $humanize-text to rewrite this text in my voice without changing its facts."

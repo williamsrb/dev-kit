@@ -1,0 +1,30 @@
+---
+description: Send a long-edge-capped sidecar to vendor vision; never overwrite the source image.
+alwaysApply: true
+---
+
+# Vendor vision image preview
+
+When pixels must enter a **vendor-model vision** path (Read-image, screenshot-to-model, or any other injection of image bytes into the remote model), send a **preview**, not the canonical file.
+
+Goal: cut vision tokens. Which local command writes the sidecar is chosen by the active skill or the tools on the box. This rule does not name a tool.
+
+## Do
+
+1. If the longest edge is already at or under **1280px**, send the file as-is. Do not copy.
+2. Otherwise write a sidecar that keeps aspect ratio and caps the longest edge at **1280px**. Then send that sidecar.
+3. Prefer a tight crop of the relevant region over shrinking a full page when the question is about one element.
+4. Keep the original path as the artifact for storage, OCR, pixel-diff, Jira flatten/upload, and any later retake.
+5. An active skill may name a different cap. Default is 1280.
+
+## Do not
+
+- Do not resize in place. Do not `mogrify` (or otherwise overwrite) the canonical file to make the preview.
+- Do not use a percentage shrink (for example 70%). Cap the long edge.
+- Do not cap at 512px for UI, layout, or evidence zoom checks.
+- Do not send images to vendor vision for OCR. OCR stays on the local-first gate.
+- Do not treat a chat attachment the user already pasted as something this gate must pre-resize.
+
+## Jira evidence
+
+Consistency checks use the **preview**. Flatten, upload, and the posted attachment use the **original**. In-place flatten of already-validated files for Jira upload is a separate step and is not this rule. A failed check still means retake; do not flatten/upload/post.

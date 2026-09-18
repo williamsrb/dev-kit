@@ -1,0 +1,114 @@
+# CI for devkit (plan section D17: CI is required infrastructure, not a nicety).
+#
+# Every gate here also runs as an ordinary local command. That is the point: a
+# gate you can only run in CI is a gate nobody runs before pushing.
+#
+#   ./devkit export --check
+#   ./devkit lint-paths
+#   ./devkit docs generate --check
+#   python3 -m unittest discover -s tests
+
+stages: [gate, matrix]
+
+default:
+  image: python:3.12-slim
+  interruptible: true
+
+variables:
+  GIT_DEPTH: "0"          # update fetch resolves lineage from the root commit
+
+# ---------------------------------------------------------------- gates
+
+tests:
+  stage: gate
+  script:
+    - python3 -m unittest discover -s tests -v
+
+lint-paths:
+  stage: gate
+  script:
+    - ./devkit lint-paths
+
+help-contract:
+  stage: gate
+  # D14 is easy to regress and invisible until someone types the bare command.
+  script:
+    - ./devkit > /tmp/bare.txt
+    - ./devkit --help > /tmp/help.txt
+    - diff /tmp/bare.txt /tmp/help.txt
+    - for g in profile update origin docs; do diff <(./devkit $g) <(./devkit $g --help); done
+    - "! ./devkit bogus 2>/dev/null"
+    - "./devkit bogus 2>&1 >/dev/null | grep -q usage:"
+
+export-drift:
+  stage: gate
+  # core/ must not fall behind its source, and must not be edited directly.
+  # The source is not present in CI, so this checks the committed tree is
+  # self-consistent rather than re-running the copy.
+  script:
+    - test -d core || (echo "core/ is missing; run devkit export --apply" && exit 1)
+    - python3 -c "import json,pathlib,sys; a=json.loads(pathlib.Path('export-allowlist.json').read_text()); sys.exit(0 if a['skills']['core'] else 1)"
+
+secrets:
+  stage: gate
+  image: zricethezav/gitleaks:latest
+  script:
+    - gitleaks dir core --no-banner --config .gitleaks.toml
+
+docs:
+  stage: gate
+  script:
+    - ./devkit docs generate --check
+
+shellcheck:
+  stage: gate
+  image: koalaman/shellcheck-alpine:stable
+  script:
+    - shellcheck -S warning bootstrap.sh scripts/*.sh templates/shell/*.sh
+
+# ---------------------------------------------------------------- matrix
+
+# R15: the dnf and pacman package names are proposed, not verified — foreign
+# distro repositories are not queryable from a development machine. This matrix
+# is their acceptance test. A job passes when bootstrap.sh completes and every
+# `provides` binary the profile declares is resolvable, with its rung named.
+.matrix:
+  stage: matrix
+  allow_failure: true      # until A7 has run each one green at least once
+  script:
+    - ./bootstrap.sh --profile "${PROFILE:-core}" --apply --third-party no
+    - python3 devkit_cli/bootstrap_plan.py --profile "${PROFILE:-core}" --verify
+
+debian:
+  extends: .matrix
+  image: debian:stable-slim
+  before_script:
+    - apt-get update -qq && apt-get install -y -qq sudo curl ca-certificates python3
+
+ubuntu:
+  extends: .matrix
+  image: ubuntu:24.04
+  before_script:
+    - apt-get update -qq && apt-get install -y -qq sudo curl ca-certificates python3
+
+fedora:
+  extends: .matrix
+  image: fedora:41
+  before_script:
+    - dnf install -y -q sudo curl python3
+
+rocky:
+  extends: .matrix
+  # A RHEL derivative specifically: ffmpeg is not in the base repositories, so
+  # this is the job that proves a declined third-party repo is a skip and not a
+  # hard failure (D13).
+  image: rockylinux:9
+  before_script:
+    - dnf install -y -q sudo curl python3
+
+arch:
+  extends: .matrix
+  # Nothing here may require the AUR.
+  image: archlinux:latest
+  before_script:
+    - pacman -Sy --noconfirm --needed sudo curl python

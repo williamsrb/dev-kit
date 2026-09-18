@@ -192,3 +192,61 @@ class RenderingTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class DocsGateTests(unittest.TestCase):
+    """'devkit docs generate --check must produce no diff on a clean tree, and
+    must fail after a CLI change that did not regenerate.' 'Every file under
+    docs/ must be reachable from README.md.'"""
+
+    def test_docs_are_up_to_date(self):
+        self.assertEqual(run("docs", "generate", "--check").returncode, 0)
+
+    def test_every_doc_is_reachable_from_the_readme(self):
+        from devkit_cli import docsgen
+        self.assertEqual(docsgen.unreachable_docs(), [])
+
+    def test_an_orphan_doc_fails_the_gate(self):
+        orphan = REPO / "docs" / "_orphan-test.md"
+        orphan.write_text("# orphan\n", encoding="utf-8")
+        try:
+            self.assertEqual(run("docs", "generate", "--check").returncode, 1)
+        finally:
+            orphan.unlink()
+
+
+class InlineCodeTests(unittest.TestCase):
+    def test_a_link_inside_backticks_is_not_a_link(self):
+        """A document explaining the ~ rule must be able to quote it."""
+        contract = json.loads((REPO / "path-contract.json").read_text())
+        found = paths.scan([REPO / "docs" / "paths.md"], contract)
+        self.assertEqual([v.rule["id"] for v in found], [])
+
+
+class BootstrapPlanTests(unittest.TestCase):
+    def test_every_manager_yields_a_plan(self):
+        for mgr in ("apt", "dnf", "pacman"):
+            with self.subTest(manager=mgr):
+                result = subprocess.run(
+                    [sys.executable, str(REPO / "devkit_cli" / "bootstrap_plan.py"),
+                     "--profile", "core", "--manager", mgr],
+                    capture_output=True, text=True, check=False)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                kinds = {line.split("\t")[0] for line in result.stdout.splitlines()}
+                self.assertTrue({"pkg", "npm", "uv", "binary"}.issubset(kinds))
+
+    def test_rhel_flags_the_third_party_package(self):
+        """A declined third-party repo must be a skip, never a hard failure (D13),
+        which means the plan has to name which packages need one."""
+        result = subprocess.run(
+            [sys.executable, str(REPO / "devkit_cli" / "bootstrap_plan.py"),
+             "--profile", "core", "--manager", "dnf"],
+            capture_output=True, text=True, check=True)
+        self.assertIn("thirdparty\tffmpeg", result.stdout)
+
+    def test_apt_does_not_flag_third_party(self):
+        result = subprocess.run(
+            [sys.executable, str(REPO / "devkit_cli" / "bootstrap_plan.py"),
+             "--profile", "core", "--manager", "apt"],
+            capture_output=True, text=True, check=True)
+        self.assertNotIn("thirdparty", result.stdout)

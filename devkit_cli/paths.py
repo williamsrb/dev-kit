@@ -18,6 +18,12 @@ from .errors import DevkitError
 
 SKIP_DIR_NAMES = {".git", "__pycache__", "node_modules", ".venv"}
 
+# `[x](~/foo)` inside backticks is a code sample of a broken link, not a broken
+# link. Stripping inline code before matching keeps a document that explains a
+# rule from tripping it.
+INLINE_CODE = re.compile(r"`[^`]*`")
+PROSE_CATEGORIES = {"prose"}
+
 
 class Violation:
     def __init__(self, path: Path, line_no: int, rule: dict, line: str) -> None:
@@ -81,10 +87,11 @@ def scan(roots: list[Path], contract: dict) -> list[Violation]:
         except (UnicodeDecodeError, OSError):
             continue
         for line_no, line in enumerate(lines, 1):
+            haystack = INLINE_CODE.sub("", line) if category in PROSE_CATEGORIES else line
             for rule, pattern in compiled:
                 if rule["id"] in exempt or not _applies(rule, category):
                     continue
-                if pattern.search(line):
+                if pattern.search(haystack):
                     violations.append(Violation(path, line_no, rule, line))
     return violations
 

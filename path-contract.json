@@ -117,7 +117,7 @@
     "core/skills/render-diff-patch/diff2html-ui.min.js"
   ],
   "allow": {
-    "_comment": "tests/test_devkit.py holds deliberate positive fixtures for these rules: a test that proves the rule fires must contain the string the rule matches.",
+    "_comment": "An exemption is a claim that a human reads that line and no program resolves it. tests/test_devkit.py holds deliberate positive fixtures: a test proving a rule fires must contain the string the rule matches. docs/paths.md, install.md and troubleshooting.md document the rules themselves, quoting example paths and error messages. Prose files already have inline code stripped before matching, so these cover only fenced blocks and running text.",
     "README.md": [
       "literal-home",
       "tilde-in-machine-position"
@@ -142,6 +142,16 @@
       "tilde-in-machine-position",
       "quoted-tilde",
       "home-fallback"
+    ],
+    "docs/paths.md": [
+      "literal-home",
+      "literal-home-macos"
+    ],
+    "docs/install.md": [
+      "literal-home"
+    ],
+    "docs/troubleshooting.md": [
+      "literal-home"
     ]
   },
   "shell": {

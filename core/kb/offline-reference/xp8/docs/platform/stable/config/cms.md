@@ -1,0 +1,175 @@
+<!-- src:https://developer.enonic.com/docs/platform/stable/config/cms generated:2026-07-24T21:49:28Z format:llm-dense xp:8.x -->
+#DOC docs/platform/stable/config/cms.md
+
+# CMS configuration
+
+This section describes configuration files related to CMS-oriented features, such as media handling and content API behavior.
+
+## Introduction
+
+The configuration files can be deployed to your Enonic XP instance’s `config` directory, and are automatically reloaded when changed. For details on configuration file syntax and behavior, see the [Configuration reference documentation](docs/platform/stable/config.md).
+
+The values listed here are defaults that can be overridden by operators. For instance, the `media.public.cacheControl` default is `public, max-age=31536000, immutable`, but an operator may choose to set it to `public, max-age=3600` for more frequent cache invalidation.
+
+## Media and legacy apis
+
+`com.enonic.xp.portal.cfg`
+
+Configure common media API behavior. Covers both Attachment API and Image API.
+
+Sample config file
+
+```properties
+media.public.cacheControl = public, max-age=31536000, immutable
+media.private.cacheControl = private, max-age=31536000, immutable
+```
+
+Disable Content Security Policy for media
+
+```properties
+media.contentSecurityPolicy =
+media.contentSecurityPolicy.svg =
+```
+
+media.public.cacheControl
+
+Defines media (images, attachments) `Cache-Control` header when media is cachable and accessible by Everyone. Default: `public, max-age=31536000, immutable`
+
+media.private.cacheControl
+
+Defines media (images, attachments) `Cache-Control` header when media is cachable and not accessible by Everyone. Default: `private, max-age=31536000, immutable`
+
+media.contentSecurityPolicy
+
+Defines media (images, attachments) `Content-Security-Policy` header. Default: `default-src 'none'; base-uri 'none'; form-action 'none'`
+
+media.contentSecurityPolicy.svg
+
+Defines media (images, attachments) `Content-Security-Policy` header in cases when it is `image/svg+xml` mime type. Default: `default-src 'none'; base-uri 'none'; form-action 'none'; style-src 'self' 'unsafe-inline'`
+
+legacy.attachmentService.enabled
+
+Enables/Disables legacy attachment service. Default `true` - means endpoint `(`/_/attachment/`) is enabled.
+
+legacy.imageService.enabled
+
+Enables/Disables legacy image service. Default `true` - means endpoint `(`/_/image/`) is enabled.
+
+legacy.httpService.enabled
+
+Enables/Disables legacy HTTP service. Default `true` - means endpoint `(`/_/service/`) is enabled.
+
+legacy.assetService.enabled
+
+Enables/Disables legacy asset service. Default `true` - means endpoint `(`/_/asset/`) is enabled.
+
+asset.cacheControl
+
+Asset service is deprecated, use lib-asset instead! Sets default cache-control header when asset is cachable. Default: `public, max-age=31536000, immutable`
+
+## Image
+
+`com.enonic.xp.image.cfg`
+
+Optionally configure the image API behavior.
+
+Default settings
+
+```properties
+scale.maxDimension = 8000
+filters.maxTotal = 5
+memoryLimit = 100mb
+progressive = jpeg
+```
+
+scale.maxDimension
+
+Defines maximum dimension size (both height and width) when scaling is done. Default: `8000`
+
+filters.maxTotal
+
+Defines maximum total filters applied per call. Default: `25`
+
+memoryLimit
+
+Defines Heap memory limit for image processing. If the memory limit is reached, the Image Service will start to protect itself from being overwhelmed by additional requests. It does so by responding with an HTTP `429 Too Many Requests` status code to subsequent incoming requests. This memory limit acts as a soft cap rather than a hard limit. This means that the used memory can momentarily exceed the limit. The value is set in percentage of total Heap, or in memory units (`mb`, `gb`, …​). Default: `10%`
+
+progressive
+
+Defines formats that will use progressive encoding. Default is `jpeg`.
+
+## Binary Text Extractor
+
+`com.enonic.xp.extractor.cfg`
+
+Configure binary text extractor service behaviour.
+
+Default settings
+
+```properties
+body.size.limit = 500000
+```
+
+body.size.limit
+
+Defines maximum number of characters from a textual media. Default: `500000`
+
+## Content
+
+`com.enonic.xp.content.cfg`
+
+General content API behavior.
+
+Sample content config file
+
+```properties
+auditlog.enabled = true
+```
+
+auditlog.enabled
+
+Set to `false` to disable the creation of audit log entries on content API operations. Default: `true`.
+
+> **Important:** Audit log can be disabled by common `[enabled](#audit_enabled)` property. Content flag won’t affect anything in this case.
+
+auditlog.filter
+
+Comma separated values `rule(,rule)*` of allow/deny rules. Default: `!system.content.update,*` (allow everything except "content update" event).
+
+A rule prefixed with `!` is a `deny` rule, otherwise it is an `allow` rule. A rule suffixed with `*` is a wildcard rule.
+
+Rules are applied in sequence. A first matching rule wins. If no matching rule found, event type is denied. Only content event types can be filtered.
+
+None of events will be logged
+
+```properties
+auditlog.filter = !*
+```
+
+Allow all event types
+
+```properties
+auditlog.filter = *
+```
+
+Every event type except 'system.content.update' will be logged (default behavior)
+
+```properties
+auditlog.filter = !system.content.update,*
+```
+
+Allow only event types with "system.content.set*" prefix.
+
+```properties
+auditlog.filter = system.content.set*
+```
+
+attachments.allowUnsafeNames
+
+Set to `true` to allow suspicious characters in content attachment file names. Default: `false`.
+
+resolveEmptyRegions
+
+Set to `true` to use deprecated Content API functionality that will read Page/Layout descriptors and inject empty regions into fetched content objects. Default: `false`.
+
+> **Warning:** Setting `resolveEmptyRegions` to `true` can adversely impact system performance. By using this deprecated Content API functionality to read Page/Layout descriptors and inject empty regions into fetched content objects, additional computational resources and processing time are required. As such, it may lead to slower system response and reduced efficiency. Importantly, this functionality is deprecated and will be removed in future versions of Enonic XP. It is advisable to adapt your workflows to operate without this feature to ensure future compatibility.

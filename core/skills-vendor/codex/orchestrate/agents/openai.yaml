@@ -1,0 +1,4 @@
+interface:
+  display_name: "Orchestrate"
+  short_description: "Route substantial work across Luna, Terra, and Sol sub-agents"
+  default_prompt: "Use $orchestrate to split this task among the right Luna, Terra, and Sol sub-agents."

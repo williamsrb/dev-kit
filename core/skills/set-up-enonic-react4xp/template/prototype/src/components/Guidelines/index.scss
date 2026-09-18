@@ -1,0 +1,49 @@
+.bp-indicator {
+	display: flex;
+	position: fixed;
+	z-index: 99999999;
+	bottom: .5rem;
+	left: .5rem;
+	padding: .25rem;
+	font-size: .7rem;
+	line-height: 1;
+	background-color: $pure-black;
+	color: $white;
+	opacity: .3;
+	font-family: sans-serif;
+	pointer-events: none;
+
+	&:before {
+		content: 'mob';
+		@media #{$mq-xs-min} { content: 'xs'; }
+		@media #{$mq-sm-min} { content: 'sm'; }
+		@media #{$mq-md-min} { content: 'md'; }
+		@media #{$mq-lg-min} { content: 'lg'; }
+		@media #{$mq-xl-min} { content: 'xl'; }
+		@media #{$mq-2xl-min} { content: '2xl'; }
+		@media #{$mq-3xl-min} { content: '3xl'; }
+	}
+}
+
+.bp-grid {
+    position: fixed;
+    overflow: hidden;
+    z-index: 9999;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 0;
+    pointer-events: none;
+    transition: .3s ease-in-out;
+
+    &.visible {
+        height: 100%;
+    }
+
+    &__block {
+        display: block;
+        width: 100%;
+        height: 100lvh;
+        background-color: rgba(red, .2);
+    }
+}

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Debug XP App"
+  short_description: "Diagnose Enonic XP build and runtime errors"
+  default_prompt: "Use $debug-xp-app to diagnose this Enonic XP build or runtime error."

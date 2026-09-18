@@ -1,0 +1,6 @@
+interface:
+  display_name: "Plan Task Evidence"
+  short_description: "Create an evidence plan for a task (Jira key or local slug)"
+  default_prompt: "Use $plan-task-evidence to prepare a test evidence plan for this task."
+policy:
+  allow_implicit_invocation: false

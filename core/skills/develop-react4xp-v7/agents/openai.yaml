@@ -1,0 +1,4 @@
+interface:
+  display_name: "Develop React4XP 7"
+  short_description: "Build React4XP 7 applications on XP 8"
+  default_prompt: "Use $develop-react4xp-v7 to implement this React4XP 7 feature on XP 8."

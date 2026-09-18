@@ -1,0 +1,16 @@
+---
+description: Never fast-forward; merges are always merge commits
+alwaysApply: true
+---
+
+# Git merge: never fast-forward
+
+Never fast-forward. Not as a default, not when history is linear, not to "keep it simple."
+
+When merging (including "merge into \<branch\>"):
+
+- Always `git merge --no-ff`
+- Never `git merge --ff`, `--ff-only`, or a merge that fast-forwards because `merge.ff` is unset/true
+- Never `git pull --ff-only` to achieve a fast-forward onto the target branch
+
+A merge the user asked for is a **merge commit** with two parents. Completing a commit on a feature branch is not permission to fast-forward the integration branch.

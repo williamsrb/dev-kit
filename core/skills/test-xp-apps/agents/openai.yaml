@@ -1,0 +1,4 @@
+interface:
+  display_name: "Test XP Apps"
+  short_description: "Apply Enonic XP application testing practices"
+  default_prompt: "Use $test-xp-apps to add or review tests for this Enonic XP application."

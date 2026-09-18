@@ -1,0 +1,6 @@
+interface:
+  display_name: "Draft Commit Message"
+  short_description: "Draft a commit message from local changes"
+  default_prompt: "Use $draft-commit-message to draft a commit message for the current delivery."
+policy:
+  allow_implicit_invocation: false

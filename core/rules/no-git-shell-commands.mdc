@@ -1,0 +1,18 @@
+---
+description: Git remote-writes only when the user explicitly asks; worktrees stay attached
+alwaysApply: true
+---
+
+# Git remote-writes on explicit order
+
+Do not run git remote-write commands (`git push`, `git -C … push`, or any other remote-write subcommand) unless the user explicitly asked for that write. "Push", "open the PR", or "publish the branch" are enough.
+
+Local git **read** commands may run without asking.
+
+Completing implementation is not an implicit push. Vague ship-it language without a named target uses the Operator Gate.
+
+When the user asked to push: warn before force-push to main/master.
+
+## Worktrees must stay attached
+
+When creating or managing a task worktree, the agent must check out and keep the worktree on its task branch. Never create or leave a task worktree in detached `HEAD` state, including via `git worktree add --detach`, unless the user explicitly asks for a detached worktree.

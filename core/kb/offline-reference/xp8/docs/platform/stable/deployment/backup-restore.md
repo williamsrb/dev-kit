@@ -1,0 +1,116 @@
+<!-- src:https://developer.enonic.com/docs/platform/stable/deployment/backup-restore generated:2026-07-24T21:49:28Z format:llm-dense xp:8.x -->
+#DOC docs/platform/stable/deployment/backup-restore.md
+
+# Backup and restore
+
+This section describes how to manage and backup your XP data
+
+## Introduction
+
+XP persists two different types of data, that are both crucial for backing up and restoring the system.
+
+### Blobs
+
+XP persists most of its data as files - aka blobs. Blobs are both text files (data) and binary files.
+
+XP’s blobstore implementation uses a so-called append-only approach. This simply means that blobs are created once, and used for reading - but they are never updated at a later point. This eliminates traditional file-system problems like locking, and enables aggressive caching. The blobstores are effective since as a single blob may be re-used for a vast number of data nodes created in XP.
+
+> **Note:** For clustered deployments, the blobs must be stored on a dedicated shared/distributed filesystem.
+
+### Indices
+
+In addition to blobs, XP also creates and stores indices. Indices are automatically replicated across all data nodes (if you have a cluster).
+
+There are essentially two types of indexes.
+
+- The search index which can be updated or re-created through re-indexing.
+
+- The metadata index contain critical repository, branch and tree structure information, as well as version history.
+
+The metadata indices are required in order to restore XP to a working state, where as the search index may be re-generated from the combination of meta-data and blobstore.
+
+> **Note:** Indices MUST always be stored on a local filesystem, preferably using fast SSDs.
+
+## Useful tools
+
+Enonic XP offers both [management endpoints](docs/platform/stable/endpoints/management.md), and internal APIs to manage your data.
+
+As an alternative to working with the APIs. Check out the following tools:
+
+- [Enonic CLI](https://developer.enonic.com/docs/enonic-cli) - Enonic’s command line interface
+
+- [Data toolbox](https://market.enonic.com/vendors/glenn-ricaud/data-toolbox) - Admin app
+
+- [Snapshotter](https://market.enonic.com/vendors/enonic/snapshotter) - Continuously snapshots your systems
+
+## Snapshot - restore
+
+XP offers the ability to quickly snapshot, and restore the indices of your system at any time.
+
+Snapshots normally complete within seconds. Once you have a snapshot, you may restore that snapshot at a later time.
+
+> **Note:** Snapshots will only restore the metadata and search index of your instance, not the blobs. As such, you must have an intact blobstore from the time the snapshot was taken.
+
+If you for instance have performed a [Vacuum](docs/platform/stable/storage/maintenance.md#vacuum) operation that deletes blobs, restoring old snapshot will bring your solution into an inconsistent state. To prevent confusion, all snapshots are deleted after any vacuum operations that delete blobs.
+
+> **Warning:** A blob-deleting vacuum is a point of no return for restores. All existing snapshots are deleted and the referenced blobs are removed, so you cannot restore to any moment before the vacuum ran — it becomes your new baseline.
+
+Take a fresh blobstore backup and snapshot immediately afterwards. See [Vacuuming](docs/platform/stable/storage/maintenance.md#vacuum).
+
+Snapshot and restore commands can be performed by using Enonic CLI, the API or a management application from Enonic Market.
+
+## Backing up XP
+
+To perform a proper backup of XP, complete the following steps in the specified order:
+
+- Take a [Snapshot](#snapshot-restore) of your instance.
+
+- Backup the files in your [snapshots folder](docs/platform/stable/config/system.md#repo) to a safe location
+
+- Backup the files in your [blobstore folder](docs/platform/stable/config/system.md#file-blobstore) to a safe location
+
+## Restoring XP
+
+To restore XP from a backup, perform the following steps in the specified order:
+
+> **Note:** If you are restoring to the same environment as the backup was performed, you may skip the first step in this list.
+
+- Deploy and start a new instance of XP, using the same version that was used to create your backup.
+
+- Copy the blobstore backup files into your instance’s [blobstore folder](docs/platform/stable/config/system.md#file-blobstore)
+
+- Copy the snapshot backup files into your instance’s [snapshots folder](docs/platform/stable/config/system.md#repo).
+
+- Using CLI, or via Admin console/Data Toolbox: Perform a [Snapshot restore](#snapshot-restore)
+
+After completing the restore, XP will restart all of it’s core services, and return to normal service.
+
+> **Note:** To guarantee a 100% healthy instance after a successful restore, perform a full restart your instance (all nodes if you run a cluster).
+
+## Data migration
+
+In addition to backing up and restoring your data, XP also provides solutions for migrating data between instances.
+
+### Export and import
+
+You may export and import tree structures of nodes, or even single leaf nodes using the Export and Import feature. Exporting will produce a human-readable export of the selected repo/branch/node and it’s child items.
+
+An export contains metadata and blobs required to re-create the selected nodes in current state. You may import any valid export, but pay attention as export/import will keep your existing node identifiers.
+
+Exporting and importing can be performed by using Enonic CLI, the API or a management application from Enonic Market.
+
+> **Note:** Export and import is limited to work basic current data. They do not include metadata such as version history, branches or commits.
+
+### Dump and load
+
+You may dump and load your entire system. Dumping will produce a machine readable file that can be used for loading at a later time.
+
+The dump may also include the version history for your data.
+
+Dumping and loading can be performed by using Enonic CLI, the API or a management application from Enonic Market.
+
+> **Note:** Dumping is not a recommended backup solution, rather use snapshots in combination with a backup of up your blobstore
+
+## Data management
+
+For ongoing operational maintenance — vacuuming unreferenced blobs and metadata, and rebuilding the search index — see [Storage maintenance](docs/platform/stable/storage/maintenance.md).

@@ -1,0 +1,5 @@
+interface:
+  display_name: "Handoff"
+  short_description: "Write a Context Summary or a PRD from this conversation"
+policy:
+  allow_implicit_invocation: false

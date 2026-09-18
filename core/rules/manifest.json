@@ -1,0 +1,226 @@
+{
+  "_comment": [
+    "Source of truth for rules/AGENTS.md (plan devkit, A0/B2).",
+    "AGENTS.md is generated: run bin/generate-agents-md.py --apply after editing this",
+    "manifest, a .mdc a section reads with body.from == 'mdc', or a file in agents.d/.",
+    "Never hand-edit AGENTS.md.",
+    "body.from 'mdc' embeds that rule file verbatim (frontmatter and H1 stripped,",
+    "headings demoted one level). 'file' means the AGENTS.md text is a translation or a",
+    "merge of several rules and lives in agents.d/ as its single source.",
+    "layer: 'core' ships in every profile; 'client' only in the client overlay (D3)."
+  ],
+  "base": {
+    "file": "BASE.md",
+    "layer": "core"
+  },
+  "intro": "agents.d/_intro.md",
+  "trailer": "agents.d/_trailer.md",
+  "sections": [
+    {
+      "title": "Local-first deterministic tools",
+      "source": "`local-first-deterministic-tools.mdc`",
+      "rules": [
+        "local-first-deterministic-tools.mdc"
+      ],
+      "layer": "core",
+      "body": {
+        "from": "mdc",
+        "file": "local-first-deterministic-tools.mdc"
+      }
+    },
+    {
+      "title": "Vendor vision image preview",
+      "source": "`vendor-vision-image-preview.mdc`",
+      "rules": [
+        "vendor-vision-image-preview.mdc"
+      ],
+      "layer": "core",
+      "body": {
+        "from": "mdc",
+        "file": "vendor-vision-image-preview.mdc"
+      }
+    },
+    {
+      "title": "Git — writes on explicit order",
+      "source": "`no-git-shell-commands.mdc`, `no-git-reset.mdc`, `no-git-index-writes.mdc`",
+      "rules": [
+        "no-git-shell-commands.mdc",
+        "no-git-reset.mdc",
+        "no-git-index-writes.mdc"
+      ],
+      "layer": "core",
+      "body": {
+        "from": "file",
+        "file": "03-git-writes-on-explicit-order.md"
+      }
+    },
+    {
+      "title": "Git — amend on explicit order",
+      "source": "`git-amend-explicit-order.mdc`",
+      "rules": [
+        "git-amend-explicit-order.mdc"
+      ],
+      "layer": "core",
+      "body": {
+        "from": "file",
+        "file": "04-git-amend-on-explicit-order.md"
+      }
+    },
+    {
+      "title": "Commit messages — no co-authoring text",
+      "source": "`no-commit-co-authors.mdc`",
+      "rules": [
+        "no-commit-co-authors.mdc"
+      ],
+      "layer": "core",
+      "body": {
+        "from": "file",
+        "file": "05-commit-messages-no-co-authoring-text.md"
+      }
+    },
+    {
+      "title": "Client-facing chat carve-out",
+      "source": "`token-efficiency-chat.mdc`",
+      "rules": [
+        "token-efficiency-chat.mdc"
+      ],
+      "layer": "client",
+      "body": {
+        "from": "file",
+        "file": "06-client-facing-chat-carve-out.md"
+      }
+    },
+    {
+      "title": "Helper scripts — prefer Python over shell",
+      "source": "`prefer-python-over-shell.mdc`",
+      "rules": [
+        "prefer-python-over-shell.mdc"
+      ],
+      "layer": "core",
+      "body": {
+        "from": "file",
+        "file": "07-helper-scripts-prefer-python-over-shell.md"
+      }
+    },
+    {
+      "title": "Browser automation — preference order",
+      "source": "browser-mcp-preference.mdc (translated to Claude Code / Codex MCPs)",
+      "rules": [
+        "browser-mcp-preference.mdc"
+      ],
+      "layer": "core",
+      "body": {
+        "from": "file",
+        "file": "08-browser-automation-preference-order.md"
+      }
+    },
+    {
+      "title": "Graphify output stays untracked",
+      "source": "`graphify.mdc` (opt-in query workflow stays Cursor `.mdc`; this git rule is standing)",
+      "rules": [
+        "graphify.mdc"
+      ],
+      "layer": "core",
+      "body": {
+        "from": "file",
+        "file": "09-graphify-output-stays-untracked.md"
+      }
+    },
+    {
+      "title": "History logging is automatic",
+      "source": "`history-automatic-logging.mdc`",
+      "rules": [
+        "history-automatic-logging.mdc"
+      ],
+      "layer": "core",
+      "body": {
+        "from": "file",
+        "file": "10-history-logging-is-automatic.md"
+      }
+    },
+    {
+      "title": "Session store isolation",
+      "source": "`session-store-isolation.mdc`",
+      "rules": [
+        "session-store-isolation.mdc"
+      ],
+      "layer": "core",
+      "body": {
+        "from": "file",
+        "file": "11-session-store-isolation.md"
+      }
+    },
+    {
+      "title": "Evidence — tracker comment post (all-pass only)",
+      "source": "`plan-task-evidence` / evidence-scoped `run-plan` (overrides `evidence-post-on-failure-ask.mdc` for evidence posting)",
+      "rules": [
+        "evidence-post-on-failure-ask.mdc"
+      ],
+      "layer": "client",
+      "body": {
+        "from": "file",
+        "file": "12-evidence-tracker-comment-post-all-pass-only.md"
+      }
+    },
+    {
+      "title": "Creating Jira evidence — persistent content, not disposable pages",
+      "source": "`jira-evidence-persistent-content.mdc`",
+      "rules": [
+        "jira-evidence-persistent-content.mdc"
+      ],
+      "layer": "client",
+      "body": {
+        "from": "mdc",
+        "file": "jira-evidence-persistent-content.mdc"
+      }
+    },
+    {
+      "title": "Jira screenshots — validate before posting",
+      "source": "`jira-screenshot-consistency.mdc`",
+      "rules": [
+        "jira-screenshot-consistency.mdc"
+      ],
+      "layer": "client",
+      "body": {
+        "from": "file",
+        "file": "14-jira-screenshots-validate-before-posting.md"
+      }
+    },
+    {
+      "title": "Jira comment edit backup",
+      "source": "`jira-comment-edit-backup.mdc`",
+      "rules": [
+        "jira-comment-edit-backup.mdc"
+      ],
+      "layer": "client",
+      "body": {
+        "from": "mdc",
+        "file": "jira-comment-edit-backup.mdc"
+      }
+    },
+    {
+      "title": "User scope exclusions beat inference",
+      "source": "`user-scope-exclusions.mdc`",
+      "rules": [
+        "user-scope-exclusions.mdc"
+      ],
+      "layer": "core",
+      "body": {
+        "from": "file",
+        "file": "16-user-scope-exclusions-beat-inference.md"
+      }
+    },
+    {
+      "title": "Multitask on the same repo",
+      "source": "`multitask-same-repo.mdc`",
+      "rules": [
+        "multitask-same-repo.mdc"
+      ],
+      "layer": "core",
+      "body": {
+        "from": "file",
+        "file": "17-multitask-on-the-same-repo.md"
+      }
+    }
+  ]
+}

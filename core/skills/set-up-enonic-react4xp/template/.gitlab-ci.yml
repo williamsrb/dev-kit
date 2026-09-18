@@ -1,0 +1,158 @@
+stages:
+  - build
+  - store
+  - deploy
+
+variables:
+  PROJECT_SHORT_NAME: {PROJECT_SHORT_NAME}
+  DEPLOY_PATH: /var/www/{PROJECT_SHORT_NAME}
+
+# -------- TEMPLATES ----------
+
+include:
+  - project: "group/ci-templates"
+    ref: master
+    file: "/enonic/xp7/organized.yml"
+  - project: "group/ci-templates"
+    ref: master
+    file: "/enonic/general/deploy-organized.yml"
+  - project: "group/ci-templates"
+    ref: master
+    file: "/enonic/helm.yml"
+
+.build_template:
+  image: leanon/enonic-ci:{ENONIC_XP_VERSION}
+  before_script:
+    # Install NVM
+    - curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.38.0/install.sh | bash
+    - export NVM_DIR="$HOME/.nvm"
+    - source "$NVM_DIR/nvm.sh"
+    - nvm install {NODE_XP_VERSION}
+    - nvm use {NODE_XP_VERSION}
+    # Debug
+    - enonic sandbox ls
+    - echo "ENONIC_DISTRO_VERSION:" ${ENONIC_DISTRO_VERSION}
+    - echo "CLI latest:" 
+    - enonic latest
+    # Building Prototype
+    - cp -r prototype/src/components/* xp/src/main/resources/react4xp/components/prototype/ 2>/dev/null || true
+    - cp -r prototype/src/pages/ xp/src/main/resources/react4xp/components/prototype/ 2>/dev/null || true
+    - cp -r prototype/src/assets/* xp/src/main/resources/react4xp/shared/ 2>/dev/null || true
+    - cp -r prototype/public/fonts/* xp/src/main/resources/react4xp/shared/fonts/ 2>/dev/null || true
+    - cp -r prototype/src/utils/* xp/src/main/resources/react4xp/utils/prototype/ 2>/dev/null || true
+    - (find xp/src/main/resources/react4xp/components -type f -exec sed -i 's|@/components|/react4xp/components/prototype|g' {} +)
+    - (find xp/src/main/resources/react4xp/utils/prototype -type f -exec sed -i 's|@/components|/react4xp/components/prototype|g' {} +)
+    - (find xp/src/main/resources/react4xp/components -type f -exec sed -i 's|@/assets|/react4xp/shared|g' {} +)
+    - (find xp/src/main/resources/react4xp/components -type f -exec sed -i 's|@/utils|/react4xp/utils/prototype|g' {} +)
+    - (find xp/src/main/resources/react4xp/shared -type f -exec sed -i "s|url('/fonts/|url('/react4xp/shared/fonts/|g" {} +)
+    # Count the number of commits on branch
+    - export VERSION=1.0.$(git rev-list --count HEAD)-$TAG
+    - cd xp/
+    - (enonic sandbox create ${ENONIC_SANDBOX_NAME} --version=${ENONIC_DISTRO_VERSION} --skip-template) || true
+    - npm install
+  script:
+    # Debug
+    - enonic sandbox ls
+    - echo "ENONIC_DISTRO_VERSION:" ${ENONIC_DISTRO_VERSION}
+    - echo "CLI latest:" 
+    - enonic latest
+    # Saving VERSION to file (to be used for another jobs)
+    - echo $VERSION > ../VERSION
+    # Filling project version and informations on the gradle.properties
+    - sed -i -e "s/version.*/version = $VERSION/g" gradle.properties
+    - sed -i -e "s/projectName.*/projectName = $PROJECT_SHORT_NAME/g" gradle.properties
+    - sed -i -e "s/displayName.*/displayName = $CI_PROJECT_TITLE/g" gradle.properties
+    - cat gradle.properties
+    # Building the JAR
+    - enonic project sandbox ${ENONIC_SANDBOX_NAME}
+    - enonic project build
+    # Check if the JAR was generated
+    - ls build/libs/*.jar
+
+# ---------- JOBS -----------
+# --------- prototype ----------
+
+prototype_build:
+  extends:
+    - .docker_build_template
+  only:
+    - prototype
+
+prototype_deploy:
+  extends:
+    - .simple_helm_deploy_template
+  environment:
+    name: prototype
+    url: http://prototype.{PROJECT_SHORT_NAME}.k8s.example.com
+  only:
+    - prototype
+
+# --------- review ----------
+
+review_build:
+  extends: 
+    - .build_template
+  only:
+    - review
+
+review_minio:
+  stage: store
+  extends:
+    - .deploy_template
+    - .minio_template
+  dependencies:
+    - review_build
+  only:
+    - review
+
+review_deploy:
+  extends: .xp7_helm_deploy_template
+  environment:
+    name: review
+    url: http://review.{PROJECT_SHORT_NAME}.k8s.example.com
+  dependencies:
+    - review_build
+  only:
+    - review
+
+# --------- staging ----------
+
+staging_build:
+  extends:
+    - .build_template
+  only:
+    - staging
+
+staging_minio:
+  stage: store
+  extends:
+    - .deploy_template
+    - .minio_template
+  variables:
+    KEEP_FILES: 3
+  dependencies:
+    - staging_build
+  only:
+    - staging
+
+# --------- master ----------
+
+master_build:
+  extends:
+    - .build_template
+  variables:
+    TAG: prod
+  only:
+    - master
+
+master_minio:
+  stage: store
+  extends:
+    - .deploy_template
+    - .minio_template
+  variables:
+    KEEP_FILES: 3
+  dependencies:
+    - master_build
+  only:
+    - master

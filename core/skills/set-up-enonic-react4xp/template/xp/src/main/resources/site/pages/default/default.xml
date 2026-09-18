@@ -1,0 +1,8 @@
+<page>
+    <display-name i18n="page.default.display_name">Default page</display-name>
+    <description>default</description>
+    <form />
+    <regions>
+        <region name="main" />
+    </regions>
+</page>

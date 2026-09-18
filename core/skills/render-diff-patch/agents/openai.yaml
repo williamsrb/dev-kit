@@ -1,0 +1,4 @@
+interface:
+  display_name: "Render Diff/Patch"
+  short_description: "Render diffs as browser screenshots"
+  default_prompt: "Use $render-diff-patch to render this unified diff as a readable browser screenshot."

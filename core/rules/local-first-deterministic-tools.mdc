@@ -1,0 +1,21 @@
+---
+description: Prefer deterministic local tools and bounded local models before vendor-model context.
+alwaysApply: true
+---
+
+# Local-first deterministic tools
+
+For mechanical extraction, normalization, discovery, validation, or formatting:
+
+1. Use a deterministic local CLI or project-native command.
+2. Use `agentctl` when it has the required primitive; it keeps raw artifacts on disk and returns bounded JSON.
+3. Use local Ollama only for low-risk clustering, classification, or summarization that cannot be deterministic. Verify its output against the local source artifact.
+4. Use the vendor model for ambiguity, tradeoffs, implementation judgment, or user-facing synthesis.
+
+Do not send images to a model for OCR, full logs for error extraction, full diffs for file scoping, or whole Markdown files when a local slicer can select the needed sections.
+
+If a CLI or shell call sits inside a loop over an already-known list, the loop belongs in a script, not in the agent. Jira/Confluence reads and writes that have a REST equivalent go through `agentctl jira` (API token at `~/.agents/.auth/jira-api-token.yaml`). Remaining MCP-only operations (Rovo semantic search, Teamwork Graph beyond issue links, the discover catalog) still have no batch form.
+
+Read `metadata.cliDependencies` in the active skill before execution. Run `agentctl tools audit` when availability is uncertain. Preferred Ollama models are `granite3-moe:3b` for the smallest routine summaries, `qwen3.5:2b` for broader structured work, and `gemma4:e4b` when the smaller models are insufficient.
+
+Ollama output is not authoritative for security findings, destructive actions, evidence pass/fail gates, Jira posting, or code changes. Those require deterministic checks and vendor-model or human judgment.

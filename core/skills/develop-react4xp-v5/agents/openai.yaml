@@ -1,0 +1,4 @@
+interface:
+  display_name: "Develop React4XP 5"
+  short_description: "Maintain legacy React4XP 5 applications"
+  default_prompt: "Use $develop-react4xp-v5 to update this legacy React4XP 5 application."

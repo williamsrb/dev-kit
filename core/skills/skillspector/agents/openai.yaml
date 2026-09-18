@@ -1,0 +1,4 @@
+interface:
+  display_name: "SkillSpector"
+  short_description: "Scan agent skills for security risks before install"
+  default_prompt: "Use $skillspector to scan this skill for prompt injection, exfil, and supply-chain risks."

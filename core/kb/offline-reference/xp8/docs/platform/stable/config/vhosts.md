@@ -1,0 +1,217 @@
+<!-- src:https://developer.enonic.com/docs/platform/stable/config/vhosts generated:2026-07-24T21:49:28Z format:llm-dense xp:8.x -->
+#DOC docs/platform/stable/config/vhosts.md
+
+# Virtual hosts
+
+Expose Universal APIs, Admin, Sites or Webapps on custom domains and paths.
+
+> **Note:** Vhosts only apply to XP’s web endpoint (defaults to port 8080). They do not affect the management and monitoring endpoints.
+
+## Configuration file
+
+`com.enonic.xp.web.vhost.cfg`
+
+XP’s web port (default: 8080) provide the following services: `/api`, `/admin`, `/webapp` and `/site`. Use Vhosts to route traffic for specific domains and url patterns to one of these services.
+
+```
+I.e. example.com -> :8080/site/default/master/homepage
+```
+
+Virtual hosts are automatically updated upon change.
+
+Sample vhost config file with a one entry
+
+```properties
+enabled = true
+
+mapping.myapp.host = company.com
+mapping.myapp.source = /app
+mapping.myapp.target = /webapp/name.of.my.app
+mapping.myapp.idProvider.myldap = default
+```
+
+> **Note:** Once vhosts are enabled, unmapped endpoints are no longer accessible.
+
+enabled
+
+turns on or of vhosts, enabled = false should only be used for development purposes
+
+host
+
+specifies the hostname (aka domain) the vhost will handle
+
+source
+
+refers to basepath used in request, sample above handles company.com/app
+
+target
+
+is the internal route in XP to the specific endpoint/service
+
+idProvider
+
+optionally adds one or more idProviders to the vhost. `idProvider` must be followed by the name of an existing idProvider. The example above refers to the idProvider called `myldap`. Supported values are `default` or `enabled`. Only one entry may use `default`.
+
+> **Note:** Each mapping must define a unique name to separate the mappings when multiple mappings exist in the same file. In the example above `myapp` is used.
+
+Sample vhost config file with both site and admin entries
+
+```properties
+mapping.website.host = example.com
+mapping.website.source = /
+mapping.website.target = /site/default/master/website
+mapping.website.idProvider.adfs = default
+mapping.website.idProvider.system = enabled
+
+mapping.admin.host = example.com
+mapping.admin.source = /admin
+mapping.admin.target = /admin
+mapping.admin.idProvider.system = default
+```
+
+## Domains
+
+In the definition, Domains can be a single host, multiple hosts separated by space and/or regular expressions (started with `~` symbol).
+
+> **Note:** IDN hosts should be specified using Punycode representation.
+
+## Request Matching
+
+VHost matches the request if `host` value matches the requested host *AND* request-uri matches `source`.
+
+Host matching can be an exact match or regular expression match. Read more about Java Regular Expressions at [Pattern JavaDoc](https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/util/regex/Pattern.html) Host matching is case-insensitive in both cases.
+
+> **Note:** For backwards compatibility with old versions of XP root domain is not normalized in host. Specify both host values `mapping.example.host = example.com. example.com` if case you need to support FQDN-style host.
+
+host mapping match both `www.example.com` and `example.com` hosts
+
+```properties
+mapping.example.host = www.example.com example.com
+```
+
+host mapping will match any sub-domain: `1.example.com`, `2.example.com` hosts (but not sub-sub-domains)
+
+```properties
+mapping.example.host = ~[^.]+\\.example\\.com
+```
+
+Source matching is done with "exact" or "starts-with" match. Source matching is case-sensitive, and is done before URI decoding.
+
+source mapping matches any request-uri
+
+```properties
+mapping.example.source = /
+```
+
+source mapping matches any request-uri that equals to /hello or starts with /hello/
+
+```properties
+mapping.example.source = /hello
+```
+
+If multiple VHosts match the request, disambiguation rules apply in the following order:
+
+- VHost with lower `order` value is preferred. If `order` is not specified, order is considered *least* preferable (`Integer.MAX_VALUE`).
+
+- VHost with the longest `source` value is preferred.
+
+- arbitrary VHost is selected.
+
+## Capture Groups
+
+When VHost matched by a host regular expression, capture groups can be used in `target` via group references.
+
+```properties
+mapping.example.host = ~example\\.(?<tld>[^.]+)
+mapping.example.target = /site/default/master/${tld}
+```
+
+In this example if host is `example.no`, then target becomes `/site/default/master/no`
+
+> **Warning:** Avoid mixing regular expressions, multiple hosts and capture groups. If host is not matched by regular expression, then group references in `target` will remain as-is.
+
+## Virtual Host Context
+
+The virtual host context is a set of attributes that can be used to configure the behavior of controllers and other components within the context of a specific virtual host.
+
+Virtual hosts may define context attributes.
+
+```properties
+mapping.adm.host = example.no
+...
+mapping.adm.context.my.timeZone = Europe/Oslo
+```
+
+Access to the context attributes is done via the `contextLib` library.
+
+```js
+const contextLib = require('/lib/xp/context');
+
+exports.GET = () => {
+    const timeZone = contextLib.get()['attributes']['my.timeZone'];
+
+    return {
+        body: {
+            timeZone: timeZone
+        }
+    };
+}
+```
+
+It is also possible to set default context repository and branch for the virtual host.
+
+```properties
+mapping.adm.host = example.com
+...
+mapping.adm.com.enonic.xp.repository.RepositoryId = com.enonic.cms.repository.myproject
+mapping.adm.com.enonic.xp.branch.Branch = master
+```
+
+## Examples
+
+"Example Inc", the owner of "example.com" just finished building their new site. The published site is available on `:8080/site/default/master/homepage`.
+
+In this case, a [vhost configuration](docs/platform/stable/config/system.md#vhost) looking like this will get the job done:
+
+Sample vhost config file
+
+```properties
+enabled = true
+
+mapping.example.host = example.com
+mapping.example.source = /
+mapping.example.target = /site/default/master/homepage
+```
+
+After saving the vhost config file, you should see the following line the XP log:
+
+```
+2019-05-10 11:34:17,234 INFO  c.e.x.w.v.i.c.VirtualHostConfigImpl - Virtual host is enabled and mappings updated.
+```
+
+> **Note:** Each mapping must have a unique mapping identifier, in this case we used `example`.
+
+Also, "Example Inc" wants the admin console deployed on `example.com/admin`. To solve this, we will simply add another mapping to the config:
+
+```properties
+mapping.adm.host = example.com
+mapping.adm.source = /admin
+mapping.adm.target = /admin
+mapping.adm.idProvider.system = default
+```
+
+> **Note:** This time we also added an ID provider to the mapping. This effectively activates `system` as the default (and only) ID provider for this vhost.
+
+## Testing vhosts
+
+To verify that your vhost config is working without setting up proxies or modifying your DNS: Simply add the following line to your **hosts** file.
+
+```
+<host-ip-address>     example.com
+```
+
+> **Note:** Location of hosts file on Mac/Linux_: `/etc/hosts`, on Windows: `c:\Windows\System32\Drivers\etc\hosts`
+
+Pointing your browser to `http://example.com:8080` will reveal the glorious result.
+
+Visit the [vhost configuration](docs/platform/stable/config/system.md#vhost) section for more details.

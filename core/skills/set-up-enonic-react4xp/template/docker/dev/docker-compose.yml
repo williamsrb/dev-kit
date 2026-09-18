@@ -1,0 +1,37 @@
+version: "3.2"
+services:
+  {PROJECT_SHORT_NAME}-xp-app:
+    container_name: {PROJECT_SHORT_NAME}-xp-app
+    build:
+      context: ./xp-app
+    image: "{PROJECT_SHORT_NAME}-xp-image:{ENONIC_XP_VERSION}"
+    ports:
+      - "8080:8080"
+      - "4848:4848"
+    volumes:
+      - type: volume
+        source: {PROJECT_SHORT_NAME}-xp-home
+        target: /enonic-xp/home
+      - type: volume
+        source: {PROJECT_SHORT_NAME}-xp-gradle
+        target: /root/.gradle
+      - type: bind
+        source: ../../xp
+        target: /enonic-xp/source
+      - type: bind
+        source: ./xp-home/config
+        target: /enonic-xp/home/config
+    environment:
+      - ENV=DEV
+    networks:
+      - {PROJECT_SHORT_NAME}-network
+  {PROJECT_SHORT_NAME}-smtp:
+    container_name: {PROJECT_SHORT_NAME}-smtp
+    image: namshi/smtp
+    networks:
+      - {PROJECT_SHORT_NAME}-network
+volumes:
+  {PROJECT_SHORT_NAME}-xp-home:
+  {PROJECT_SHORT_NAME}-xp-gradle:
+networks:
+  {PROJECT_SHORT_NAME}-network:

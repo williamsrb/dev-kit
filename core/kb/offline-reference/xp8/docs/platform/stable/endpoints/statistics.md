@@ -1,0 +1,629 @@
+<!-- src:https://developer.enonic.com/docs/platform/stable/endpoints/statistics generated:2026-07-24T21:49:28Z format:llm-dense xp:8.x -->
+#DOC docs/platform/stable/endpoints/statistics.md
+
+# Statistics API (Port 2609)
+
+The Statistics API exposes real-time metrics and monitoring data about the XP instance. It is commonly used for health checks, performance monitoring, and capacity planning.
+
+> **Note:** The Statistics API is intended for internal monitoring and is exposed without authentication on port 2609. Do not expose it publicly.
+
+## Overview
+
+Enonic XP exposes a set of named **reporters** on port 2609. The list of registered reporters is available at:
+
+```
+GET http://<host>:2609/
+```
+
+> **Tip:** `<host>` equals `localhost` on the machine running the XP instance.
+
+Sample response:
+
+```json
+[
+  "cluster.elasticsearch",
+  "cluster.manager",
+  "dump.deadlocks",
+  "dump.threads",
+  "http.filter",
+  "http.serverdump",
+  "http.servlet",
+  "http.threadpool",
+  "http.webHandler",
+  "index",
+  "jvm.gc",
+  "jvm.info",
+  "jvm.memory",
+  "jvm.os",
+  "jvm.threads",
+  "mediaTypes",
+  "metrics",
+  "osgi.bundle",
+  "osgi.component",
+  "osgi.service",
+  "server"
+]
+```
+
+Each reporter is fetched at:
+
+```
+GET http://<host>:2609/<name>
+```
+
+> **Note:** The set of registered reporters depends on the deployment. The list above is from a single-node SDK; clustered installations also expose `cluster.hazelcast`.
+
+In addition to reporters, two top-level probe endpoints expose health and readiness signals - see [Health and readiness](#health-and-readiness).
+
+## Reporters
+
+### cluster.elasticsearch
+
+Information about the Elasticsearch cluster - local node and members.
+
+```
+GET http://<host>:2609/cluster.elasticsearch
+```
+
+```json
+{
+  "name": "mycluster",
+  "localNode": {
+    "isMaster": true,
+    "id": "16RUH2cUS_6lCGoY27JblQ",
+    "hostName": "local",
+    "version": "2.4.6",
+    "numberOfNodesSeen": 1
+  },
+  "members": [
+    {
+      "isMaster": true,
+      "id": "16RUH2cUS_6lCGoY27JblQ",
+      "hostName": "local",
+      "version": "2.4.6",
+      "address": "local[1]",
+      "name": "8c30363f-9ba3-4af9-85d9-99c8d6827899",
+      "isDataNode": true,
+      "isClientNode": false
+    }
+  ],
+  "state": "YELLOW"
+}
+```
+
+For convenience, the local node is surfaced as a separate `localNode` entry alongside the full `members` list.
+
+The `state` property is the most important:
+
+- **Green**: cluster is operational and all configured replicas are distributed.
+
+- **Yellow**: cluster is operational, but some replicas are not distributed to a node.
+
+- **Red**: cluster is not operational.
+
+For shard-level distribution, see the [index](#index) reporter.
+
+### cluster.manager
+
+Aggregate health of all clusters. XP 8 currently registers a single cluster, `elasticsearch`.
+
+```
+GET http://<host>:2609/cluster.manager
+```
+
+```json
+{
+  "state": "OK",
+  "clusters": [
+    {
+      "id": "elasticsearch",
+      "healthy": true,
+      "numberOfNodesSeen": 1
+    }
+  ]
+}
+```
+
+### cluster.hazelcast
+
+Information about the Hazelcast cluster - state, version, and members.
+
+> **Note:** This reporter is only registered when Hazelcast clustering is active. It is not available on single-node SDK or standalone deployments.
+
+```
+GET http://<host>:2609/cluster.hazelcast
+```
+
+```json
+{
+  "clusterState": "ACTIVE",
+  "clusterTime": 1778137547054,
+  "clusterVersion": "5.3",
+  "members": [
+    {
+      "uuid": "d7b9b75e-aacf-444b-bff9-af5c786843c2",
+      "address": "192.168.1.1",
+      "port": 5701,
+      "liteMember": false,
+      "version": "5.3.7"
+    },
+    {
+      "uuid": "899920a2-d9bd-4add-8b1a-133bf27af9a0",
+      "address": "192.168.1.2",
+      "port": 5701,
+      "liteMember": false,
+      "version": "5.3.7"
+    }
+  ]
+}
+```
+
+### dump.deadlocks
+
+Detects thread deadlocks. Returns plain text - the literal string `No deadlocks detected!` when none are found, otherwise a stack-trace dump per locked thread.
+
+```
+GET http://<host>:2609/dump.deadlocks
+```
+
+### dump.threads
+
+Plain-text snapshot of every JVM thread and its current stack.
+
+```
+GET http://<host>:2609/dump.threads
+```
+
+```text
+"Reference Handler" daemon prio=10 Id=11 RUNNABLE
+    at java.base@25.0.3/java.lang.ref.Reference.waitForReferencePendingList(Native Method)
+    at java.base@25.0.3/java.lang.ref.Reference.processPendingReferences(Reference.java:246)
+    at java.base@25.0.3/java.lang.ref.Reference$ReferenceHandler.run(Reference.java:208)
+
+"Finalizer" daemon prio=8 Id=12 WAITING on java.lang.ref.ReferenceQueue$Lock
+    at java.base@25.0.3/java.lang.Object.wait0(Native Method)
+    ...
+```
+
+### http.filter
+
+Servlet filters registered with the HTTP layer. Each entry shows class, order, URL patterns, and the connectors it applies to.
+
+```
+GET http://<host>:2609/http.filter
+```
+
+```json
+[
+  {
+    "order": -500,
+    "name": "HeaderFilterWrapper",
+    "class": "com.enonic.xp.web.impl.header.HeaderFilterWrapper",
+    "patterns": ["/*"],
+    "connectors": ["xp", "api", "status"],
+    "initParams": {}
+  },
+  {
+    "order": -400,
+    "name": "DosFilterWrapper",
+    "class": "com.enonic.xp.web.impl.dos.DosFilterWrapper",
+    "patterns": ["/*"],
+    "connectors": ["xp", "api"],
+    "initParams": {}
+  }
+]
+```
+
+### http.serverdump
+
+Jetty’s internal server dump - thread pools, connectors, handler chain, and acceptor state. Plain text, intended for low-level debugging.
+
+```
+GET http://<host>:2609/http.serverdump
+```
+
+```text
+oejs.Server@417b362b{STARTED}[12.1.8,sto=0] ~ BLOCKING - STARTED
++= oejut.QueuedThreadPool[qtp646782988]@268d200c{STARTED,8<=18<=200,i=1,r=-1,t=-8608ms,q=0} - STARTED
+|  +- oejut.ThreadPoolBudget
+|  += oejut.ReservedThreadExecutor{capacity=8,threads=oejut.ThreadIdPool{capacity=8}} - STARTED
+|  ...
+```
+
+### http.servlet
+
+HTTP servlets registered. Same shape as `http.filter`.
+
+```
+GET http://<host>:2609/http.servlet
+```
+
+```json
+[
+  {
+    "order": 0,
+    "name": "JaxRsServlet",
+    "class": "com.enonic.xp.jaxrs.impl.JaxRsServlet",
+    "patterns": ["/admin/rest-v2/apps/*"],
+    "connectors": ["xp"],
+    "initParams": {}
+  },
+  {
+    "order": 100,
+    "name": "WebDispatcherServlet",
+    "class": "com.enonic.xp.web.impl.handler.WebDispatcherServlet",
+    "patterns": ["/*"],
+    "connectors": ["xp"],
+    "initParams": {}
+  }
+]
+```
+
+### http.threadpool
+
+Status of Jetty’s HTTP thread pool.
+
+```
+GET http://<host>:2609/http.threadpool
+```
+
+```json
+{
+  "threads": 18,
+  "idleThreads": 1,
+  "isLowOnThreads": false
+}
+```
+
+### http.webHandler
+
+The chain of WebHandler instances that requests are dispatched through, ordered by priority.
+
+```
+GET http://<host>:2609/http.webHandler
+```
+
+```json
+[
+  { "order": -100, "class": "com.enonic.xp.web.impl.trace.TraceWebFilter" },
+  { "order": -51,  "class": "com.enonic.app.contentstudio.site.AdminSiteHandler" },
+  { "order": -50,  "class": "com.enonic.xp.admin.impl.portal.AdminToolPortalHandler" },
+  { "order": -50,  "class": "com.enonic.xp.portal.impl.handler.portal.SiteHandler" },
+  ...
+]
+```
+
+### index
+
+Elasticsearch index status: total/started/unassigned shards, plus per-shard placement.
+
+```
+GET http://<host>:2609/index
+```
+
+```json
+{
+  "summary": {
+    "total": 16,
+    "started": 8,
+    "unassigned": 8,
+    "relocating": 0,
+    "initializing": 0
+  },
+  "shards": {
+    "started": [
+      {
+        "id": "storage-system-repo(0)",
+        "nodeId": "16RUH2cUS_6lCGoY27JblQ",
+        "nodeAddress": "0.0.0.0",
+        "type": "PRIMARY"
+      },
+      {
+        "id": "search-system-repo(0)",
+        "nodeId": "16RUH2cUS_6lCGoY27JblQ",
+        "nodeAddress": "0.0.0.0",
+        "type": "PRIMARY"
+      }
+    ],
+    "unassigned": [],
+    "relocating": [],
+    "initializing": []
+  }
+}
+```
+
+A shard is either `PRIMARY` or `REPLICA` (a copy of the primary). The summary buckets:
+
+- **total**: total shards across repositories and replicas.
+
+- **started**: shards currently assigned to a node.
+
+- **unassigned**: shards waiting to be distributed - typically a multi-replica setup with one or more nodes down.
+
+- **relocating**: shards moving from one node to another.
+
+- **initializing**: shards being recovered from disk during startup.
+
+### jvm.gc
+
+Cumulative JVM garbage-collection stats.
+
+```
+GET http://<host>:2609/jvm.gc
+```
+
+```json
+{
+  "collectionTime": 2111,
+  "collectionCount": 383
+}
+```
+
+### jvm.info
+
+JVM identity and uptime.
+
+```
+GET http://<host>:2609/jvm.info
+```
+
+```json
+{
+  "name": "Java HotSpot(TM) 64-Bit Server VM",
+  "vendor": "Oracle Corporation",
+  "version": "25.0.3+9-LTS-jvmci-b01",
+  "startTime": 1778137547054,
+  "upTime": 45129597
+}
+```
+
+### jvm.memory
+
+Heap, non-heap, and per-pool memory usage.
+
+```
+GET http://<host>:2609/jvm.memory
+```
+
+```json
+{
+  "heap": {
+    "init": 402653184,
+    "max": 6442450944,
+    "committed": 268435456,
+    "used": 231056848
+  },
+  "nonHeap": {
+    "init": 7667712,
+    "max": -1,
+    "committed": 255983616,
+    "used": 232611296
+  },
+  "pools": [
+    {
+      "name": "G1 Eden Space",
+      "type": "Heap memory",
+      "usage": { "init": 50331648, "max": -1, "committed": 125829120, "used": 109051904 }
+    },
+    {
+      "name": "Metaspace",
+      "type": "Non-heap memory",
+      "usage": { "init": 0, "max": -1, "committed": 182190080, "used": 176992680 }
+    }
+  ]
+}
+```
+
+### jvm.os
+
+Operating system the JVM is running on.
+
+```
+GET http://<host>:2609/jvm.os
+```
+
+```json
+{
+  "name": "Mac OS X",
+  "version": "26.2",
+  "arch": "aarch64",
+  "cores": 8,
+  "loadAverage": 2.366
+}
+```
+
+### jvm.threads
+
+JVM thread counts.
+
+```
+GET http://<host>:2609/jvm.threads
+```
+
+```json
+{
+  "count": 100,
+  "peak": 118,
+  "daemonCount": 72,
+  "totalStarted": 572,
+  "numDeadLocks": 0
+}
+```
+
+### mediaTypes
+
+File-extension to media-type mappings used by the runtime.
+
+```
+GET http://<host>:2609/mediaTypes
+```
+
+```json
+{
+  "css": "text/css",
+  "html": "text/html",
+  "js": "application/javascript",
+  "json": "application/json",
+  "jpg": "image/jpeg",
+  "png": "image/png",
+  "svg": "image/svg+xml",
+  "pdf": "application/pdf"
+}
+```
+
+### metrics
+
+Prometheus / OpenMetrics-formatted metrics for the instance. Point Prometheus, Grafana Agent, or any compatible scraper at this endpoint.
+
+```
+GET http://<host>:2609/metrics
+```
+
+```text
+# TYPE com_enonic_xp_event_EventPublisher_event counter
+com_enonic_xp_event_EventPublisher_event_total 367.0
+
+# TYPE jetty_connections_bytes_in_bytes summary
+# HELP jetty_connections_bytes_in_bytes Bytes received by tracked connections
+jetty_connections_bytes_in_bytes_count{connector_name="xp"} 0
+jetty_connections_bytes_in_bytes_sum{connector_name="xp"} 0.0
+jetty_connections_bytes_in_bytes_count{connector_name="api"} 0
+jetty_connections_bytes_in_bytes_sum{connector_name="api"} 0.0
+...
+```
+
+### osgi.bundle
+
+All OSGi bundles installed in the runtime.
+
+```
+GET http://<host>:2609/osgi.bundle
+```
+
+```json
+{
+  "count": 120,
+  "bundles": [
+    { "id": 0, "name": "org.apache.felix.framework", "state": "ACTIVE" },
+    { "id": 1, "name": "jakarta.activation-api", "state": "ACTIVE" },
+    { "id": 9, "name": "org.apache.felix.scr", "state": "ACTIVE" }
+  ]
+}
+```
+
+### osgi.component
+
+SCR (Declarative Services) components and their instance state.
+
+```
+GET http://<host>:2609/osgi.component
+```
+
+```json
+{
+  "count": 336,
+  "components": [
+    {
+      "name": "com.enonic.xp.server.internal.metrics.MetricsReporter",
+      "enabled": true,
+      "bundle": 21,
+      "instances": [{ "id": 1, "state": "ACTIVE" }]
+    },
+    {
+      "name": "com.enonic.xp.server.impl.status.DeadlockReporter",
+      "enabled": true,
+      "bundle": 70,
+      "instances": [{ "id": 4, "state": "ACTIVE" }]
+    }
+  ]
+}
+```
+
+### osgi.service
+
+All OSGi services currently registered.
+
+```
+GET http://<host>:2609/osgi.service
+```
+
+```json
+{
+  "count": 375,
+  "services": [
+    {
+      "id": "320",
+      "iface": "com.enonic.xp.web.handler.WebHandler",
+      "bundle": "com.enonic.xp.portal.impl"
+    },
+    {
+      "id": "92",
+      "iface": "com.enonic.xp.blob.BlobStore",
+      "bundle": "com.enonic.xp.core"
+    }
+  ]
+}
+```
+
+### server
+
+Build and version of the running XP instance.
+
+```
+GET http://<host>:2609/server
+```
+
+```json
+{
+  "version": "8.0.0-B4",
+  "installation": "Sandbox7",
+  "runMode": "DEV",
+  "build": {
+    "hash": "a0f053aa204fb51cc70a388bc99efd446e37059b",
+    "shortHash": "a0f053a",
+    "branch": "a0f053aa204fb51cc70a388bc99efd446e37059b",
+    "timestamp": "2026-04-30T15:26:12Z"
+  }
+}
+```
+
+## Health and readiness
+
+In addition to reporters, two probe endpoints expose simple health signals on the same port - useful for load balancers, Kubernetes liveness/readiness probes, and similar.
+
+### health
+
+Validates that essential data services are available.
+
+```
+GET http://<host>:2609/health
+```
+
+Returns `200 OK` with an empty `{}` body when healthy. On failure, returns `503` with a list of errors:
+
+```json
+{
+  "errors": [
+    "org.elasticsearch.client.Client service is not available"
+  ]
+}
+```
+
+### ready
+
+Validates that all services required for full operation are available.
+
+```
+GET http://<host>:2609/ready
+```
+
+Returns `200 OK` with an empty `{}` body when ready. On failure, returns `503` with a list of errors:
+
+```json
+{
+  "errors": [
+    "com.enonic.xp.portal.websocket.WebSocketManager service is not available",
+    "com.enonic.xp.mail.MailService service is not available"
+  ]
+}
+```

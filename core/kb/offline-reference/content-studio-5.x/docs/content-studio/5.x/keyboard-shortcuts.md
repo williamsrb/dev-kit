@@ -1,0 +1,63 @@
+<!-- src:https://developer.enonic.com/docs/content-studio/5.x/keyboard-shortcuts generated:2026-07-29T03:47:31Z format:llm-dense content-studio-5.x -->
+#DOC docs/content-studio/5.x/keyboard-shortcuts.md
+
+# Keyboard Shortcuts
+
+This section describes the shortcuts that are available for power users in the Content Studio.
+
+> **Note:** Press F2 to reveal all available shortcuts for a view.
+
+## Browse View
+
+| Content Navigator | Mac OS X | Windows / Linux |
+| --- | --- | --- |
+| New content | `Alt + N` |  |
+| Select / Unselect content | `Space` |  |
+| Move selected content | `Alt + M` |  |
+| Edit selected content | `⌘ + E` / `Enter` | `Ctrl + E` / `Enter` |
+| Archive selected content | `⌘ + Delete` | `Ctrl + Delete` |
+| Publish selected content | `⌘ + Alt + P` | `Ctrl + Alt + P` |
+| Preview selected content | `Alt + Space` | `Ctrl + Alt + Space` |
+| Open search panel | `Shift + F` |  |
+
+## Content Editor
+
+| Edit content wizard | Mac OS X | Windows / Linux |
+| --- | --- | --- |
+| Save content | `⌘ + S` | `Ctrl + S` |
+| Save content and close wizard tab | `⌘ + Enter` | `Ctrl + Enter` |
+| Close wizard tab | `Alt + W` |  |
+| Archive content | `⌘ + Delete` | `Ctrl + Delete` |
+| Publish selected content | `⌘ + Alt + P` | `Ctrl + Alt + P` |
+| Preview selected content | `Alt + Space` | `Ctrl + Alt + Space` |
+
+## Rich Text Editor
+
+| HtmlArea editor | Mac OS X | Windows / Linux |
+| --- | --- | --- |
+| Cut | `⌘ + X` | `Ctrl + X` |
+| Copy | `⌘ + C` | `Ctrl + C` |
+| Paste | `⌘ + V` | `Ctrl + V` |
+| Paste as text | `⌘ + Shift + V` | `Ctrl + Shift + V` |
+| Select All | `⌘ + A` | `Ctrl + A` |
+| Bold | `⌘ + B` | `Ctrl + B` |
+| Italic | `⌘ + I` | `Ctrl + I` |
+| Underline | `⌘ + U` | `Ctrl + U` |
+| H1 | `⌘ + Alt + 1` | `Ctrl + Alt + 1` |
+| H2 | `⌘ + Alt + 2` | `Ctrl + Alt + 2` |
+| H3 | `⌘ + Alt + 3` | `Ctrl + Alt + 3` |
+| H4 | `⌘ + Alt + 4` | `Ctrl + Alt + 4` |
+| H5 | `⌘ + Alt + 5` | `Ctrl + Alt + 5` |
+| H6 | `⌘ + Alt + 6` | `Ctrl + Alt + 6` |
+| Paragraph | `⌘ + Shift + 7` | `Ctrl + Shift + 7` |
+| Div (Nornal) | `⌘ + Shift + 8` | `Ctrl + Shift + 8` |
+| Address | `⌘ + Shift + 9` | `Ctrl + Shift + 9` |
+| Undo | `⌘ + Z` | `Ctrl + Z` |
+| Redo | `⌘ + Y` / `⌘ + Shift + Z` | `Ctrl + Y` / `Ctrl + Shift + Z` |
+| Insert link | `⌘ + K` | `Ctrl + K` |
+| Insert image | `⌘ + L` | `Ctrl + L` |
+| Find | `⌘ + F` | `Ctrl + F` |
+| Replace | `⌘ + R` | `Ctrl + R` |
+| Focus to toolbar | `Alt + F10` |  |
+| Focus to element | `Alt + F11` |  |
+| Insert non-breaking space | `Ctrl + Space` |  |

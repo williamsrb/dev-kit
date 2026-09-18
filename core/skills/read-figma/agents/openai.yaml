@@ -1,0 +1,4 @@
+interface:
+  display_name: "Read Figma File"
+  short_description: "Inspect local Figma files deterministically"
+  default_prompt: "Use $read-figma to inspect this local Figma file and verify the requested node."

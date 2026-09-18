@@ -1,0 +1,2386 @@
+#!/usr/bin/env python3
+"""Deterministic local primitives for personal agent skills.
+
+Keep raw artifacts on disk and return compact JSON for model-facing workflows.
+Python 3.12+, standard library only; optional capabilities call declared CLIs.
+"""
+
+from __future__ import annotations
+
+import argparse
+import datetime as dt
+import hashlib
+import json
+import re
+import shutil
+import sqlite3
+import subprocess
+import sys
+from pathlib import Path
+from typing import Any
+
+_BIN_DIR = Path(__file__).resolve().parent
+if str(_BIN_DIR) not in sys.path:
+    sys.path.insert(0, str(_BIN_DIR))
+import agentctl_jira
+
+ISSUE_RE = re.compile(r"(?<![A-Z0-9])([A-Z][A-Z0-9]+-\d+)(?![A-Z0-9])", re.IGNORECASE)
+SLUG_RE = re.compile(r"(?<![A-Za-z0-9-])([a-z][a-z0-9]*(?:-[a-z0-9]+)+)(?![A-Za-z0-9-])")
+HEADING_RE = re.compile(r"^(#{1,6})\s+(.+?)\s*$")
+LOG_START_RE = re.compile(
+    r"^(?:\d{4}-\d{2}-\d{2}[T ][^ ]+\s+)?(?:\[[^]]+\]\s*)?"
+    r"(?P<level>ERROR|WARN(?:ING)?|FATAL)\b",
+    re.IGNORECASE,
+)
+TIMESTAMP_RE = re.compile(r"^\d{4}-\d{2}-\d{2}[T ][0-9:.+\-Z]+")
+
+RECOMMENDED_TOOLS = (
+    "rg", "jq", "git", "python3", "xmllint", "xmlstarlet", "yq",
+    "shellcheck", "shfmt", "ruff", "markdownlint-cli2", "lychee",
+    "codespell", "ast-grep", "gitleaks", "osv-scanner", "trivy", "semgrep",
+    "qpdf", "ocrmypdf", "tesseract", "image-diff", "convert", "identify", "pdftotext",
+    "pdfinfo", "pdftoppm", "ffmpeg", "ffprobe", "libreoffice", "zstd",
+    "ollama", "skillspector",
+)
+
+RECOMMENDED_PYTHON_PACKAGES = ("PIL", "numpy")
+
+
+def emit(payload: Any, *, as_json: bool = True) -> None:
+    if as_json:
+        print(json.dumps(payload, indent=2, ensure_ascii=False, sort_keys=True))
+    elif isinstance(payload, str):
+        print(payload)
+    else:
+        print(payload)
+
+
+def run(
+    command: list[str],
+    *,
+    cwd: Path | None = None,
+    input_text: str | None = None,
+    check: bool = False,
+    timeout: float | None = None,
+) -> subprocess.CompletedProcess[str]:
+    try:
+        return subprocess.run(
+            command,
+            cwd=str(cwd) if cwd else None,
+            input=input_text,
+            text=True,
+            capture_output=True,
+            check=check,
+            timeout=timeout,
+        )
+    except subprocess.TimeoutExpired as exc:
+        return subprocess.CompletedProcess(
+            command, returncode=124, stdout=exc.stdout or "",
+            stderr=(exc.stderr or "") + f"\ntimed out after {timeout}s",
+        )
+
+
+def git(cwd: Path, *args: str) -> subprocess.CompletedProcess[str]:
+    return run(["git", *args], cwd=cwd)
+
+
+def repo_root(start: Path) -> Path | None:
+    result = git(start, "rev-parse", "--show-toplevel")
+    if result.returncode == 0:
+        return Path(result.stdout.strip()).resolve()
+    return None
+
+
+def _is_jira_token(token: str) -> bool:
+    match = ISSUE_RE.search(token)
+    return bool(match) and match.group(1).lower() == token.lower()
+
+
+def _local_artifact_exists(key: str) -> bool:
+    home = Path.home() / ".agents"
+    return (
+        (home / "prds" / f"{key}.md").is_file()
+        or (home / "plans" / key).is_dir()
+        or (home / "plans" / f"{key}.md").is_file()
+    )
+
+
+def _unique(items: list[dict[str, str]]) -> list[dict[str, str]]:
+    seen: set[str] = set()
+    unique: list[dict[str, str]] = []
+    for item in items:
+        if item["key"] in seen:
+            continue
+        seen.add(item["key"])
+        unique.append(item)
+    return unique
+
+
+def _issues_from(source: str, value: str) -> list[dict[str, str]]:
+    found: list[dict[str, str]] = []
+    for match in ISSUE_RE.finditer(value):
+        found.append({"key": match.group(1).upper(), "source": source, "value": value[:300], "mode": "jira"})
+    return _unique(found)
+
+
+def _slugs_from(source: str, value: str) -> list[dict[str, str]]:
+    found: list[dict[str, str]] = []
+    for match in SLUG_RE.finditer(value):
+        token = match.group(1)
+        if _is_jira_token(token):
+            continue
+        found.append({"key": token, "source": source, "value": value[:300], "mode": "local"})
+    found = _unique(found)
+    if len(found) <= 1:
+        return found
+    existing = [item for item in found if _local_artifact_exists(item["key"])]
+    return existing or found
+
+
+def cmd_task_resolve(args: argparse.Namespace) -> int:
+    cwd = args.cwd.resolve()
+    root = repo_root(cwd)
+    branch = git(root, "branch", "--show-current").stdout.strip() if root else ""
+    file_issues: list[dict[str, str]] = []
+    for folder_name in ("plans", "prds"):
+        for base in (cwd, Path.home() / ".agents"):
+            folder = base / folder_name
+            if folder.is_dir():
+                for item in sorted(folder.glob("*.md"), key=lambda p: p.stat().st_mtime, reverse=True)[:20]:
+                    file_issues.extend(_issues_from(f"{folder_name}-filename", item.name))
+    file_issues = _unique(file_issues)
+
+    buckets = (
+        _issues_from("text", args.text) if args.text else [],
+        _slugs_from("text", args.text) if args.text else [],
+        _issues_from("git-branch", branch) if branch else [],
+        _slugs_from("git-branch", branch) if branch else [],
+        _issues_from("cwd", cwd.name),
+        _slugs_from("cwd", cwd.name),
+        file_issues,
+    )
+    candidates: list[dict[str, str]] = []
+    for bucket in buckets:
+        if bucket:
+            candidates = bucket
+            break
+    status = "resolved" if len(candidates) == 1 else "ambiguous" if candidates else "unresolved"
+    selected = candidates[0] if len(candidates) == 1 else None
+    emit({
+        "status": status,
+        "key": selected["key"] if selected else None,
+        "mode": selected["mode"] if selected else None,
+        "candidates": candidates,
+        "repo": str(root) if root else None,
+    })
+    return 0 if status == "resolved" else 2
+
+
+def section_slug(text: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "-", text.lower()).strip("-")
+
+
+HEADING_QUALIFIER_RE = re.compile(r"\s*(?:\(.*\)|\[.*\]|[\u2014\u2013:-]\s.*)\s*$")
+
+
+def section_slugs(title: str) -> list[str]:
+    """Slug plus the qualifier-stripped base slug.
+
+    Plan headings carry human qualifiers the required-section contract does not:
+    "Constraints (user exclusions)", "TBD (ask analyst before implement)", and
+    "Implicit requirements (techlead tick)" must still satisfy `constraints`,
+    `tbd`, and `implicit-requirements`. Order is exact-first, base-second.
+    """
+    slugs = [section_slug(title)]
+    base = section_slug(HEADING_QUALIFIER_RE.sub("", title))
+    if base and base not in slugs:
+        slugs.append(base)
+    return slugs
+
+
+def markdown_sections(path: Path) -> list[dict[str, Any]]:
+    lines = path.read_text(encoding="utf-8").splitlines()
+    headings: list[tuple[int, int, str]] = []
+    for index, line in enumerate(lines):
+        match = HEADING_RE.match(line)
+        if match:
+            headings.append((index, len(match.group(1)), match.group(2)))
+    sections: list[dict[str, Any]] = []
+    for pos, (start, level, title) in enumerate(headings):
+        end = len(lines)
+        for later_start, later_level, _ in headings[pos + 1:]:
+            if later_level <= level:
+                end = later_start
+                break
+        slugs = section_slugs(title)
+        sections.append({
+            "title": title,
+            "slug": slugs[0],
+            "slugs": slugs,
+            "level": level,
+            "start_line": start + 1,
+            "end_line": end,
+            "text": "\n".join(lines[start:end]).rstrip(),
+        })
+    return sections
+
+
+def cmd_markdown_slice(args: argparse.Namespace) -> int:
+    wanted = {section_slug(value) for value in args.sections.split(",") if value.strip()}
+    selected = [section for section in markdown_sections(args.file)
+                if wanted.intersection(section["slugs"])]
+    payload = {
+        "file": str(args.file.resolve()),
+        "requested": sorted(wanted),
+        "found": [section["slug"] for section in selected],
+        "missing": sorted(wanted - {slug for section in selected for slug in section["slugs"]}),
+        "sections": selected,
+    }
+    emit(payload, as_json=args.json)
+    return 0 if not payload["missing"] else 2
+
+
+def cmd_delivery_scope(args: argparse.Namespace) -> int:
+    cwd = args.cwd.resolve()
+    root = repo_root(cwd)
+    if not root:
+        emit({"status": "not-a-git-repo", "cwd": str(cwd)})
+        return 2
+    commands = {
+        "unstaged": ("diff", "--name-only"),
+        "staged": ("diff", "--cached", "--name-only"),
+        "untracked": ("ls-files", "--others", "--exclude-standard"),
+    }
+    files: dict[str, list[str]] = {}
+    for label, command in commands.items():
+        result = git(root, *command)
+        files[label] = [line for line in result.stdout.splitlines() if line]
+    branch = git(root, "branch", "--show-current").stdout.strip()
+    base = args.base
+    branch_files: list[str] = []
+    if base:
+        result = git(root, "diff", "--name-only", f"{base}...HEAD")
+        if result.returncode == 0:
+            branch_files = [line for line in result.stdout.splitlines() if line]
+    if args.write_diff:
+        diff = git(root, "diff", "--binary").stdout
+        args.write_diff.parent.mkdir(parents=True, exist_ok=True)
+        args.write_diff.write_text(diff, encoding="utf-8")
+    emit({"status": "ok", "repo": str(root), "branch": branch, "base": base,
+          "files": files, "branch_files": branch_files,
+          "diff_file": str(args.write_diff.resolve()) if args.write_diff else None})
+    return 0
+
+
+PROJECT_MARKERS = {
+    "node": ("package.json",),
+    "python": ("pyproject.toml", "requirements.txt", "setup.py"),
+    "gradle": ("build.gradle", "build.gradle.kts", "gradlew"),
+    "godot": ("project.godot",),
+    "enonic": ("app/src/main/resources/application.xml", "src/main/resources/application.xml"),
+    "react4xp": ("react4xp.config.js", "react4xp.config.ts"),
+    "docker": ("Dockerfile", "compose.yaml", "docker-compose.yml"),
+}
+
+
+def cmd_repo_detect(args: argparse.Namespace) -> int:
+    cwd = args.cwd.resolve()
+    root = repo_root(cwd) or cwd
+    stacks: dict[str, list[str]] = {}
+    for stack, markers in PROJECT_MARKERS.items():
+        hits = [marker for marker in markers if (root / marker).exists()]
+        if hits:
+            stacks[stack] = hits
+    package_manager = None
+    for manager, lockfile in (("pnpm", "pnpm-lock.yaml"), ("yarn", "yarn.lock"),
+                              ("npm", "package-lock.json"), ("bun", "bun.lockb")):
+        if (root / lockfile).exists():
+            package_manager = manager
+            break
+    emit({"root": str(root), "git": repo_root(cwd) is not None, "stacks": stacks,
+          "package_manager": package_manager})
+    return 0
+
+
+PLACEHOLDER_TOKENS = (
+    "ISSUE-KEY", "ISSUE_KEY", "ISSUE-ID", "TASK-ID", "TASK_ID", "TASK-KEY", "EPIC-KEY",
+    "JIRA-KEY", "ENV", "ENVIRONMENT", "DATE", "DATETIME", "ISO-DATE", "ISO-DATETIME",
+    "PLACEHOLDER", "FILL-ME", "FIXME", "XXX",
+)
+# Only template tokens count. Generic angle brackets are ordinary plan content:
+# TypeScript generics, JSX tags, regex character classes, and documented path
+# conventions such as `services/<name>/<name>.ts` are not unresolved placeholders.
+PLACEHOLDER_RE = re.compile(
+    r"<(?:" + "|".join(re.escape(token) for token in PLACEHOLDER_TOKENS) + r")>|\bTODO\b",
+    re.IGNORECASE,
+)
+
+PLAN_HEADINGS = {
+    "implementation": ("overview", "functional-requirements", "non-goals", "constraints",
+                       "tbd", "implicit-requirements", "implementation-plan", "validation"),
+    "evidence": ("auth-required", "acceptance-criteria", "evidence-steps", "artifacts",
+                 "posting-gate"),
+}
+
+PLANS_ROOT = Path.home() / ".agents" / "plans"
+INDEX_FILE_RE = re.compile(r"([a-z0-9][a-z0-9._-]+\.md)", re.IGNORECASE)
+FOLDER_COMPANIONS = (
+    "plan.md", "requirements.md", "implementation.md", "validation.md",
+    "evidence.md", "tbd.md", "implicit.md", "decisions.md",
+)
+
+
+def plan_template(kind: str, issue: str) -> str:
+    if kind == "implementation":
+        return f"""# {issue}: Implementation plan
+
+## Overview
+
+## Functional Requirements
+
+## Non-Goals
+
+## Constraints
+
+## TBD
+
+## Implicit requirements
+
+## Implementation Plan
+
+## Validation
+"""
+    return f"""# {issue}: Evidence plan
+
+## Auth Required?
+
+- Required: unknown
+- Surfaces:
+- Storage state: `~/.agents/.auth/<env>.json`
+
+## Acceptance Criteria
+
+## Evidence Steps
+
+## Artifacts
+
+## Posting Gate
+
+Post a Jira evidence comment only when every criterion and step passes.
+"""
+
+
+def folder_plan_md(issue: str, kind: str) -> str:
+    if kind == "evidence":
+        rows = [
+            ("Overview, Non-Goals, Constraints", "plan.md"),
+            ("Evidence", "evidence.md"),
+        ]
+        title = "Evidence plan"
+    else:
+        rows = [
+            ("Overview, Non-Goals, Constraints", "plan.md"),
+            ("User Stories, Functional Requirements", "requirements.md"),
+            ("TBD", "tbd.md"),
+            ("Implicit requirements", "implicit.md"),
+            ("Implementation Plan", "implementation.md"),
+            ("Validation", "validation.md"),
+        ]
+        title = "Implementation plan"
+    table = "\n".join(f"| {section} | {file} |" for section, file in rows)
+    return f"""# {issue}: {title}
+
+## Overview
+
+## Non-Goals
+
+## Constraints
+
+## Section index
+
+| Section | File |
+|---------|------|
+{table}
+"""
+
+
+def folder_companion_bodies(issue: str) -> dict[str, str]:
+    return {
+        "requirements.md": f"# {issue}: Requirements\n\n## User Stories\n\n## Functional Requirements\n",
+        "implementation.md": f"# {issue}: Implementation\n\n## Implementation Plan\n",
+        "validation.md": f"# {issue}: Validation\n\n## Validation\n",
+        "tbd.md": f"# {issue}: TBD\n\n## TBD\n",
+        "implicit.md": (
+            f"# {issue}: Implicit requirements\n\n"
+            "## Implicit requirements\n\n"
+            "- Implicit: none\n"
+        ),
+        "evidence.md": plan_template("evidence", issue),
+        "decisions.md": f"# {issue}: Decisions\n\n## Decisions\n",
+    }
+
+
+def plan_dir_files(directory: Path) -> list[Path]:
+    files = []
+    for name in FOLDER_COMPANIONS:
+        path = directory / name
+        if path.is_file():
+            files.append(path)
+    for path in sorted(directory.glob("*.md")):
+        if path not in files:
+            files.append(path)
+    return files
+
+
+def collect_headings(paths: list[Path]) -> list[dict[str, Any]]:
+    sections: list[dict[str, Any]] = []
+    for path in paths:
+        for section in markdown_sections(path):
+            item = dict(section)
+            item["file"] = str(path.resolve())
+            sections.append(item)
+    return sections
+
+
+def index_files(plan_md: Path) -> list[str]:
+    if not plan_md.is_file():
+        return []
+    names: list[str] = []
+    in_index = False
+    for line in plan_md.read_text(encoding="utf-8").splitlines():
+        if HEADING_RE.match(line):
+            in_index = "section index" in line.lower()
+            continue
+        if not in_index:
+            continue
+        for match in INDEX_FILE_RE.findall(line):
+            if match not in names:
+                names.append(match)
+    return names
+
+
+def infer_plan_kind(target: Path) -> str:
+    if target.is_dir():
+        if (target / "implementation.md").is_file() or (target / "requirements.md").is_file():
+            return "implementation"
+        if (target / "evidence.md").is_file() and not (target / "implementation.md").is_file():
+            return "evidence"
+        return "implementation"
+    name = target.name.lower()
+    if name.endswith("-evidence-plan.md") or name == "evidence.md":
+        return "evidence"
+    return "implementation"
+
+
+def resolve_plan_target(task_id: str, *, plans_dir: Path, kind: str | None = None) -> dict[str, Any]:
+    raw = task_id.strip()
+    candidate = Path(raw).expanduser()
+    folder: Path | None = None
+    file_path: Path | None = None
+
+    if candidate.exists():
+        if candidate.is_dir():
+            folder = candidate
+        else:
+            file_path = candidate
+    else:
+        folder_hit = plans_dir / raw
+        if folder_hit.is_dir() and (folder_hit / "plan.md").is_file():
+            folder = folder_hit
+        else:
+            evidence = plans_dir / f"{raw}-evidence-plan.md"
+            impl = plans_dir / f"{raw}.md"
+            if kind == "evidence" and evidence.is_file():
+                file_path = evidence
+            elif impl.is_file():
+                file_path = impl
+            elif evidence.is_file():
+                file_path = evidence
+
+    if folder is not None:
+        detected = kind or infer_plan_kind(folder)
+        if detected == "evidence" and (folder / "evidence.md").is_file():
+            entry = folder / "evidence.md"
+        else:
+            entry = folder / "plan.md"
+        sections = []
+        for path in plan_dir_files(folder):
+            sections.append({
+                "name": path.stem,
+                "file": str(path.resolve()),
+                "bytes": path.stat().st_size,
+            })
+        return {
+            "status": "ok",
+            "entry": str(entry.resolve()) if entry.is_file() else str((folder / "plan.md").resolve()),
+            "kind": detected,
+            "layout": "folder",
+            "root": str(folder.resolve()),
+            "sections": sections,
+        }
+
+    if file_path is not None and file_path.is_file():
+        detected = kind or infer_plan_kind(file_path)
+        sections = []
+        for section in markdown_sections(file_path):
+            sections.append({
+                "name": section["slug"],
+                "file": str(file_path.resolve()),
+                "bytes": len(section["text"].encode("utf-8")),
+            })
+        return {
+            "status": "ok",
+            "entry": str(file_path.resolve()),
+            "kind": detected,
+            "layout": "file",
+            "root": str(file_path.resolve()),
+            "sections": sections,
+        }
+
+    return {
+        "status": "unresolved",
+        "entry": None,
+        "kind": kind,
+        "layout": None,
+        "root": None,
+        "sections": [],
+        "task_id": raw,
+        "plans_dir": str(plans_dir.resolve()),
+    }
+
+
+def validate_plan_paths(paths: list[Path], kind: str, label: str) -> dict[str, Any]:
+    sections = collect_headings(paths)
+    present = {slug for section in sections for slug in section["slugs"]}
+    required = set(PLAN_HEADINGS[kind])
+    missing = sorted(required - present)
+    unresolved = []
+    for path in paths:
+        for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+            if PLACEHOLDER_RE.search(line):
+                unresolved.append({"file": str(path), "line": number, "text": line[:240]})
+    payload = {
+        "valid": not missing and not unresolved,
+        "file": label,
+        "kind": kind,
+        "missing_sections": missing,
+        "unresolved_placeholders": unresolved,
+    }
+    return payload
+
+
+def cmd_plan_init(args: argparse.Namespace) -> int:
+    output = args.output.resolve()
+    folder_mode = output.suffix.lower() != ".md"
+    if folder_mode:
+        if output.exists() and not output.is_dir():
+            emit({"status": "not-a-directory", "output": str(output)})
+            return 2
+        output.mkdir(parents=True, exist_ok=True)
+        created: list[str] = []
+        plan_md = output / "plan.md"
+        if plan_md.exists() and not args.force:
+            emit({"status": "exists", "output": str(plan_md)})
+            return 2
+        plan_md.write_text(folder_plan_md(args.issue.upper(), args.kind), encoding="utf-8")
+        created.append(str(plan_md))
+        bodies = folder_companion_bodies(args.issue.upper())
+        names = ["evidence.md"] if args.kind == "evidence" else [
+            "requirements.md", "implementation.md", "validation.md", "tbd.md",
+            "implicit.md",
+        ]
+        for name in names:
+            path = output / name
+            if path.exists() and not args.force:
+                continue
+            path.write_text(bodies[name], encoding="utf-8")
+            created.append(str(path))
+        emit({
+            "status": "created",
+            "kind": args.kind,
+            "issue": args.issue.upper(),
+            "output": str(output),
+            "layout": "folder",
+            "files": created,
+        })
+        return 0
+    if output.exists() and not args.force:
+        emit({"status": "exists", "output": str(output)})
+        return 2
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(plan_template(args.kind, args.issue.upper()), encoding="utf-8")
+    emit({
+        "status": "created",
+        "kind": args.kind,
+        "issue": args.issue.upper(),
+        "output": str(output),
+        "layout": "file",
+    })
+    return 0
+
+
+def cmd_plan_validate(args: argparse.Namespace) -> int:
+    target = args.file.resolve()
+    if not target.exists():
+        emit({"valid": False, "file": str(target), "error": "missing"})
+        return 2
+    kind = args.kind or infer_plan_kind(target)
+    missing_index: list[str] = []
+    if target.is_dir():
+        paths = plan_dir_files(target)
+        plan_md = target / "plan.md"
+        for name in index_files(plan_md):
+            if not (target / name).is_file():
+                missing_index.append(name)
+        payload = validate_plan_paths(paths, kind, str(target))
+        payload["layout"] = "folder"
+        payload["missing_index_files"] = missing_index
+        if missing_index:
+            payload["valid"] = False
+        emit(payload)
+        return 0 if payload["valid"] else 2
+    payload = validate_plan_paths([target], kind, str(target))
+    payload["layout"] = "file"
+    emit(payload)
+    return 0 if payload["valid"] else 2
+
+
+def cmd_plan_resolve(args: argparse.Namespace) -> int:
+    payload = resolve_plan_target(
+        args.task_id, plans_dir=args.plans_dir.resolve(), kind=args.kind,
+    )
+    emit(payload)
+    return 0 if payload["status"] == "ok" else 2
+
+
+def log_events(path: Path, levels: set[str], limit: int) -> list[dict[str, Any]]:
+    lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+    blocks: list[tuple[int, list[str], str]] = []
+    current: tuple[int, list[str], str] | None = None
+    for number, line in enumerate(lines, 1):
+        start = LOG_START_RE.search(line)
+        if start:
+            if current:
+                blocks.append(current)
+            level = start.group("level").upper().replace("WARNING", "WARN")
+            current = (number, [line], level) if level in levels else None
+        elif current:
+            if TIMESTAMP_RE.match(line) and not re.search(r"\bat\s+", line):
+                blocks.append(current)
+                current = None
+            elif len(current[1]) < 80:
+                current[1].append(line)
+    if current:
+        blocks.append(current)
+    seen: set[str] = set()
+    events: list[dict[str, Any]] = []
+    for line_no, block, level in blocks:
+        text = "\n".join(block).strip()
+        normalized = re.sub(r"\b\d+\b", "#", text)
+        fingerprint = hashlib.sha256(normalized.encode()).hexdigest()[:12]
+        if fingerprint in seen:
+            continue
+        seen.add(fingerprint)
+        events.append({"line": line_no, "level": level, "fingerprint": fingerprint,
+                       "text": text[: argsafe_limit(8000)]})
+        if len(events) >= limit:
+            break
+    return events
+
+
+def argsafe_limit(value: int) -> int:
+    return max(1, min(value, 100_000))
+
+
+def cmd_logs_extract(args: argparse.Namespace) -> int:
+    levels = {value.strip().upper() for value in args.levels.split(",") if value.strip()}
+    events = log_events(args.file, levels, args.limit)
+    emit({"file": str(args.file.resolve()), "levels": sorted(levels), "count": len(events),
+          "truncated": len(events) == args.limit, "events": events})
+    return 0
+
+
+def cmd_evidence_inspect(args: argparse.Namespace) -> int:
+    image = args.image.resolve()
+    checks: dict[str, Any] = {"exists": image.is_file()}
+    if not image.is_file():
+        emit({"valid": False, "image": str(image), "checks": checks})
+        return 2
+    identify = shutil.which("identify")
+    if identify:
+        result = run([identify, "-format", "%w %h %m", str(image)])
+        if result.returncode == 0:
+            width, height, image_format = result.stdout.split(maxsplit=2)
+            checks["image"] = {"width": int(width), "height": int(height), "format": image_format}
+            if args.min_width or args.min_height:
+                checks["dimensions"] = {
+                    "min_width": args.min_width,
+                    "min_height": args.min_height,
+                    "matches": int(width) >= args.min_width and int(height) >= args.min_height,
+                }
+    sidecar = args.sidecar or image.with_suffix(image.suffix + ".json")
+    manifest: dict[str, Any] = {}
+    if sidecar.is_file():
+        try:
+            manifest = json.loads(sidecar.read_text(encoding="utf-8"))
+            checks["sidecar"] = "valid"
+        except (OSError, json.JSONDecodeError) as exc:
+            checks["sidecar"] = f"invalid: {exc}"
+    else:
+        checks["sidecar"] = "missing"
+    if args.expected_url:
+        actual_url = manifest.get("url")
+        checks["url"] = {"expected": args.expected_url, "actual": actual_url,
+                         "matches": actual_url == args.expected_url}
+    if args.expected_selector:
+        actual_selector = manifest.get("selector")
+        checks["selector"] = {"expected": args.expected_selector, "actual": actual_selector,
+                              "matches": actual_selector == args.expected_selector}
+    ocr_payload = None
+    if args.ocr or args.expected_text:
+        tesseract = shutil.which("tesseract")
+        if not tesseract:
+            checks["ocr"] = "tesseract-missing"
+        else:
+            shared_tessdata = Path.home() / ".agents" / "share" / "tessdata"
+            tessdata_args = []
+            if shared_tessdata.is_dir() and all(
+                (shared_tessdata / f"{language}.traineddata").is_file()
+                for language in args.lang.split("+")
+            ):
+                tessdata_args = ["--tessdata-dir", str(shared_tessdata)]
+            result = run([tesseract, str(image), "stdout", *tessdata_args, "-l", args.lang])
+            ocr_payload = result.stdout[: argsafe_limit(args.max_ocr_chars)]
+            checks["ocr"] = {"exit_code": result.returncode, "chars": len(result.stdout),
+                             "truncated": len(result.stdout) > args.max_ocr_chars}
+            if args.expected_text:
+                checks["text"] = {
+                    "expected": args.expected_text,
+                    "matches": args.expected_text.casefold() in result.stdout.casefold(),
+                }
+    valid = checks["exists"] and not str(checks.get("sidecar", "")).startswith("invalid")
+    if args.expected_url:
+        valid = valid and checks.get("url", {}).get("matches", False)
+    if args.expected_selector:
+        valid = valid and checks.get("selector", {}).get("matches", False)
+    if args.expected_text:
+        valid = valid and checks.get("text", {}).get("matches", False)
+    if args.min_width or args.min_height:
+        valid = valid and checks.get("dimensions", {}).get("matches", False)
+    emit({"valid": bool(valid), "image": str(image), "sidecar": str(sidecar),
+          "checks": checks, "ocr_text": ocr_payload})
+    return 0 if valid else 2
+
+
+def cmd_evidence_manifest(args: argparse.Namespace) -> int:
+    image = args.image.expanduser().resolve()
+    if not image.is_file():
+        emit({"status": "error", "error": f"image not found: {image}"})
+        return 2
+    output = (args.output or image.with_suffix(image.suffix + ".json")).expanduser().resolve()
+    payload: dict[str, Any] = {
+        "image": str(image),
+        "sha256": hashlib.sha256(image.read_bytes()).hexdigest(),
+        "bytes": image.stat().st_size,
+        "url": args.url,
+        "selector": args.selector,
+        "title": args.title,
+        "captured_at": dt.datetime.now().astimezone().isoformat(),
+    }
+    identify = shutil.which("identify")
+    if identify:
+        result = run([identify, "-format", "%w %h %m", str(image)])
+        if result.returncode == 0:
+            width, height, image_format = result.stdout.split(maxsplit=2)
+            payload.update({"width": int(width), "height": int(height), "format": image_format})
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(json.dumps(payload, indent=2, ensure_ascii=False, sort_keys=True) + "\n",
+                      encoding="utf-8")
+    emit({"status": "written", "output": str(output), "manifest": payload})
+    return 0
+
+
+def run_skill_script(script: Path, script_args: list[str], *, timeout: float | None = None) -> int:
+    if not script.is_file():
+        emit({"status": "error", "error": f"skill script missing: {script}"})
+        return 2
+    result = run([sys.executable, str(script), *script_args], timeout=timeout)
+    try:
+        payload = json.loads(result.stdout)
+    except json.JSONDecodeError:
+        emit({
+            "status": "error",
+            "error": "non-JSON output from skill script",
+            "exit_code": result.returncode,
+            "stdout": result.stdout[:2000],
+            "stderr": result.stderr[:2000],
+        })
+        return 2
+    emit(payload)
+    return result.returncode
+
+
+def cmd_image_stamp(args: argparse.Namespace) -> int:
+    script = (
+        Path.home()
+        / ".agents"
+        / "skills"
+        / "plan-task-evidence"
+        / "scripts"
+        / "annotate-evidence-resolution.py"
+    )
+    script_args = ["--json"]
+    if args.check:
+        script_args.append("--check")
+    if args.no_flatten:
+        script_args.append("--no-flatten")
+    script_args.extend(str(path.expanduser()) for path in args.paths)
+    return run_skill_script(script, script_args, timeout=60)
+
+
+def cmd_image_whitespace(args: argparse.Namespace) -> int:
+    script = Path.home() / ".agents" / "skills" / "blank-space" / "scripts" / "blank_space.py"
+    script_args = [str(args.image.expanduser().resolve()), "--background", args.background,
+                   "--tolerance", str(args.tolerance)]
+    if args.grid:
+        script_args += ["--grid", str(args.grid)]
+    return run_skill_script(script, script_args, timeout=30)
+
+
+def cmd_image_describe(args: argparse.Namespace) -> int:
+    script = Path.home() / ".agents" / "skills" / "describe-image" / "scripts" / "describe.py"
+    script_args = [str(args.image.expanduser().resolve()), "--model", args.model,
+                   "--timeout", str(args.timeout), "--max-chars", str(args.max_chars)]
+    if args.prompt:
+        script_args += ["--prompt", args.prompt]
+    return run_skill_script(script, script_args, timeout=args.timeout + 30)
+
+
+def cmd_image_diff(args: argparse.Namespace) -> int:
+    script = Path.home() / ".agents" / "skills" / "diff-image" / "scripts" / "compare.py"
+    first = args.first.expanduser().resolve()
+    second = args.second.expanduser().resolve()
+    output = (args.output or second.with_name(f"{second.stem}.diff.png")).expanduser().resolve()
+    script_args = [str(first), str(second), "--output", str(output)]
+    if args.mask_output:
+        script_args += ["--mask-output", str(args.mask_output.expanduser().resolve())]
+    if args.max_diff_pixels is not None:
+        script_args += ["--max-diff-pixels", str(args.max_diff_pixels)]
+    if args.max_diff_ratio is not None:
+        script_args += ["--max-diff-ratio", str(args.max_diff_ratio)]
+    return run_skill_script(script, script_args, timeout=60)
+
+
+def cmd_image_palette_create(args: argparse.Namespace) -> int:
+    script = Path.home() / ".agents" / "skills" / "color-palette" / "scripts" / "palette_create.py"
+    script_args = [str(args.image.expanduser().resolve()), "--colors", str(args.colors),
+                   "--method", args.method]
+    if args.out:
+        script_args += ["--out", str(args.out.expanduser().resolve())]
+    if args.swatch:
+        script_args += ["--swatch", str(args.swatch.expanduser().resolve())]
+    if args.swatch_size:
+        script_args += ["--swatch-size", args.swatch_size]
+    return run_skill_script(script, script_args, timeout=120)
+
+
+def cmd_image_palette_distance(args: argparse.Namespace) -> int:
+    script = Path.home() / ".agents" / "skills" / "color-palette" / "scripts" / "palette_distance.py"
+    palette = Path(args.palette).expanduser()
+    script_args = [
+        str(args.image.expanduser().resolve()),
+        str(palette.resolve()) if palette.is_file() else args.palette,
+        "--space", args.space,
+        "--tolerance", str(args.tolerance),
+        "--percentiles", args.percentiles,
+        "--top-offenders", str(args.top_offenders),
+        "--palette-max-colors", str(args.palette_max_colors),
+    ]
+    return run_skill_script(script, script_args, timeout=120)
+
+
+def cmd_playwright(args: argparse.Namespace) -> int:
+    script = Path.home() / ".agents" / "mcp" / "playwright.py"
+    extra = list(args.playwright_args or [])
+    proc = subprocess.run([sys.executable, str(script), args.action, *extra], check=False)
+    return proc.returncode
+
+
+def cmd_worklog_collect(args: argparse.Namespace) -> int:
+    day = (
+        dt.date.fromisoformat(args.date)
+        if args.date
+        else dt.datetime.now().astimezone().date()
+    )
+    history = Path.home() / ".agents" / "history" / day.isoformat()
+    prompts = sorted(str(path) for path in history.glob("*_prompt.md")) if history.is_dir() else []
+    result: dict[str, Any] = {"date": day.isoformat(), "history": {"count": len(prompts), "files": prompts},
+                              "git": [], "collector": None}
+    collector = Path.home() / ".agents" / "skills" / "generate-worklogs" / "scripts" / "collect-daily-evidence.py"
+    if collector.is_file():
+        collected = run([sys.executable, str(collector), day.isoformat()])
+        cache_dir = Path.home() / ".agents" / ".cache" / "worklogs"
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        cache_file = cache_dir / f"{day.isoformat()}.txt"
+        cache_file.write_text(collected.stdout, encoding="utf-8")
+        result["collector"] = {"exit_code": collected.returncode, "cache": str(cache_file),
+                               "bytes": len(collected.stdout.encode())}
+        for line in collected.stdout.splitlines():
+            if line.startswith("REPO|"):
+                parts = line.split("|", 2)
+                result["git"].append({"repo": parts[1], "details": parts[2] if len(parts) > 2 else ""})
+    database = Path.home() / ".agents" / ".cache" / "worklogs" / "evidence.sqlite"
+    database.parent.mkdir(parents=True, exist_ok=True)
+    connection = sqlite3.connect(database)
+    try:
+        connection.execute(
+            "CREATE TABLE IF NOT EXISTS daily_evidence ("
+            "day TEXT PRIMARY KEY, payload TEXT NOT NULL, updated_at TEXT NOT NULL)"
+        )
+        connection.execute(
+            "INSERT OR REPLACE INTO daily_evidence(day, payload, updated_at) VALUES (?, ?, ?)",
+            (day.isoformat(), json.dumps(result, ensure_ascii=False), dt.datetime.now().astimezone().isoformat()),
+        )
+        connection.commit()
+    finally:
+        connection.close()
+    result["cache_database"] = str(database)
+    emit(result)
+    return 0
+
+
+def first_line(text: str) -> str:
+    return next((line.strip() for line in text.splitlines() if line.strip()), "")[:240]
+
+
+def cmd_tools_audit(args: argparse.Namespace) -> int:
+    tools = []
+    for name in RECOMMENDED_TOOLS:
+        path = shutil.which(name)
+        item: dict[str, Any] = {"name": name, "available": bool(path), "path": path}
+        if path and args.versions:
+            for flag in ("--version", "-version", "-v"):
+                result = run([path, flag])
+                if result.returncode == 0 and (result.stdout or result.stderr):
+                    item["version"] = first_line(result.stdout or result.stderr)
+                    break
+        tools.append(item)
+    packages = []
+    for name in RECOMMENDED_PYTHON_PACKAGES:
+        probe = run([sys.executable, "-c", f"import {name}; print(getattr({name}, '__version__', 'unknown'))"])
+        packages.append({
+            "name": name,
+            "available": probe.returncode == 0,
+            "version": probe.stdout.strip() if probe.returncode == 0 else None,
+        })
+    token_path = agentctl_jira.TOKEN_PATH
+    jira_token: dict[str, Any] = {"path": str(token_path), "present": token_path.is_file()}
+    if token_path.is_file():
+        try:
+            jira_token.update(agentctl_jira.public_auth(agentctl_jira.load_credentials(token_path)))
+        except (OSError, ValueError) as exc:
+            jira_token["error"] = str(exc)
+    nvidia_path = Path.home() / ".agents" / ".auth" / "nvidia-api-key.yaml"
+    nvidia_token: dict[str, Any] = {"path": str(nvidia_path), "present": nvidia_path.is_file()}
+    if nvidia_path.is_file():
+        try:
+            nvidia_token.update(public_nvidia_auth(nvidia_path))
+        except (OSError, ValueError) as exc:
+            nvidia_token["error"] = str(exc)
+    emit({
+        "available": sum(1 for item in tools if item["available"]),
+        "missing": [item["name"] for item in tools if not item["available"]],
+        "tools": tools,
+        "python_packages": packages,
+        "python_packages_missing": [item["name"] for item in packages if not item["available"]],
+        "jira_token": jira_token,
+        "nvidia_token": nvidia_token,
+    })
+    return 0
+
+
+def scoped_files(cwd: Path, scope: str) -> tuple[Path, list[Path]]:
+    root = repo_root(cwd) or cwd.resolve()
+    if scope == "changed" and repo_root(cwd):
+        names: set[str] = set()
+        for command in (
+            ("diff", "--name-only"),
+            ("diff", "--cached", "--name-only"),
+            ("ls-files", "--others", "--exclude-standard"),
+        ):
+            result = git(root, *command)
+            names.update(line for line in result.stdout.splitlines() if line)
+        paths = [root / name for name in sorted(names) if (root / name).is_file()]
+    else:
+        excluded = {".git", "node_modules", "build", "dist", ".gradle", ".venv", "venv"}
+        paths = [
+            path for path in root.rglob("*")
+            if path.is_file() and not any(part in excluded for part in path.relative_to(root).parts)
+        ]
+    return root, paths[:500]
+
+
+def cmd_checks_run(args: argparse.Namespace) -> int:
+    root, paths = scoped_files(args.cwd.resolve(), args.scope)
+    groups: dict[str, list[Path]] = {
+        "python": [path for path in paths if path.suffix == ".py"],
+        "shell": [path for path in paths if path.suffix in {".sh", ".bash"}],
+        "markdown": [path for path in paths if path.suffix.lower() in {".md", ".mdx"}],
+        "xml": [path for path in paths if path.suffix.lower() == ".xml"],
+        "yaml": [path for path in paths if path.suffix.lower() in {".yaml", ".yml"}],
+    }
+    specs: list[tuple[str, str, list[str], list[Path]]] = [
+        ("ruff", "ruff", ["check", "--output-format=json"], groups["python"]),
+        ("shellcheck", "shellcheck", ["--format=json1"], groups["shell"]),
+        ("markdownlint", "markdownlint-cli2", [], groups["markdown"]),
+        ("xmllint", "xmllint", ["--noout"], groups["xml"]),
+        ("yq", "yq", ["."], groups["yaml"]),
+        ("codespell", "codespell", ["--quiet-level=2"], groups["python"] + groups["markdown"]),
+    ]
+    checks: list[dict[str, Any]] = []
+    for label, executable, prefix, selected in specs:
+        path = shutil.which(executable)
+        if not selected:
+            checks.append({"check": label, "status": "skipped", "reason": "no matching files"})
+            continue
+        if not path:
+            checks.append({"check": label, "status": "unavailable", "executable": executable})
+            continue
+        command = [path, *prefix, *[str(item.relative_to(root)) for item in selected[:200]]]
+        result = run(command, cwd=root)
+        output = (result.stdout + ("\n" if result.stdout and result.stderr else "") + result.stderr).strip()
+        checks.append({
+            "check": label,
+            "status": "passed" if result.returncode == 0 else "failed",
+            "exit_code": result.returncode,
+            "files": len(selected[:200]),
+            "output": output[: argsafe_limit(args.max_output_chars)],
+            "truncated": len(output) > args.max_output_chars,
+        })
+    failed = [item["check"] for item in checks if item["status"] == "failed"]
+    emit({"repo": str(root), "scope": args.scope, "files": len(paths), "failed": failed, "checks": checks})
+    return 2 if failed else 0
+
+
+# Local parity for the group/ci-templates application security baseline (INT-238).
+# Tool choice, flags, severity defaults, and skip rules follow
+# security-skills/SETTINGS.md; the exclusion list mirrors DS_EXCLUDED_PATHS in
+# ci-templates general/gitlab-security-baseline.yml.
+
+SECURITY_OUTPUT_DIR = ".security-local"
+SECURITY_SEVERITIES = ("UNKNOWN", "LOW", "MEDIUM", "HIGH", "CRITICAL")
+SECURITY_CHECKS = ("secrets", "deps", "sast", "iac")
+# sast and iac are slow and noisy on first run; they stay opt-in via --check.
+SECURITY_DEFAULT_CHECKS = ("secrets", "deps")
+
+DEPENDENCY_LOCKFILES = (
+    "package-lock.json", "yarn.lock", "pnpm-lock.yaml", "bun.lockb",
+    "composer.lock", "Gemfile.lock", "go.mod", "Cargo.lock", "poetry.lock",
+    "Pipfile.lock", "requirements.txt", "gradle.lockfile",
+)
+
+SECURITY_EXCLUDED_DIRS = (
+    "vendor", "node_modules", ".gradle", "build", "dist", "test", "tests",
+    "spec", "tmp", ".git", SECURITY_OUTPUT_DIR,
+)
+
+SOURCE_SUFFIXES = {
+    ".js", ".jsx", ".ts", ".tsx", ".mjs", ".cjs", ".es6", ".php", ".py",
+    ".java", ".kt", ".rb", ".go", ".cs", ".rs", ".scala",
+}
+
+# Enonic layouts first (SETTINGS.md): scan sources, never compiled output.
+SAST_ROOT_CANDIDATES = ("xp/src", "xp/assets/src", "src", "app", "lib", "packages")
+IAC_DIR_CANDIDATES = ("environments", "charts", "chart", "k8s", "kubernetes", "deploy", "terraform", "docker")
+IAC_FILE_GLOBS = ("Chart.yaml", "docker-compose*.yml", "docker-compose*.yaml",
+                  "compose.yaml", "compose.yml", "*.tf")
+
+SEVERITY_ALIASES = {
+    "ERROR": "HIGH", "WARNING": "MEDIUM", "WARN": "MEDIUM", "INFO": "LOW",
+    "MODERATE": "MEDIUM", "IMPORTANT": "HIGH", "NONE": "UNKNOWN", "": "UNKNOWN",
+}
+
+
+def normalize_severity(value: Any) -> str:
+    text = str(value or "").strip().upper()
+    text = SEVERITY_ALIASES.get(text, text)
+    return text if text in SECURITY_SEVERITIES else "UNKNOWN"
+
+
+def severity_from_score(score: Any) -> str:
+    try:
+        number = float(score)
+    except (TypeError, ValueError):
+        return "UNKNOWN"
+    if number >= 9.0:
+        return "CRITICAL"
+    if number >= 7.0:
+        return "HIGH"
+    if number >= 4.0:
+        return "MEDIUM"
+    return "LOW" if number > 0 else "UNKNOWN"
+
+
+def security_excluded(root: Path, path: Path) -> bool:
+    return any(part in SECURITY_EXCLUDED_DIRS for part in path.relative_to(root).parts)
+
+
+def dependency_lockfiles(root: Path) -> list[str]:
+    found: list[str] = []
+    for path in root.rglob("*"):
+        if not path.is_file() or security_excluded(root, path):
+            continue
+        if path.name in DEPENDENCY_LOCKFILES:
+            found.append(str(path.relative_to(root)))
+        if len(found) >= 50:
+            break
+    return sorted(found)
+
+
+def sast_roots(root: Path) -> list[str]:
+    roots = [name for name in SAST_ROOT_CANDIDATES if (root / name).is_dir()]
+    if roots:
+        return roots
+    for path in root.rglob("*"):
+        if path.is_file() and path.suffix in SOURCE_SUFFIXES and not security_excluded(root, path):
+            return ["."]
+    return []
+
+
+def iac_targets(root: Path) -> list[str]:
+    targets = {name for name in IAC_DIR_CANDIDATES if (root / name).is_dir()}
+    for pattern in IAC_FILE_GLOBS:
+        targets.update(str(path.relative_to(root)) for path in root.glob(pattern))
+        targets.update(
+            str(path.relative_to(root)) for path in root.glob(f"*/{pattern}")
+            if not security_excluded(root, path)
+        )
+    return sorted(targets)
+
+
+def security_applicability(root: Path) -> dict[str, dict[str, Any]]:
+    lockfiles = dependency_lockfiles(root)
+    roots = sast_roots(root)
+    iac = iac_targets(root)
+    return {
+        "secrets": {"applies": True, "targets": ["."], "reason": "always applicable"},
+        "deps": {
+            "applies": bool(lockfiles), "targets": lockfiles[:20],
+            "reason": "lockfile or manifest present" if lockfiles else "no dependency lockfile found",
+        },
+        "sast": {
+            "applies": bool(roots), "targets": roots,
+            "reason": "source roots present" if roots else "no scannable source files",
+        },
+        "iac": {
+            "applies": bool(iac), "targets": iac,
+            "reason": "deploy or infrastructure definitions present" if iac else "no IaC or deploy files",
+        },
+    }
+
+
+def security_plan(check: str, root: Path, out_dir: Path, targets: list[str]) -> dict[str, Any] | None:
+    """Tool invocation for one check, or None when no tool is installed."""
+    rel_out = out_dir.relative_to(root)
+    all_severities = ",".join(SECURITY_SEVERITIES)
+    skip_dirs = [arg for name in SECURITY_EXCLUDED_DIRS for arg in ("--skip-dirs", name)]
+    if check == "secrets":
+        artifact = rel_out / "gitleaks.json"
+        # --no-git scans the working tree, which is what SETTINGS.md specifies and the
+        # only mode that sees uncommitted changes or a directory that is not a repo.
+        # Commit-range scanning (--log-opts) stays a separate pre-push step.
+        # --exit-code 0 keeps "found leaks" distinct from "gitleaks crashed".
+        return {"tool": "gitleaks", "artifact": artifact, "args": [
+            "detect", "--source", ".", "--no-git", "--no-banner", "--redact",
+            "--exit-code", "0", "--report-format", "json", "--report-path", str(artifact),
+        ]}
+    if check == "deps":
+        if shutil.which("trivy"):
+            artifact = rel_out / "trivy-deps.json"
+            return {"tool": "trivy", "artifact": artifact, "args": [
+                "fs", "--scanners", "vuln,license", "--severity", all_severities,
+                "--format", "json", "--output", str(artifact), *skip_dirs, ".",
+            ]}
+        artifact = rel_out / "osv-scanner.json"
+        return {"tool": "osv-scanner", "artifact": artifact, "args": [
+            "scan", "source", "--recursive", "--format", "json",
+            "--output-file", str(artifact), ".",
+        ]}
+    if check == "sast":
+        artifact = rel_out / "semgrep.json"
+        excludes = [arg for name in SECURITY_EXCLUDED_DIRS for arg in ("--exclude", name)]
+        return {"tool": "semgrep", "artifact": artifact, "args": [
+            "scan", "--config", "p/ci", "--metrics", "off", "--quiet",
+            "--json", "--output", str(artifact), *excludes, *targets,
+        ]}
+    if check == "iac":
+        artifact = rel_out / "trivy-config.json"
+        # trivy config takes one target; scan the root and exclude noise instead.
+        # Rendered-manifest scanning (helm template) stays a manual step per SETTINGS.md.
+        return {"tool": "trivy", "artifact": artifact, "args": [
+            "config", "--severity", all_severities, "--format", "json",
+            "--output", str(artifact), *skip_dirs, ".",
+        ]}
+    return None
+
+
+def findings_from_gitleaks(data: Any) -> list[dict[str, Any]]:
+    # Gitleaks reports no severity; a committed secret is treated as HIGH.
+    return [{
+        "severity": "HIGH",
+        "id": item.get("RuleID"),
+        "title": item.get("Description"),
+        "location": f"{item.get('File')}:{item.get('StartLine')}",
+    } for item in (data or []) if isinstance(item, dict)]
+
+
+def findings_from_trivy(data: Any) -> list[dict[str, Any]]:
+    findings: list[dict[str, Any]] = []
+    for result in (data or {}).get("Results") or []:
+        target = result.get("Target") or ""
+        for vuln in result.get("Vulnerabilities") or []:
+            findings.append({
+                "severity": normalize_severity(vuln.get("Severity")),
+                "id": vuln.get("VulnerabilityID"),
+                "title": f"{vuln.get('PkgName')} {vuln.get('InstalledVersion')}".strip(),
+                "location": target,
+            })
+        for miscfg in result.get("Misconfigurations") or []:
+            findings.append({
+                "severity": normalize_severity(miscfg.get("Severity")),
+                "id": miscfg.get("ID"),
+                "title": miscfg.get("Title"),
+                "location": f"{target}:{(miscfg.get('CauseMetadata') or {}).get('StartLine', '')}".rstrip(":"),
+            })
+    return findings
+
+
+def findings_from_osv(data: Any) -> list[dict[str, Any]]:
+    findings: list[dict[str, Any]] = []
+    for result in (data or {}).get("results") or []:
+        source = (result.get("source") or {}).get("path") or ""
+        for package in result.get("packages") or []:
+            name = (package.get("package") or {}).get("name") or ""
+            scores: dict[str, str] = {}
+            for group in package.get("groups") or []:
+                bucket = severity_from_score(group.get("max_severity"))
+                for identifier in group.get("ids") or []:
+                    scores[identifier] = bucket
+            for vuln in package.get("vulnerabilities") or []:
+                identifier = vuln.get("id")
+                severity = normalize_severity((vuln.get("database_specific") or {}).get("severity"))
+                if severity == "UNKNOWN":
+                    severity = scores.get(identifier, "UNKNOWN")
+                findings.append({
+                    "severity": severity,
+                    "id": identifier,
+                    "title": (vuln.get("summary") or name)[:200],
+                    "location": f"{source}:{name}".rstrip(":"),
+                })
+    return findings
+
+
+def findings_from_semgrep(data: Any) -> list[dict[str, Any]]:
+    findings: list[dict[str, Any]] = []
+    for item in (data or {}).get("results") or []:
+        extra = item.get("extra") or {}
+        findings.append({
+            "severity": normalize_severity(extra.get("severity")),
+            "id": item.get("check_id"),
+            "title": (extra.get("message") or "").strip()[:200],
+            "location": f"{item.get('path')}:{(item.get('start') or {}).get('line')}",
+        })
+    return findings
+
+
+def sniff_report_tool(data: Any) -> str | None:
+    if isinstance(data, list):
+        return "gitleaks" if not data or "RuleID" in (data[0] or {}) else None
+    if not isinstance(data, dict):
+        return None
+    if "Results" in data:
+        return "trivy"
+    results = data.get("results")
+    if isinstance(results, list):
+        if any("check_id" in item for item in results if isinstance(item, dict)):
+            return "semgrep"
+        if any("source" in item for item in results if isinstance(item, dict)):
+            return "osv-scanner"
+        return "semgrep" if "paths" in data else "osv-scanner"
+    return None
+
+
+def relative_location(location: str, root: Path | None) -> str:
+    if not root or not location:
+        return location
+    prefix = f"{root}/"
+    return location.removeprefix(prefix)
+
+
+def read_findings(path: Path, root: Path | None = None) -> tuple[str | None, list[dict[str, Any]]]:
+    if not path.is_file() or not path.stat().st_size:
+        return None, []
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return None, []
+    tool = sniff_report_tool(data)
+    readers = {
+        "gitleaks": findings_from_gitleaks,
+        "trivy": findings_from_trivy,
+        "osv-scanner": findings_from_osv,
+        "semgrep": findings_from_semgrep,
+    }
+    reader = readers.get(tool or "")
+    if not reader:
+        return tool, []
+    findings = reader(data)
+    for item in findings:
+        item["location"] = relative_location(item["location"], root)
+    return tool, findings
+
+
+def summarize_findings(findings: list[dict[str, Any]], top: int) -> dict[str, Any]:
+    counts = {name: 0 for name in SECURITY_SEVERITIES}
+    for item in findings:
+        counts[item["severity"]] = counts.get(item["severity"], 0) + 1
+    ranked = sorted(findings, key=lambda item: -SECURITY_SEVERITIES.index(item["severity"]))
+    return {"total": len(findings), "by_severity": counts, "top": ranked[:argsafe_limit(top)]}
+
+
+def gate_tripped(counts: dict[str, int], fail_on: str | None) -> bool:
+    if not fail_on:
+        return False
+    threshold = SECURITY_SEVERITIES.index(normalize_severity(fail_on))
+    return any(
+        count > 0 for name, count in counts.items()
+        if SECURITY_SEVERITIES.index(name) >= threshold
+    )
+
+
+def cmd_security_detect(args: argparse.Namespace) -> int:
+    cwd = args.cwd.resolve()
+    root = repo_root(cwd) or cwd
+    applicability = security_applicability(root)
+    emit({
+        "root": str(root),
+        "default_checks": list(SECURITY_DEFAULT_CHECKS),
+        "opt_in_checks": [name for name in SECURITY_CHECKS if name not in SECURITY_DEFAULT_CHECKS],
+        "applicable": [name for name, item in applicability.items() if item["applies"]],
+        "checks": applicability,
+    })
+    return 0
+
+
+def cmd_security_scan(args: argparse.Namespace) -> int:
+    cwd = args.cwd.resolve()
+    root = repo_root(cwd) or cwd
+    requested = [name.strip() for name in args.check.split(",") if name.strip()]
+    unknown = [name for name in requested if name not in SECURITY_CHECKS]
+    if unknown:
+        emit({"status": "error", "error": f"unknown checks: {', '.join(unknown)}",
+              "valid": list(SECURITY_CHECKS)})
+        return 1
+    out_dir = root / SECURITY_OUTPUT_DIR
+    out_dir.mkdir(parents=True, exist_ok=True)
+    applicability = security_applicability(root)
+    totals = {name: 0 for name in SECURITY_SEVERITIES}
+    checks: list[dict[str, Any]] = []
+    for name in requested:
+        applies = applicability[name]
+        if not applies["applies"]:
+            checks.append({"check": name, "status": "skipped", "reason": applies["reason"]})
+            continue
+        plan = security_plan(name, root, out_dir, applies["targets"])
+        executable = shutil.which(plan["tool"])
+        if not executable:
+            checks.append({"check": name, "status": "unavailable", "tool": plan["tool"]})
+            continue
+        artifact = root / plan["artifact"]
+        artifact.unlink(missing_ok=True)
+        result = run([executable, *plan["args"]], cwd=root, timeout=args.timeout)
+        tool, findings = read_findings(artifact, root)
+        summary = summarize_findings(findings, args.top)
+        for severity, count in summary["by_severity"].items():
+            totals[severity] += count
+        produced = artifact.is_file() and artifact.stat().st_size > 0
+        entry = {
+            "check": name,
+            "status": "completed" if produced else "error",
+            "tool": tool or plan["tool"],
+            "exit_code": result.returncode,
+            "artifact": str(artifact),
+            "targets": applies["targets"][:20],
+            **summary,
+        }
+        if not produced:
+            stderr = (result.stderr or result.stdout or "").strip()
+            entry["error"] = stderr[: argsafe_limit(args.max_output_chars)] or "no report produced"
+        checks.append(entry)
+    errored = [item["check"] for item in checks if item["status"] == "error"]
+    tripped = gate_tripped(totals, args.fail_on)
+    emit({
+        "root": str(root),
+        "output_dir": str(out_dir),
+        "gitignored": SECURITY_OUTPUT_DIR in (root / ".gitignore").read_text(encoding="utf-8")
+        if (root / ".gitignore").is_file() else False,
+        "requested": requested,
+        "totals": totals,
+        "fail_on": args.fail_on,
+        "gate_tripped": tripped,
+        "errored": errored,
+        "checks": checks,
+    })
+    return 2 if tripped or errored else 0
+
+
+def cmd_security_summarize(args: argparse.Namespace) -> int:
+    tool, findings = read_findings(args.report.resolve())
+    if tool is None:
+        emit({"status": "error", "report": str(args.report),
+              "error": "unrecognized or empty report; expected gitleaks, trivy, osv-scanner, or semgrep JSON"})
+        return 1
+    summary = summarize_findings(findings, args.top)
+    tripped = gate_tripped(summary["by_severity"], args.fail_on)
+    emit({"report": str(args.report), "tool": tool, "fail_on": args.fail_on,
+          "gate_tripped": tripped, **summary})
+    return 2 if tripped else 0
+
+
+TOP_KEY = re.compile(r"^[A-Za-z][A-Za-z0-9_-]*:")
+EXISTING_DESC_SUFFIX = re.compile(
+    r"\s*\|\s*(?:recommendedRole:\s*[a-z0-9-]+(?:\s*\|\s*aliases:\s*[^|]+)?|"
+    r"aliases:\s*[^|]+)\.?\s*$"
+)
+
+
+def metadata_description_suffix(role: str | None, aliases: str | None) -> str:
+    parts = []
+    if role:
+        parts.append(f"recommendedRole: {role}")
+    if aliases:
+        parts.append(f"aliases: {aliases}")
+    if not parts:
+        return ""
+    return " | " + " | ".join(parts) + "."
+
+
+def extract_description(fm_lines: list[str]) -> str:
+    for index, line in enumerate(fm_lines):
+        if not line.startswith("description:"):
+            continue
+        rest = line.split(":", 1)[1].strip()
+        if rest in {">", ">-", "|", "|-"}:
+            collected = []
+            for nxt in fm_lines[index + 1 :]:
+                if TOP_KEY.match(nxt) and not nxt.startswith((" ", "\t")):
+                    break
+                collected.append(nxt.strip())
+            return " ".join(item for item in collected if item)
+        if len(rest) >= 2 and rest[0] == rest[-1] and rest[0] in {'"', "'"}:
+            return rest[1:-1]
+        return rest
+    return ""
+
+
+def parse_frontmatter(path: Path) -> dict[str, Any]:
+    lines = path.read_text(encoding="utf-8").splitlines()
+    if not lines or lines[0] != "---":
+        return {}
+    result: dict[str, Any] = {}
+    metadata_lines: list[str] = []
+    fm_lines: list[str] = []
+    in_metadata = False
+    for line in lines[1:]:
+        if line == "---":
+            break
+        fm_lines.append(line)
+        if re.match(r"^[A-Za-z][A-Za-z0-9_-]*:", line):
+            in_metadata = line.startswith("metadata:")
+            key, value = line.split(":", 1)
+            result[key] = value.strip().strip("'\"")
+        elif in_metadata:
+            metadata_lines.append(line)
+            stripped = line.strip()
+            if stripped.startswith("recommendedRole:"):
+                result["recommendedRole"] = stripped.split(":", 1)[1].strip()
+            elif stripped.startswith("aliases:"):
+                result["aliases"] = stripped.split(":", 1)[1].strip()
+    result["metadata_text"] = "\n".join(metadata_lines)
+    result["description"] = extract_description(fm_lines)
+    return result
+
+
+def is_alias_bound_symlink(entry: Path) -> bool:
+    if not entry.is_symlink():
+        return False
+    skill = entry / "SKILL.md"
+    if not skill.exists():
+        return False
+    name = parse_frontmatter(skill).get("name")
+    return bool(name) and name != entry.name
+
+
+def alias_bound_symlinks(root: Path) -> list[str]:
+    if not root.is_dir():
+        return []
+    return sorted(entry.name for entry in root.iterdir() if is_alias_bound_symlink(entry))
+
+
+def description_suffix_ok(data: dict[str, Any]) -> bool:
+    role = data.get("recommendedRole") or None
+    aliases = data.get("aliases") or None
+    expected = metadata_description_suffix(role, aliases)
+    description = (data.get("description") or "").rstrip()
+    if not expected:
+        return EXISTING_DESC_SUFFIX.search(description) is None
+    return description.endswith(expected)
+
+
+def public_nvidia_auth(path: Path) -> dict[str, Any]:
+    raw = agentctl_jira.load_yaml_map(path)
+    key = (
+        raw.get("api_key")
+        or raw.get("nvidia_inference_key")
+        or raw.get("NVIDIA_INFERENCE_KEY")
+        or ""
+    ).strip()
+    expires = raw.get("expires_at") or ""
+    expired = False
+    if expires:
+        try:
+            expired = dt.date.fromisoformat(expires[:10]) < dt.datetime.now(dt.timezone.utc).date()
+        except ValueError:
+            expired = False
+    return {
+        "path": str(path),
+        "user": raw.get("user") or None,
+        "key_name": raw.get("key_name") or None,
+        "created_at": raw.get("created_at") or None,
+        "expires_at": expires or None,
+        "expired": expired,
+        "key_present": bool(key),
+        "world_readable": oct(path.stat().st_mode & 0o777) in {"0o644", "0o664", "0o666", "0o755"},
+    }
+
+
+def cmd_skills_scan(args: argparse.Namespace) -> int:
+    script = Path.home() / ".agents" / "skills" / "skillspector" / "scripts" / "scan.py"
+    timeout = args.timeout or (600 if args.llm else 180)
+    script_args = [args.target, "--max-issues", str(args.max_issues), "--timeout", str(timeout)]
+    if args.llm:
+        script_args.append("--llm")
+    if args.recursive:
+        script_args.append("--recursive")
+    if args.output:
+        script_args += ["--output", str(args.output.expanduser().resolve())]
+    if args.baseline:
+        script_args += ["--baseline", str(args.baseline.expanduser().resolve())]
+    return run_skill_script(script, script_args, timeout=timeout + 30)
+
+
+def cmd_skills_audit(args: argparse.Namespace) -> int:
+    roots = [path.resolve() for path in args.root]
+    unique: dict[str, dict[str, Any]] = {}
+    leftover_aliases: list[str] = []
+    for root in roots:
+        leftover_aliases.extend(f"{root}/{name}" for name in alias_bound_symlinks(root))
+        if not root.is_dir():
+            continue
+        for path in root.glob("*/SKILL.md"):
+            real = path.resolve()
+            key = str(real)
+            if key in unique:
+                unique[key]["entries"].append(str(path))
+                continue
+            data = parse_frontmatter(real)
+            metadata_text = data.get("metadata_text", "")
+            required_match = re.search(r"required:\s*\[([^]]*)\]", metadata_text)
+            required_dependencies = []
+            if required_match:
+                required_dependencies = [
+                    value.strip().strip("'\"")
+                    for value in required_match.group(1).split(",")
+                    if value.strip()
+                ]
+            unique[key] = {
+                "name": data.get("name"),
+                "path": key,
+                "entries": [str(path)],
+                "recommended_role": data.get("recommendedRole") or None,
+                "aliases": data.get("aliases") or None,
+                "description_suffix_ok": description_suffix_ok(data),
+                "disable_model_invocation": data.get("disable-model-invocation") == "true",
+                "has_dependency_metadata": "cliDependencies:" in metadata_text,
+                "required_dependencies": required_dependencies,
+                "missing_required_dependencies": [
+                    value for value in required_dependencies if not shutil.which(value)
+                ],
+                "codex_policy": None,
+            }
+            policy = real.parent / "agents" / "openai.yaml"
+            if policy.is_file():
+                policy_text = policy.read_text(encoding="utf-8")
+                unique[key]["codex_policy"] = "allow_implicit_invocation: false" in policy_text
+    vendor_status: dict[str, Any] = {}
+    for vendor in args.vendor:
+        vendor_root = vendor.resolve()
+        leftover_aliases.extend(
+            f"{vendor_root}/{name}" for name in alias_bound_symlinks(vendor_root)
+        )
+        missing = []
+        divergent = []
+        suffix_mismatches = []
+        for path in vendor_root.glob("*/SKILL.md") if vendor_root.is_dir() else []:
+            data = parse_frontmatter(path.resolve())
+            if not description_suffix_ok(data):
+                suffix_mismatches.append(data.get("name") or path.parent.name)
+        for item in unique.values():
+            name = item["name"]
+            candidate = vendor_root / str(name) / "SKILL.md"
+            if not candidate.exists():
+                missing.append(name)
+            elif candidate.resolve() != Path(item["path"]):
+                divergent.append(name)
+        vendor_status[str(vendor_root)] = {
+            "missing": sorted(missing),
+            "divergent": sorted(divergent),
+            "description_suffix_mismatches": sorted(set(suffix_mismatches)),
+        }
+    items = sorted(unique.values(), key=lambda item: str(item["name"]))
+    suffix_mismatches = sorted(
+        str(item["name"]) for item in items if not item["description_suffix_ok"]
+    )
+    declared_aliases = sum(
+        len([part for part in (item["aliases"] or "").split(",") if part.strip()])
+        for item in items
+    )
+    leftover_aliases = sorted(set(leftover_aliases))
+    emit({
+        "unique_skills": len(items),
+        "alias_entries": len(leftover_aliases),
+        "alias_bound_symlinks": leftover_aliases,
+        "declared_aliases": declared_aliases,
+        "description_suffix_mismatches": suffix_mismatches,
+        "manual_only_frontmatter": sum(1 for item in items if item["disable_model_invocation"]),
+        "manual_only_codex": sum(1 for item in items if item["codex_policy"]),
+        "with_dependency_metadata": sum(1 for item in items if item["has_dependency_metadata"]),
+        "missing_required_dependencies": sorted({
+            value for item in items for value in item["missing_required_dependencies"]
+        }),
+        "vendors": vendor_status,
+        "skills": items,
+    })
+    return 2 if leftover_aliases or suffix_mismatches else 0
+
+
+def ollama_models() -> list[dict[str, str]]:
+    ollama = shutil.which("ollama")
+    if not ollama:
+        return []
+    result = run([ollama, "list"])
+    models = []
+    for line in result.stdout.splitlines()[1:]:
+        parts = line.split()
+        if parts:
+            models.append({"name": parts[0], "id": parts[1] if len(parts) > 1 else ""})
+    return models
+
+
+def cmd_local_models(args: argparse.Namespace) -> int:
+    models = ollama_models()
+    emit({"available": bool(shutil.which("ollama")), "models": models})
+    return 0
+
+
+def cmd_local_run(args: argparse.Namespace) -> int:
+    ollama = shutil.which("ollama")
+    if not ollama:
+        emit({"status": "ollama-missing"})
+        return 2
+    if args.file:
+        content = args.file.read_text(encoding="utf-8", errors="replace")
+    elif args.text is not None:
+        content = args.text
+    else:
+        content = sys.stdin.read()
+    content = content[: argsafe_limit(args.max_chars)]
+    prompt = f"{args.instruction.strip()}\n\nINPUT:\n{content}"
+    result = run([ollama, "run", args.model], input_text=prompt)
+    clean_stderr = re.sub(r"\x1b\[[0-9;?]*[A-Za-z]", "", result.stderr)
+    emit({"status": "ok" if result.returncode == 0 else "error", "model": args.model,
+          "input_chars": len(content), "output": result.stdout[: argsafe_limit(args.max_output_chars)],
+          "stderr": clean_stderr[:1000] if result.returncode else "", "exit_code": result.returncode})
+    return result.returncode
+
+
+def cmd_docs_index(args: argparse.Namespace) -> int:
+    database = args.db.expanduser().resolve()
+    database.parent.mkdir(parents=True, exist_ok=True)
+    roots = [path.expanduser().resolve() for path in args.root]
+    documents: list[tuple[str, str, str]] = []
+    for root in roots:
+        if not root.is_dir():
+            continue
+        for path in sorted(root.rglob("*.md")):
+            if path.name == "llm-index.md":
+                continue
+            body = path.read_text(encoding="utf-8", errors="replace")
+            title = next(
+                (line.lstrip("#").strip() for line in body.splitlines() if line.startswith("#")),
+                path.stem,
+            )
+            documents.append((str(path), title, body))
+    connection = sqlite3.connect(database)
+    try:
+        connection.execute("DROP TABLE IF EXISTS docs")
+        connection.execute(
+            "CREATE VIRTUAL TABLE docs USING fts5("
+            "path UNINDEXED, title, body, tokenize='unicode61 remove_diacritics 2')"
+        )
+        connection.executemany("INSERT INTO docs(path, title, body) VALUES (?, ?, ?)", documents)
+        connection.commit()
+        optimize_error = None
+        try:
+            connection.execute("INSERT INTO docs(docs) VALUES ('optimize')")
+        except sqlite3.DatabaseError as exc:
+            optimize_error = str(exc)
+    finally:
+        connection.close()
+    emit({"status": "indexed", "database": str(database), "roots": [str(path) for path in roots],
+          "documents": len(documents), "optimize_error": optimize_error})
+    return 0
+
+
+def cmd_docs_search(args: argparse.Namespace) -> int:
+    database = args.db.expanduser().resolve()
+    if not database.is_file():
+        emit({"status": "missing-index", "database": str(database)})
+        return 2
+    connection = sqlite3.connect(f"file:{database}?mode=ro", uri=True)
+    connection.row_factory = sqlite3.Row
+    tokens = re.findall(r"[\w.]+", args.query, re.UNICODE)
+    fts_query = args.query if args.raw_fts else " ".join(f'"{token}"' for token in tokens)
+    if not fts_query:
+        emit({"status": "query-error", "database": str(database), "error": "empty query"})
+        return 2
+    try:
+        rows = connection.execute(
+            "SELECT path, title, snippet(docs, 2, '[', ']', ' … ', 24) AS snippet, "
+            "bm25(docs, 0.0, 2.0, 1.0) AS score FROM docs WHERE docs MATCH ? "
+            "ORDER BY score LIMIT ?",
+            (fts_query, args.limit),
+        ).fetchall()
+    except sqlite3.DatabaseError as exc:
+        emit({"status": "query-error", "database": str(database), "error": str(exc)})
+        return 2
+    finally:
+        connection.close()
+    emit({"status": "ok", "database": str(database), "query": args.query,
+          "fts_query": fts_query,
+          "count": len(rows), "results": [dict(row) for row in rows]})
+    return 0
+
+
+def _help_action(parser: argparse.ArgumentParser):
+    """Default action for a group: print that group's own help, exit 0 (D16)."""
+    def run(_args: argparse.Namespace) -> int:
+        parser.print_help()
+        return 0
+    return run
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="agentctl",
+        description=(
+            "Deterministic local primitives for agent workflows.\n\n"
+            "agentctl keeps mechanical discovery, extraction, validation, and indexing "
+            "off the model path. Commands emit bounded JSON so an agent can inspect a "
+            "small result and open only the source artifacts it actually needs."
+        ),
+        epilog=(
+            "Common examples:\n"
+            "  agentctl repo detect --cwd .\n"
+            "  agentctl delivery scope --cwd . --write-diff /tmp/delivery.patch\n"
+            "  agentctl logs extract server.log --limit 20\n"
+            "  agentctl evidence inspect screenshot.png --ocr --expected-text 'Saved'\n"
+            "  agentctl jira fetch PROJ-1\n"
+            "  agentctl playwright spawn JOT-101 --enable\n"
+            "  agentctl playwright revive --default\n"
+            "  agentctl security detect --cwd .\n"
+            "  agentctl security scan --check secrets,deps --fail-on HIGH\n"
+            "  agentctl skills scan ~/.agents/skills/find-skills\n"
+            "  agentctl tools audit --versions\n\n"
+            "Run 'agentctl GROUP --help' or 'agentctl GROUP COMMAND --help' for details."
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    top = parser.add_subparsers(
+        dest="group", required=False, title="command groups", metavar="GROUP"
+    )
+
+    def group(name: str, summary: str) -> argparse._SubParsersAction:
+        group_parser = top.add_parser(
+            name,
+            help=summary,
+            description=summary,
+            formatter_class=argparse.RawDescriptionHelpFormatter,
+        )
+        group_parser.set_defaults(func=_help_action(group_parser))
+        return group_parser.add_subparsers(
+            dest="action", required=False, title="commands", metavar="COMMAND"
+        )
+
+    task = group("task", "Resolve issue keys, kebab slugs, and task context from local inputs.")
+    resolve = task.add_parser(
+        "resolve",
+        help="Resolve a task key from text, branch, or local files.",
+        description=(
+            "Resolve a Jira issue key or local kebab slug from explicit text and "
+            "repository context. Text beats branch, cwd, and filename scans. "
+            "Returns candidates, selected key, and mode (jira|local) as JSON."
+        ),
+    )
+    resolve.add_argument("--cwd", type=Path, default=Path.cwd(), help="Repository or task directory.")
+    resolve.add_argument("--text", default="", help="Prompt text or URL that may contain an issue key.")
+    resolve.add_argument("--json", action="store_true", help=argparse.SUPPRESS)
+    resolve.set_defaults(func=cmd_task_resolve)
+
+    markdown = group("markdown", "Select named Markdown sections without loading the whole file.")
+    slice_parser = markdown.add_parser(
+        "slice",
+        help="Return selected heading sections.",
+        description="Extract selected Markdown sections and return bounded JSON.",
+    )
+    slice_parser.add_argument("file", type=Path, help="Markdown file to inspect.")
+    slice_parser.add_argument(
+        "--sections", required=True, help="Comma-separated heading names, case-insensitive."
+    )
+    slice_parser.add_argument("--json", action="store_true", help=argparse.SUPPRESS)
+    slice_parser.set_defaults(func=cmd_markdown_slice)
+
+    delivery = group("delivery", "Identify the current local delivery and its changed files.")
+    scope = delivery.add_parser(
+        "scope",
+        help="Summarize the current delivery diff.",
+        description=(
+            "Inspect staged, unstaged, or branch changes without modifying git state. "
+            "Optionally persist the full diff and return only its path and summary."
+        ),
+    )
+    scope.add_argument("--cwd", type=Path, default=Path.cwd(), help="Git repository directory.")
+    scope.add_argument("--base", help="Explicit base revision for branch-diff mode.")
+    scope.add_argument("--write-diff", type=Path, help="Write the full diff to this path.")
+    scope.add_argument("--json", action="store_true", help=argparse.SUPPRESS)
+    scope.set_defaults(func=cmd_delivery_scope)
+
+    repo = group("repo", "Detect repository stacks, manifests, and project-native checks.")
+    detect = repo.add_parser(
+        "detect",
+        help="Detect repository structure and technology stacks.",
+        description="Inspect local manifests and return stack/check hints without running builds.",
+    )
+    detect.add_argument("--cwd", type=Path, default=Path.cwd(), help="Repository directory.")
+    detect.add_argument("--json", action="store_true", help=argparse.SUPPRESS)
+    detect.set_defaults(func=cmd_repo_detect)
+
+    plan = group("plan", "Create, resolve, and validate structured implementation or evidence plans.")
+    init = plan.add_parser(
+        "init",
+        help="Create a deterministic plan skeleton.",
+        description=(
+            "Create the required headings for a plan without inventing plan content. "
+            "A path that does not end in .md is a folder layout (plan.md plus companions). "
+            "A .md path stays a single-file plan."
+        ),
+    )
+    init.add_argument("--kind", choices=sorted(PLAN_HEADINGS), required=True, help="Plan schema.")
+    init.add_argument("--issue", required=True, help="Issue key used in the plan title.")
+    init.add_argument("--output", type=Path, required=True, help="Destination Markdown file or plan directory.")
+    init.add_argument("--force", action="store_true", help="Replace an existing output file.")
+    init.set_defaults(func=cmd_plan_init)
+    validate = plan.add_parser(
+        "validate",
+        help="Check required plan structure.",
+        description=(
+            "Report missing required sections without editing the plan. "
+            "Accepts a single Markdown file or a plan folder."
+        ),
+    )
+    validate.add_argument("file", type=Path, help="Plan Markdown file or plan directory.")
+    validate.add_argument(
+        "--kind",
+        choices=sorted(PLAN_HEADINGS),
+        help="Plan schema. Inferred from layout or filename when omitted.",
+    )
+    validate.add_argument("--json", action="store_true", help=argparse.SUPPRESS)
+    validate.set_defaults(func=cmd_plan_validate)
+    plan_resolve = plan.add_parser(
+        "resolve",
+        help="Resolve a task id to plan entry, kind, and section index.",
+        description=(
+            "Look up ~/.agents/plans/{TASK-ID}/ first, then {TASK-ID}.md and "
+            "{TASK-ID}-evidence-plan.md. Return bounded JSON: entry, kind, sections."
+        ),
+    )
+    plan_resolve.add_argument("task_id", help="Issue key, plan folder, or plan file path.")
+    plan_resolve.add_argument(
+        "--kind",
+        choices=sorted(PLAN_HEADINGS),
+        help="Prefer implementation or evidence when both exist.",
+    )
+    plan_resolve.add_argument(
+        "--plans-dir",
+        type=Path,
+        default=PLANS_ROOT,
+        help="Plans root. Defaults to ~/.agents/plans.",
+    )
+    plan_resolve.add_argument("--json", action="store_true", help=argparse.SUPPRESS)
+    plan_resolve.set_defaults(func=cmd_plan_resolve)
+
+    logs = group("logs", "Extract and deduplicate important local log events.")
+    extract = logs.add_parser(
+        "extract",
+        help="Return bounded error and warning blocks.",
+        description=(
+            "Extract selected log levels, retain attached stack lines, deduplicate volatile "
+            "variants, and return at most the requested number of events."
+        ),
+    )
+    extract.add_argument("file", type=Path, help="Log file to inspect.")
+    extract.add_argument("--levels", default="ERROR,WARN,FATAL", help="Comma-separated levels.")
+    extract.add_argument("--limit", type=int, default=50, help="Maximum unique events.")
+    extract.add_argument("--json", action="store_true", help=argparse.SUPPRESS)
+    extract.set_defaults(func=cmd_logs_extract)
+
+    evidence = group("evidence", "Create and verify screenshot evidence metadata locally.")
+    inspect = evidence.add_parser(
+        "inspect",
+        help="Verify screenshot dimensions, metadata, and optional OCR text.",
+        description=(
+            "Run deterministic screenshot assertions before visual review or Jira upload. "
+            "Checks metadata sidecars, dimensions, and optional local Tesseract OCR."
+        ),
+    )
+    inspect.add_argument("image", type=Path, help="Screenshot image.")
+    inspect.add_argument("--sidecar", type=Path, help="Manifest JSON; defaults beside the image.")
+    inspect.add_argument("--expected-url", help="Required captured page URL.")
+    inspect.add_argument("--expected-selector", help="Required captured selector.")
+    inspect.add_argument("--expected-text", help="Text that local OCR must find.")
+    inspect.add_argument("--min-width", type=int, default=0, help="Minimum image width.")
+    inspect.add_argument("--min-height", type=int, default=0, help="Minimum image height.")
+    inspect.add_argument("--ocr", action="store_true", help="Run local OCR.")
+    inspect.add_argument("--lang", default="eng", help="Tesseract language code.")
+    inspect.add_argument("--max-ocr-chars", type=int, default=12000, help="Bound OCR output.")
+    inspect.add_argument("--json", action="store_true", help=argparse.SUPPRESS)
+    inspect.set_defaults(func=cmd_evidence_inspect)
+    manifest = evidence.add_parser(
+        "manifest",
+        help="Write a screenshot metadata sidecar.",
+        description="Record capture URL, selector, title, dimensions, and checksum as JSON.",
+    )
+    manifest.add_argument("image", type=Path, help="Screenshot image.")
+    manifest.add_argument("--url", required=True, help="Captured page URL.")
+    manifest.add_argument("--selector", help="Captured selector or target element.")
+    manifest.add_argument("--title", help="Human-readable evidence title.")
+    manifest.add_argument("--output", type=Path, help="Sidecar path; defaults beside the image.")
+    manifest.add_argument("--json", action="store_true", help=argparse.SUPPRESS)
+    manifest.set_defaults(func=cmd_evidence_manifest)
+
+    image = group("image", "Deterministic and local-model image primitives for evidence review.")
+    stamp = image.add_parser(
+        "stamp",
+        help="Flatten a screenshot and stamp WIDTH x HEIGHT at bottom-left.",
+        description=(
+            "Delegate to annotate-evidence-resolution.py: flatten alpha, add a 2px "
+            "#dddedd border, overlay WIDTH x HEIGHT at bottom-left, and record "
+            "a resolution-stamp comment. Idempotent. Required before any Jira upload. "
+            "Pass file paths (a directory only auto-stamps NN-*.png). --check exits 1 "
+            "when the matching stamp is missing."
+        ),
+    )
+    stamp.add_argument("paths", nargs="+", type=Path, help="PNG files, or an evidence directory.")
+    stamp.add_argument(
+        "--check",
+        action="store_true",
+        help="Do not write; exit 1 if any PNG is missing the matching stamp.",
+    )
+    stamp.add_argument(
+        "--no-flatten",
+        action="store_true",
+        help="Stamp only; skip alpha flatten and 2px border.",
+    )
+    stamp.add_argument("--json", action="store_true", help=argparse.SUPPRESS)
+    stamp.set_defaults(func=cmd_image_stamp)
+    whitespace = image.add_parser(
+        "whitespace",
+        help="Measure blank/background pixel ratio in a screenshot.",
+        description=(
+            "Delegate to the blank-space skill (Pillow + numpy): overall blank ratio, "
+            "border-trim ratio, and optional NxN grid. Deterministic, no model involved."
+        ),
+    )
+    whitespace.add_argument("image", type=Path, help="Screenshot image.")
+    whitespace.add_argument(
+        "--background", default="auto",
+        help="'auto' (corner sample), 'mode' (full-image mode color), or #RRGGBB.",
+    )
+    whitespace.add_argument("--tolerance", type=int, default=12, help="Per-channel blank tolerance (0-255).")
+    whitespace.add_argument("--grid", type=int, default=0, help="Optional NxN per-cell blank-ratio grid.")
+    whitespace.add_argument("--json", action="store_true", help=argparse.SUPPRESS)
+    whitespace.set_defaults(func=cmd_image_whitespace)
+    describe = image.add_parser(
+        "describe",
+        help="Describe a screenshot with a local vision-capable Ollama model.",
+        description=(
+            "Delegate to the describe-image skill: sends the image to a local Ollama "
+            "vision model (default gemma4:e4b) over its HTTP API. Not deterministic; "
+            "CPU-only inference measured ~140s per screenshot on this host."
+        ),
+    )
+    describe.add_argument("image", type=Path, help="Screenshot image.")
+    describe.add_argument("--prompt", help="Override the default layout/text/UI/issues prompt.")
+    describe.add_argument("--model", default="gemma4:e4b", help="Vision-capable local Ollama model.")
+    describe.add_argument("--timeout", type=float, default=300.0, help="Seconds to wait for inference.")
+    describe.add_argument("--max-chars", type=int, default=4000, help="Bound the returned description.")
+    describe.add_argument("--json", action="store_true", help=argparse.SUPPRESS)
+    describe.set_defaults(func=cmd_image_describe)
+    diff = image.add_parser(
+        "diff",
+        help="Compare two same-size images with exact pixel-diff metrics.",
+        description=(
+            "Delegate to the diff-image skill (image-diff CLI): exact changed-pixel "
+            "count, ratio, a visible difference PNG, and optional threshold gating. "
+            "Deterministic; images must already be aligned to the same dimensions."
+        ),
+    )
+    diff.add_argument("first", type=Path, help="Baseline, expected, backend, or prototype image.")
+    diff.add_argument("second", type=Path, help="Candidate, actual, frontend, or final image.")
+    diff.add_argument(
+        "--output", type=Path,
+        help="Visible magnitude-difference PNG. Defaults beside the second image.",
+    )
+    diff.add_argument("--mask-output", type=Path, help="Optional black/white changed-pixel mask PNG.")
+    diff.add_argument("--max-diff-pixels", type=int, help="Maximum allowed changed pixels.")
+    diff.add_argument("--max-diff-ratio", type=float, help="Maximum allowed changed-pixel ratio (0-1).")
+    diff.add_argument("--json", action="store_true", help=argparse.SUPPRESS)
+    diff.set_defaults(func=cmd_image_diff)
+    palette_create = image.add_parser(
+        "palette-create",
+        help="Extract a deterministic N-color palette from an image.",
+        description=(
+            "Delegate to the color-palette skill: quantize an image to N colors and "
+            "report each entry with its hex, Lab, and pixel share. Optionally write a "
+            "reusable palette JSON and a PNG swatch strip. Deterministic."
+        ),
+    )
+    palette_create.add_argument("image", type=Path, help="Source image.")
+    palette_create.add_argument("--colors", type=int, default=8, help="Palette size (2-256).")
+    palette_create.add_argument(
+        "--method", default="mediancut", choices=("mediancut", "maxcoverage", "fastoctree"),
+        help="Quantizer; 'mediancut' balances the color cube, 'maxcoverage' favors dominant colors.",
+    )
+    palette_create.add_argument("--out", type=Path, help="Write the palette JSON here.")
+    palette_create.add_argument("--swatch", type=Path, help="Write a PNG swatch strip here.")
+    palette_create.add_argument("--swatch-size", default="400x50", help="Swatch strip WIDTHxHEIGHT.")
+    palette_create.add_argument("--json", action="store_true", help=argparse.SUPPRESS)
+    palette_create.set_defaults(func=cmd_image_palette_create)
+    palette_distance = image.add_parser(
+        "palette-distance",
+        help="Score an image against a palette as a 0-1 deviation number.",
+        description=(
+            "Delegate to the color-palette skill: for every pixel take the distance to "
+            "the nearest palette color, average over the image, and normalize to 0-1. "
+            "Reports percentiles, on-palette coverage, palette usage, and the worst "
+            "off-palette colors. Deterministic; no sampling."
+        ),
+    )
+    palette_distance.add_argument("image", type=Path, help="Candidate image to score.")
+    palette_distance.add_argument(
+        "palette",
+        help="Palette JSON, a swatch image, or a hex list like '#1a2b3c,#ffffff'.",
+    )
+    palette_distance.add_argument(
+        "--space", default="lab", choices=("lab", "rgb"),
+        help="Primary distance space; 'lab' is perceptual (CIE76 dE) and is the one to threshold on.",
+    )
+    palette_distance.add_argument(
+        "--tolerance", type=float, default=10.0,
+        help="Raw distance still counted as on-palette (Lab: ~2.3 is one JND).",
+    )
+    palette_distance.add_argument(
+        "--percentiles", default="50,90,95,99", help="Per-pixel distance percentiles to report.",
+    )
+    palette_distance.add_argument(
+        "--top-offenders", type=int, default=5, help="How many worst off-palette colors to list.",
+    )
+    palette_distance.add_argument(
+        "--palette-max-colors", type=int, default=256,
+        help="Reject a palette image with more distinct colors than this.",
+    )
+    palette_distance.add_argument("--json", action="store_true", help=argparse.SUPPRESS)
+    palette_distance.set_defaults(func=cmd_image_palette_distance)
+
+    playwright = group(
+        "playwright",
+        "On-demand Playwright MCP instances (HTTP, one process per task id).",
+    )
+    for playwright_action, playwright_help in (
+        ("spawn", "Start one HTTP Playwright MCP per id."),
+        ("revive", "Re-spawn dead instances from the registry (post-reboot)."),
+        ("stop", "Kill instance processes and remove vendor MCP entries."),
+        ("list", "Show instance registry."),
+        ("enable", "Register a running instance on vendor MCP configs."),
+        ("disable", "Remove playwright-<id> from vendor MCP configs."),
+    ):
+        pw = playwright.add_parser(playwright_action, help=playwright_help)
+        pw.add_argument("playwright_args", nargs=argparse.REMAINDER, help="Args forwarded to mcp/playwright.py.")
+        pw.set_defaults(func=cmd_playwright, action=playwright_action)
+
+    worklog = group("worklog", "Collect bounded local evidence for daily worklogs.")
+    collect = worklog.add_parser(
+        "collect",
+        help="Cache local work evidence for a date.",
+        description="Collect local history and git evidence into dated raw and SQLite caches.",
+    )
+    collect.add_argument("--date", help="Date in YYYY-MM-DD; defaults to today.")
+    collect.add_argument("--json", action="store_true", help=argparse.SUPPRESS)
+    collect.set_defaults(func=cmd_worklog_collect)
+
+    tools = group("tools", "Audit availability of local deterministic CLI dependencies.")
+    audit = tools.add_parser(
+        "audit",
+        help="Report available and missing executables.",
+        description="Check the shared local-tool catalog without installing or changing anything.",
+    )
+    audit.add_argument("--versions", action="store_true", help="Probe bounded version output.")
+    audit.add_argument("--json", action="store_true", help=argparse.SUPPRESS)
+    audit.set_defaults(func=cmd_tools_audit)
+
+    checks = group("checks", "Run applicable local validators with bounded output.")
+    check_run = checks.add_parser(
+        "run",
+        help="Run validators selected from repository contents.",
+        description="Run only applicable local checks and return compact pass/fail/skip results.",
+    )
+    check_run.add_argument("--cwd", type=Path, default=Path.cwd(), help="Repository directory.")
+    check_run.add_argument(
+        "--scope", choices=("changed", "all"), default="changed", help="Files to validate."
+    )
+    check_run.add_argument(
+        "--max-output-chars", type=int, default=12000, help="Maximum captured output per check."
+    )
+    check_run.add_argument("--json", action="store_true", help=argparse.SUPPRESS)
+    check_run.set_defaults(func=cmd_checks_run)
+
+    security = group(
+        "security",
+        "Run local security scans with CI-parity tools and summarize reports.",
+    )
+    sec_detect = security.add_parser(
+        "detect",
+        help="Report which security checks apply to this repository.",
+        description=(
+            "Detect applicable security checks from repository contents: lockfiles "
+            "for dependency scanning, source roots for SAST, deploy and chart files "
+            "for IaC. Returns the skip reason for every check that does not apply."
+        ),
+    )
+    sec_detect.add_argument("--cwd", type=Path, default=Path.cwd(), help="Repository directory.")
+    sec_detect.set_defaults(func=cmd_security_detect)
+
+    sec_scan = security.add_parser(
+        "scan",
+        help="Run selected security scans and return bounded findings.",
+        description=(
+            "Run local scans, keep raw tool reports in .security-local/, and return "
+            "severity counts plus the highest-severity findings. Secrets and "
+            "dependency scanning run by default; sast and iac are slower and noisier "
+            "and only run when named in --check. A missing tool reports "
+            "'unavailable' rather than failing the run."
+        ),
+    )
+    sec_scan.add_argument("--cwd", type=Path, default=Path.cwd(), help="Repository directory.")
+    sec_scan.add_argument(
+        "--check", default=",".join(SECURITY_DEFAULT_CHECKS),
+        help="Comma-separated checks to run: " + ", ".join(SECURITY_CHECKS) + ".",
+    )
+    sec_scan.add_argument(
+        "--fail-on", choices=SECURITY_SEVERITIES, default=None,
+        help="Exit 2 when a finding at or above this severity exists.",
+    )
+    sec_scan.add_argument("--top", type=int, default=10, help="Findings returned per check.")
+    sec_scan.add_argument("--timeout", type=float, default=900.0, help="Per-tool timeout in seconds.")
+    sec_scan.add_argument(
+        "--max-output-chars", type=int, default=4000, help="Maximum captured error output per check."
+    )
+    sec_scan.set_defaults(func=cmd_security_scan)
+
+    sec_summarize = security.add_parser(
+        "summarize",
+        help="Normalize a gitleaks, trivy, osv-scanner, or semgrep JSON report.",
+        description=(
+            "Read a raw scanner report and return severity counts plus the "
+            "highest-severity findings, so a full multi-megabyte report never "
+            "has to enter the model context."
+        ),
+    )
+    sec_summarize.add_argument("report", type=Path, help="Path to the scanner JSON report.")
+    sec_summarize.add_argument("--top", type=int, default=20, help="Findings returned.")
+    sec_summarize.add_argument(
+        "--fail-on", choices=SECURITY_SEVERITIES, default=None,
+        help="Exit 2 when a finding at or above this severity exists.",
+    )
+    sec_summarize.set_defaults(func=cmd_security_summarize)
+
+    skills = group(
+        "skills",
+        "Audit skill metadata and scan skills for security risks.",
+    )
+    skill_scan = skills.add_parser(
+        "scan",
+        help="Scan a skill with NVIDIA SkillSpector (static by default).",
+        description=(
+            "Run NVIDIA SkillSpector and return a bounded JSON verdict. "
+            "Default is static analysis only. Pass --llm to add NVIDIA semantic "
+            "analysis using ~/.agents/.auth/nvidia-api-key.yaml."
+        ),
+    )
+    skill_scan.add_argument(
+        "target",
+        help="Skill directory, SKILL.md, zip, or Git URL.",
+    )
+    skill_scan.add_argument(
+        "--llm",
+        action="store_true",
+        help="Enable NVIDIA semantic analysis.",
+    )
+    skill_scan.add_argument(
+        "--recursive",
+        action="store_true",
+        help="Scan immediate subdirectories that each contain SKILL.md.",
+    )
+    skill_scan.add_argument(
+        "--output",
+        type=Path,
+        help="Write the full SkillSpector JSON report here.",
+    )
+    skill_scan.add_argument(
+        "--baseline",
+        type=Path,
+        help="Suppression baseline YAML or JSON.",
+    )
+    skill_scan.add_argument(
+        "--max-issues",
+        type=int,
+        default=20,
+        help="Maximum issues in the bounded payload.",
+    )
+    skill_scan.add_argument(
+        "--timeout",
+        type=int,
+        default=0,
+        help="Seconds. 0 = 180 static / 600 with --llm.",
+    )
+    skill_scan.add_argument("--json", action="store_true", help=argparse.SUPPRESS)
+    skill_scan.set_defaults(func=cmd_skills_scan)
+    skill_audit = skills.add_parser(
+        "audit",
+        help="Audit canonical skills and vendor copies.",
+        description=(
+            "Check that recommendedRole/aliases are pipe-appended on description, "
+            "reject leftover alias-bound symlinks, and compare optional vendor skill directories."
+        ),
+    )
+    skill_audit.add_argument(
+        "--root", type=Path, action="append", required=True, help="Canonical skill root; repeatable."
+    )
+    skill_audit.add_argument(
+        "--vendor", type=Path, action="append", default=[], help="Vendor skill root to compare; repeatable."
+    )
+    skill_audit.add_argument("--json", action="store_true", help=argparse.SUPPRESS)
+    skill_audit.set_defaults(func=cmd_skills_audit)
+
+    local = group("local", "Use bounded Ollama inference for low-risk local synthesis.")
+    models = local.add_parser(
+        "models",
+        help="List installed Ollama models.",
+        description="Return installed local model names and sizes without running inference.",
+    )
+    models.add_argument("--json", action="store_true", help=argparse.SUPPRESS)
+    models.set_defaults(func=cmd_local_models)
+    local_run = local.add_parser(
+        "run",
+        help="Run bounded low-risk local inference.",
+        description=(
+            "Send bounded text—not images or authoritative decisions—to a local Ollama model. "
+            "Use only for low-risk clustering, classification, or summarization."
+        ),
+    )
+    local_run.add_argument("--model", default="granite3-moe:3b", help="Installed Ollama model.")
+    local_run.add_argument("--instruction", required=True, help="Focused operation to perform.")
+    local_run.add_argument("--file", type=Path, help="Read input text from this file.")
+    local_run.add_argument("--text", help="Inline input text; mutually exclusive with --file.")
+    local_run.add_argument("--max-chars", type=int, default=24000, help="Maximum input characters.")
+    local_run.add_argument(
+        "--max-output-chars", type=int, default=8000, help="Maximum returned output characters."
+    )
+    local_run.add_argument("--json", action="store_true", help=argparse.SUPPRESS)
+    local_run.set_defaults(func=cmd_local_run)
+
+    docs = group("docs", "Index and search local Markdown documentation with SQLite FTS.")
+    docs_index = docs.add_parser(
+        "index",
+        help="Build or refresh an offline documentation index.",
+        description="Index Markdown files from one or more roots into a local SQLite FTS database.",
+    )
+    docs_index.add_argument(
+        "--root", type=Path, action="append", required=True, help="Documentation root; repeatable."
+    )
+    docs_index.add_argument("--db", type=Path, required=True, help="SQLite database path.")
+    docs_index.add_argument("--json", action="store_true", help=argparse.SUPPRESS)
+    docs_index.set_defaults(func=cmd_docs_index)
+    docs_search = docs.add_parser(
+        "search",
+        help="Search an offline documentation index.",
+        description="Return ranked source paths and bounded matching snippets from SQLite FTS.",
+    )
+    docs_search.add_argument("query", help="Words or phrase to search for.")
+    docs_search.add_argument("--db", type=Path, required=True, help="SQLite database path.")
+    docs_search.add_argument("--limit", type=int, default=8, help="Maximum results.")
+    docs_search.add_argument("--raw-fts", action="store_true", help="Treat query as SQLite FTS syntax.")
+    docs_search.add_argument("--json", action="store_true", help=argparse.SUPPRESS)
+    docs_search.set_defaults(func=cmd_docs_search)
+
+    jira = group(
+        "jira",
+        "Call Jira and Confluence Cloud REST with the local API token (no MCP/model loop).",
+    )
+    agentctl_jira.add_jira_parsers(jira)
+    return parser
+
+
+def main() -> int:
+    parser = build_parser()
+    args, unknown = parser.parse_known_args()
+    if not hasattr(args, "func"):
+        if unknown:
+            parser.error("unrecognized arguments: " + " ".join(unknown))
+        parser.print_help()
+        return 0
+    if args.func is cmd_playwright:
+        extra = list(getattr(args, "playwright_args", None) or [])
+        args.playwright_args = extra + unknown
+        unknown = []
+    if unknown:
+        parser.error("unrecognized arguments: " + " ".join(unknown))
+    try:
+        return int(args.func(args))
+    except (OSError, ValueError, subprocess.SubprocessError, agentctl_jira.JiraError) as exc:
+        emit({"status": "error", "error": str(exc), "type": type(exc).__name__})
+        return 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

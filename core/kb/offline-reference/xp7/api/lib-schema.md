@@ -1,0 +1,1340 @@
+<!-- src:https://developer.enonic.com/docs/platform/7.x/api/lib-schema generated:2026-07-24T21:10:20Z format:llm-dense xp:7.x -->
+#DOC api/lib-schema.md
+
+# Dynamic schema API
+
+XP 7.11.0 API for fetching and manipulating dynamic schemas.
+
+> **Tip:** Functions of this library require the Schema Admin role. It means that user role in the current context may lack sufficient permissions, for example when executed from inside a service - in this case you must explicitly execute the function in the [context](/docs/platform/7.x/api/lib-context#runcontext) of `system.schema.admin` role.
+
+## Usage
+
+```groovy
+dependencies {
+  include "com.enonic.xp:lib-schema:${xpVersion}"
+}
+```
+
+Add the `import` statement to your controller:
+
+```typescript
+import schemaLib from '/lib/xp/schema';
+```
+
+## Functions
+
+### getSchema
+
+Fetches a schema from an application.
+
+Parameters
+
+| Name | Type | Description |  |  |
+| --- | --- | --- | --- | --- |
+| params | object | JSON with parameters      Properties                Name | Type | Description |
+| name | string | Schema name |  |  |
+| type | string | Schema type(`CONTENT_TYPE`, `MIXIN` or `XDATA`) |  |  |
+
+Returns
+
+**object** : ([`Schema`](#schema)) Property object of the fetched schema.
+
+Example
+
+Fetches a content type schema:
+
+```typescript
+import {getSchema} from '/lib/xp/schema';
+
+const result = getSchema({
+    name: 'myapp:mytype',
+    type: 'CONTENT_TYPE'
+
+});
+```
+
+Return value:
+
+```typescript
+const expected = {
+  name: "myapp:mytype",
+  displayName: "Tag",
+  displayNameI18nKey: "",
+  createdTime: "2021-09-25T10:00:00Z",
+  creator: "user:system:anonymous",
+  modifiedTime: "2021-09-25T10:00:00Z",
+  "resource" : <!-- resource string value -->,
+  type: "CONTENT_TYPE",
+  icon: {
+    data: {},
+    mimeType: "image/png",
+    modifiedTime: "2016-01-01T12:00:00Z"
+  },
+  form: [
+    {
+      formItemType: "Input",
+      name: "tag",
+      label: "Tag, unlimited occurrences",
+      maximize: true,
+      inputType: "Tag",
+      occurrences: {
+        maximum: 0,
+        minimum: 0
+      },
+      config: {}
+    }
+  ],
+  config: {}
+};
+```
+
+### listSchemas
+
+Fetches schemas of a particular type from an application.
+
+Parameters
+
+| Name | Type | Description |  |  |
+| --- | --- | --- | --- | --- |
+| params | object | JSON with parameters      Properties                Name | Type | Description |
+| application | string | Application key |  |  |
+| type | string | Schema type(`CONTENT_TYPE`, `MIXIN` or `XDATA`) |  |  |
+
+Returns
+
+**object[]** : ([`Schema[]`](#schema)) Property object of the fetched schemas.
+
+Example
+
+Fetches application’s content type schemas:
+
+```typescript
+import {listSchemas} from '/lib/xp/schema';
+
+const result = listSchemas({
+    application: 'myapp',
+    type: 'CONTENT_TYPE'
+
+});
+```
+
+Return value:
+
+```typescript
+const expected = {
+    name: 'myapp:type1',
+    displayName: 'My type display name',
+    description: 'My type description',
+    modifiedTime: '2010-01-01T10:00:00Z',
+    resource: '<content-type><some-data></some-data></content-type>',
+    type: 'CONTENT_TYPE',
+    form: [
+        {
+            formItemType: 'Layout',
+            name: 'myLayout',
+            label: 'My layout',
+            items: [
+                {
+                    formItemType: 'ItemSet',
+                    name: 'mySet',
+                    occurrences: {
+                        maximum: 1,
+                        minimum: 1
+                    },
+                    items: [
+                        {
+                            formItemType: 'Input',
+                            name: 'myInput',
+                            label: 'Input',
+                            maximize: true,
+                            inputType: 'TextLine',
+                            occurrences: {
+                                maximum: 1,
+                                minimum: 0
+                            },
+                            config: {}
+                        }
+                    ]
+                }
+            ]
+        }
+    ],
+    config: {}
+},
+{
+    name: 'myapp:type2',
+    displayName: 'My type display name 2',
+    description: 'My type description 2',
+    modifiedTime: '2012-01-01T10:00:00Z',
+    resource: '<content-type><some-other-data></some-other-data></content-type>',
+    type: 'CONTENT_TYPE',
+    form: [],
+    config: {}
+};
+```
+
+### createSchema
+
+Creates a dynamic schema in a virtual application.
+
+Parameters
+
+| Name | Type | Description |  |  |
+| --- | --- | --- | --- | --- |
+| params | object | JSON with parameters      Properties                Name | Type | Description |
+| name | string | Dynamic schema name |  |  |
+| type | string | Dynamic schema type(`CONTENT_TYPE`,`MIXIN` or `XDATA`) |  |  |
+| resource | string | Dynamic schema resource value |  |  |
+
+Returns
+
+**object** : ([`Schema`](#schema)) Property object of the created dynamic schema.
+
+Example
+
+Creates a content type schema:
+
+```typescript
+import {createSchema} from '/lib/xp/schema';
+
+const resource = `<?xml version='1.0' encoding='UTF-8'?>
+<content-type xmlns='urn:enonic:xp:model:1.0'>
+    <display-name>Tag</display-name>
+    <super-type>base:structured</super-type>
+    <form>
+        <input name="tag" type="Tag">
+        <label>Tag, unlimited occurrences</label>
+        <occurrences minimum="0"
+        maximum="0"/>
+        </input>
+    </form>
+</content-type>`;
+
+const result = createSchema({
+    name: 'myapp:mytype',
+    type: 'CONTENT_TYPE',
+    resource
+});
+```
+
+Return value:
+
+```typescript
+const expected = {
+  name: "myapp:mytype",
+  displayName: "Tag",
+  displayNameI18nKey: "",
+  createdTime: "2021-09-25T10:00:00Z",
+  creator: "user:system:anonymous",
+  modifiedTime: "2021-09-25T10:00:00Z",
+  "resource" : <!-- resource string value -->,
+  type: "CONTENT_TYPE",
+  icon: {
+    data: {},
+    mimeType: "image/png",
+    modifiedTime: "2016-01-01T12:00:00Z"
+  },
+  form: [
+    {
+      formItemType: "Input",
+      name: "tag",
+      label: "Tag, unlimited occurrences",
+      maximize: true,
+      inputType: "Tag",
+      occurrences: {
+        maximum: 0,
+        minimum: 0
+      },
+      config: {}
+    }
+  ],
+  config: {}
+};
+```
+
+### updateSchema
+
+Updates a dynamic schema in a virtual application.
+
+Parameters
+
+| Name | Type | Description |  |  |
+| --- | --- | --- | --- | --- |
+| params | object | JSON with parameters      Properties                Name | Type | Description |
+| name | string | Dynamic schema name |  |  |
+| type | string | Dynamic schema type(`CONTENT_TYPE`,`MIXIN` or `XDATA`) |  |  |
+| resource | string | Dynamic schema resource value |  |  |
+
+Returns
+
+**object** : ([`Schema`](#schema)) Property object for the modified dynamic schema.
+
+Example
+
+Updates a mixin schema:
+
+```typescript
+import {updateSchema} from '/lib/xp/schema';
+
+const resource = `<?xml version='1.0' encoding='UTF-8'?>
+       <mixin xmlns='urn:enonic:xp:model:1.0'>
+          <display-name>Virtual Mixin</display-name>
+          <description>Mixin description</description>
+          <form>
+            <input type='TextLine' name='text2'>
+              <label>Text 2</label>
+            </input>
+
+            <mixin name='myapplication:inline'/>
+          </form>
+        </mixin>`;
+
+const result = updateSchema({
+    name: 'myapp:mytype',
+    type: 'MIXIN',
+    resource
+
+});
+```
+
+Return value:
+
+```typescript
+const expected = {
+    name: 'myapp:mytype',
+    displayName: 'Virtual Mixin',
+    displayNameI18nKey: '',
+    description: 'Mixin description',
+    descriptionI18nKey: '',
+    createdTime: '2021-09-25T10:00:00Z',
+    modifiedTime: '2021-09-25T10:00:00Z',
+    resource: <!-- resource string value -->,
+    type: 'MIXIN',
+    form: [
+        {
+            formItemType: 'Input',
+            name: 'text2',
+            label: 'Text 2',
+            maximize: true,
+            inputType: 'TextLine',
+            occurrences: {
+                maximum: 1,
+                minimum: 0
+            },
+            config: {}
+        },
+        {
+            formItemType: 'InlineMixin',
+            name: 'myapplication:inline'
+        }
+    ]
+};
+```
+
+### deleteSchema
+
+Removes a schema from a virtual application.
+
+Parameters
+
+| Name | Type | Description |  |  |
+| --- | --- | --- | --- | --- |
+| params | object | JSON with parameters      Properties                Name | Type | Description |
+| name | string | Dynamic schema name |  |  |
+| type | string | Dynamic schema type(`CONTENT_TYPE`,`MIXIN` or `XDATA`) |  |  |
+
+Returns
+
+**boolean** : `true` if deletion was successful.
+
+Example
+
+Updates a mixin schema:
+
+```typescript
+import {deleteSchema} from '/lib/xp/schema';
+
+const result = deleteSchema({
+    name: 'myapp:mytype',
+    type: 'XDATA'
+});
+
+if (result) {
+    log.info('Deleted x-data: [myapp:mytype]');
+} else {
+    log.info('X-data deletion failed: [myapp:mytype]');
+}
+```
+
+### getComponent
+
+Fetches a component from an application.
+
+Parameters
+
+| Name | Type | Description |  |  |
+| --- | --- | --- | --- | --- |
+| params | object | JSON with parameters      Properties                Name | Type | Description |
+| key | string | Component key |  |  |
+| type | string | Component type(`PAGE`, `PART` or `LAYOUT`) |  |  |
+
+Returns
+
+**object** : ([`Component`](#component)) Property object of the fetched component.
+
+Example
+
+Fetches a page component:
+
+```typescript
+import {getComponent} from '/lib/xp/schema';
+
+const result = getComponent({
+    key: 'myapp:mypage',
+    type: 'PAGE'
+
+});
+```
+
+Return value:
+
+```typescript
+const expected = {
+    key: 'myapp:mypage',
+    displayName: 'News page',
+    description: 'My news page',
+    descriptionI18nKey: 'key.description',
+    componentPath: 'myapp:/site/pages/mypage',
+    modifiedTime: '2021-02-25T10:44:33.170079900Z',
+    resource: '<page><some-data></some-data></page>',
+    type: 'PAGE',
+    form: [
+        {
+            formItemType: 'Input',
+            name: 'width',
+            label: 'width',
+            maximize: true,
+            inputType: 'Double',
+            occurrences: {
+                maximum: 1,
+                minimum: 0
+            },
+            config: {}
+        }
+    ],
+    config: {},
+    regions: [
+        'region-one'
+    ]
+};
+```
+
+### listComponents
+
+Fetches components of a particular type from an application.
+
+Parameters
+
+| Name | Type | Description |  |  |
+| --- | --- | --- | --- | --- |
+| params | object | JSON with parameters      Properties                Name | Type | Description |
+| application | string | Application key |  |  |
+| type | string | Component type(`PAGE`, `PART` or `LAYOUT`) |  |  |
+
+Returns
+
+**object[]** : ([`Component[]`](#component)) Array of Property objects of the fetched components.
+
+Example
+
+Fetches application’s part components:
+
+```typescript
+import {listComponents} from '/lib/xp/schema';
+
+const result = listComponents({
+    application: 'myapp',
+    type: 'PART'
+
+});
+```
+
+Return value:
+
+```typescript
+const expected = [
+    {
+        key: 'myapp:part1',
+        displayName: 'News part',
+        description: 'My news part',
+        descriptionI18nKey: 'key.description',
+        componentPath: 'myapp:/site/parts/part1',
+        modifiedTime: '2021-02-25T10:44:33.170079900Z',
+        resource: '<part><some-data></some-data></part>',
+        type: 'PART',
+        form: [
+            {
+                formItemType: 'Input',
+                name: 'width',
+                label: 'width',
+                maximize: true,
+                inputType: 'Double',
+                occurrences: {
+                    maximum: 1,
+                    minimum: 0
+                },
+                config: {}
+            }
+        ],
+        config: {}
+    },
+    {
+        key: 'myapp:part2',
+        displayName: 'Other part',
+        componentPath: 'myapp:/site/parts/part2',
+        modifiedTime: '2022-02-25T10:44:33.170079900Z',
+        resource: '<part><some-other-data></some-other-data></part>',
+        type: 'PART',
+        form: [],
+        config: {}
+    }
+];
+```
+
+### createComponent
+
+Creates a dynamic component in a virtual application.
+
+Parameters
+
+| Name | Type | Description |  |  |
+| --- | --- | --- | --- | --- |
+| params | object | JSON with parameters      Properties                Name | Type | Description |
+| key | string | Dynamic component key |  |  |
+| type | string | Dynamic schema type(`PAGE`, `PART` or `LAYOUT`) |  |  |
+| resource | string | Dynamic component resource value |  |  |
+
+Returns
+
+**object** : ([`Component`](#component)) Property object of the created dynamic component.
+
+Example
+
+Creates a part type component:
+
+```typescript
+import {createComponent} from '/lib/xp/schema';
+
+const resource = `<?xml version='1.0' encoding='UTF-8'?>
+                <content-type xmlns='urn:enonic:xp:model:1.0'>
+               <display-name>Tag</display-name>
+               <super-type>base:structured</super-type>
+               <form>
+                 <input name="tag" type="Tag">
+                   <label>Tag, unlimited occurrences</label>
+                   <occurrences minimum="0"
+                    maximum="0"/>
+                 </input>
+               </form>
+              </content-type>`;
+
+const result = createComponent({
+    key: 'myapp:mypart',
+    type: 'PART',
+    resource
+});
+```
+
+Return value:
+
+```typescript
+const expected = {
+    key: 'myapp:mypart',
+    displayName: 'Virtual Part',
+    displayNameI18nKey: 'key.display-name',
+    description: 'My Part Description',
+    descriptionI18nKey: 'key.description',
+    componentPath: 'myapp:/site/parts/mypart',
+    modifiedTime: '2021-09-25T10:00:00Z',
+    resource: <!-- resource string value -->,
+    type: 'PART',
+    form: [
+        {
+            formItemType: 'Input',
+            name: 'width',
+            label: 'Column width',
+            helpText: 'key.help-text',
+            maximize: true,
+            inputType: 'Double',
+            occurrences: {
+                maximum: 1,
+                minimum: 0
+            },
+            config: {}
+        },
+        {
+            formItemType: 'InlineMixin',
+            name: 'myapplication:link-urls'
+        }
+    ],
+
+    config: {
+        input: [{
+            value: '', '@name': 'width', '@type': 'Double'
+        }]
+    }
+};
+```
+
+### updateComponent
+
+Updates a dynamic component in a virtual application.
+
+Parameters
+
+| Name | Type | Description |  |  |
+| --- | --- | --- | --- | --- |
+| params | object | JSON with parameters      Properties                Name | Type | Description |
+| key | string | Dynamic component key |  |  |
+| type | string | Dynamic component type(`PAGE`, `PART` or `LAYOUT`) |  |  |
+| resource | string | Dynamic component resource value |  |  |
+
+Returns
+
+**object** : ([`Component`](#component)) Property object of the modified dynamic component.
+
+Example
+
+Updates a layout component:
+
+```typescript
+import {updateComponent} from '/lib/xp/schema';
+
+const resource = `<?xml version='1.0' encoding='UTF-8'?>
+<layout xmlns='urn:enonic:xp:model:1.0'>
+    <display-name i18n='key.display-name'>Virtual Layout</display-name>
+    <description i18n='key.description'>My Layout Description</description>
+    <form>
+    <input type='Double' name='pause'>
+        <label i18n='key1.label'>Pause parameter</label>
+        <immutable>false</immutable>
+        <indexed>false</indexed>
+        <help-text i18n='key1.help-text'/>
+        <occurrences minimum='0' maximum='1'/>
+    </input>
+    <item-set name='myFormItemSet'>
+        <label>My form item set</label>
+        <immutable>false</immutable>
+        <occurrences minimum='0' maximum='1'/>
+        <items>
+        <input type='TextLine' name='myTextLine'>
+            <label>My text line</label>
+            <immutable>false</immutable>
+            <indexed>false</indexed>
+            <occurrences minimum='1' maximum='1'/>
+        </input>
+        <input type='TextLine' name='myCustomInput'>
+            <label>My custom input</label>
+            <immutable>false</immutable>
+            <indexed>false</indexed>
+            <occurrences minimum='0' maximum='1'/>
+        </input>
+        </items>
+    </item-set>
+    </form>
+    <regions>
+    <region name='header'/>
+    <region name='main'/>
+    <region name='footer'/>
+    </regions>
+</layout>`;
+
+const result = updateComponent({
+    key: 'myapp:mylayout',
+    type: 'LAYOUT',
+    resource
+});
+```
+
+Return value:
+
+```typescript
+const expected = {
+    key: 'myapp:mylayout',
+    displayName: 'Virtual Layout',
+    displayNameI18nKey: 'key.display-name',
+    description: 'My Layout Description',
+    descriptionI18nKey: 'key.description',
+    componentPath: 'myapp:/site/layouts/mylayout',
+    modifiedTime: '2021-09-25T10:00:00Z',
+    resource: <!-- resource string value -->,
+    type: 'LAYOUT',
+    form: [
+        {
+            formItemType: 'Input',
+            name: 'pause',
+            label: 'Pause parameter',
+            helpText: 'key1.help-text',
+            maximize: true,
+            inputType: 'Double',
+            occurrences: {
+                maximum: 1,
+                minimum: 0
+            },
+            config: {}
+        },
+        {
+            formItemType: 'ItemSet',
+            name: 'myFormItemSet',
+            label: 'My form item set',
+            occurrences: {
+                maximum: 1,
+                minimum: 0
+            },
+            items: [
+                {
+                    formItemType: 'Input',
+                    name: 'myTextLine',
+                    label: 'My text line',
+                    maximize: true,
+                    inputType: 'TextLine',
+                    occurrences: {
+                        maximum: 1,
+                        minimum: 1
+                    },
+                    config: {}
+                },
+                {
+                    formItemType: 'Input',
+                    name: 'myCustomInput',
+                    label: 'My custom input',
+                    maximize: true,
+                    inputType: 'TextLine',
+                    occurrences: {
+                        maximum: 1,
+                        minimum: 0
+                    },
+                    config: {}
+                }
+            ]
+        }
+    ],
+    config: {},
+    regions: [
+        'header',
+        'main',
+        'footer'
+    ]
+};
+```
+
+### deleteComponent
+
+Deletes a dynamic component from a virtual application.
+
+Parameters
+
+| Name | Type | Description |  |  |
+| --- | --- | --- | --- | --- |
+| params | object | JSON with parameters      Properties                Name | Type | Description |
+| key | string | Dynamic component key |  |  |
+| type | string | Dynamic component type(`PAGE`, `PART` or `LAYOUT`) |  |  |
+
+Returns
+
+**boolean** : `true` if deletion was successful.
+
+Example
+
+Removes a layout component:
+
+```typescript
+import {deleteComponent} from '/lib/xp/schema';
+
+const result = deleteComponent({
+    key: 'myapp:mylayout',
+    type: 'LAYOUT'
+});
+
+if (result) {
+    log.info('Deleted layout: [myapp:mylayout]');
+} else {
+    log.info('Layout deletion failed: [myapp:mylayout]');
+}
+```
+
+### getStyles
+
+Fetches styles (f.ex. image styles) from an application.
+
+Parameters
+
+| Name | Type | Description |  |  |
+| --- | --- | --- | --- | --- |
+| params | object | JSON with parameters      Properties                Name | Type | Description |
+| application | string | Application key |  |  |
+
+Returns
+
+**object** : ([`Styles`](#styles)) Property object of the fetched styles.
+
+Example
+
+Fetch application styles:
+
+```typescript
+import {getStyles} from '/lib/xp/schema';
+
+const result = getStyles({
+    application: 'myapp'
+});
+```
+
+Return value:
+
+```typescript
+const expected = {
+    application: 'myapp',
+    cssPath: 'assets/styles.css',
+    modifiedTime: '2021-02-25T10:44:33.170079900Z',
+    resource: '<styles><some-data></some-data></styles>',
+    elements: [
+        {
+            element: 'style',
+            displayName: 'Style display name',
+            name: 'mystyle'
+        }
+    ]
+};
+```
+
+### createStyles
+
+Creates styles in a virtual application.
+
+Parameters
+
+| Name | Type | Description |  |  |
+| --- | --- | --- | --- | --- |
+| params | object | JSON with parameters      Properties                Name | Type | Description |
+| application | string | Virtual application key |  |  |
+| resource | string | Dynamic styles resource value |  |  |
+
+Returns
+
+**object** : ([`Styles`](#styles)) Property object of the created dynamic styles.
+
+Example
+
+Creates application styles:
+
+```typescript
+import {createStyles} from '/lib/xp/schema';
+
+const resource = '<?xml version="1.0" encoding="UTF-8"?>' +
+    '<styles css="assets/styles.css" xmlns="urn:enonic:xp:model:1.0">' +
+    '<style name="warning">' +
+    '<display-name i18n="warning.displayName">Warning</display-name>' +
+    '</style>' +
+    '<image name="editor-width-auto">' +
+    '<display-name i18n="editor-width-auto-text">Override ${width}</display-name>' +
+    '</image>' +
+    '<image name="editor-style-cinema">' +
+    '<display-name i18n="editor-style-cinema-text">Cinema</display-name>' +
+    '<aspect-ratio>21:9</aspect-ratio>' +
+    '<filter>pixelate(10)</filter>' +
+    '</image>' +
+    '</styles>';
+
+const result = createStyles({
+    application: 'myapp',
+    resource
+});
+```
+
+Return value:
+
+```typescript
+const expected = {
+    application: 'myapp',
+    cssPath: 'assets/styles.css',
+    modifiedTime: '2021-09-25T10:00:00Z',
+    resource: <!-- resource string value -->,
+    elements: [
+        {
+            element: 'style',
+            displayName: 'Warning',
+            name: 'warning'
+        },
+        {
+            element: 'image',
+            displayName: 'Override ${width}',
+            name: 'editor-width-auto'
+        },
+        {
+            element: 'image',
+            displayName: 'Cinema',
+            name: 'editor-style-cinema'
+        }
+    ]
+};
+```
+
+### updateStyles
+
+Updates styles in a virtual application.
+
+Parameters
+
+| Name | Type | Description |  |  |
+| --- | --- | --- | --- | --- |
+| params | object | JSON with parameters      Properties                Name | Type | Description |
+| application | string | Dynamic application key |  |  |
+| resource | string | Dynamic styles resource value |  |  |
+
+Returns
+
+**object** : ([`Styles`](#styles)) Property object with the modified styles.
+
+Example
+
+Updates application styles:
+
+```typescript
+import {updateStyles} from '/lib/xp/schema';
+
+const resource = '<?xml version="1.0" encoding="UTF-8"?>' +
+    '<styles css="assets/styles.css" xmlns="urn:enonic:xp:model:1.0">' +
+    '<style name="warning">' +
+    '<display-name i18n="warning.displayName">Warning</display-name>' +
+    '</style>' +
+    '<image name="editor-width-auto">' +
+    '<display-name i18n="editor-width-auto-text">Override ${width}</display-name>' +
+    '</image>' +
+    '<image name="editor-style-cinema">' +
+    '<display-name i18n="editor-style-cinema-text">Cinema</display-name>' +
+    '<aspect-ratio>21:9</aspect-ratio>' +
+    '<filter>pixelate(10)</filter>' +
+    '</image>' +
+    '</styles>';
+
+const result = updateStyles({
+    application: 'myapp',
+    resource
+});
+```
+
+Return value:
+
+```typescript
+const expected = {
+    application: 'myapp',
+    cssPath: 'assets/styles.css',
+    modifiedTime: '2021-09-25T10:00:00Z',
+    resource: <!-- resource string value -->,
+    elements: [
+        {
+            element: 'style',
+            displayName: 'Warning',
+            name: 'warning'
+        },
+        {
+            element: 'image',
+            displayName: 'Override ${width}',
+            name: 'editor-width-auto'
+        },
+        {
+            element: 'image',
+            displayName: 'Cinema',
+            name: 'editor-style-cinema'
+        }
+    ]
+};
+```
+
+### deleteStyles
+
+Deletes styles from a virtual application.
+
+Parameters
+
+| Name | Type | Description |  |  |
+| --- | --- | --- | --- | --- |
+| params | object | JSON with parameters      Properties                Name | Type | Description |
+| application | string | Dynamic application key |  |  |
+
+Returns
+
+**boolean** : `true` if deletion was successful.
+
+Example
+
+Removes an application styles:
+
+```typescript
+import {deleteStyles} from '/lib/xp/schema';
+
+const result = deleteStyles({
+    application: 'myapp'
+});
+
+if (result) {
+    log.info('Styles were deleted: [myapp]');
+} else {
+    log.info('Styles deletion failed: [myapp]');
+}
+```
+
+### getSite
+
+Fetches a site descriptor from an application.
+
+Parameters
+
+| Name | Type | Description |  |  |
+| --- | --- | --- | --- | --- |
+| params | object | JSON with parameters      Properties                Name | Type | Description |
+| application | string | Application key |  |  |
+
+Returns
+
+**object** : ([`Site`](#site)) Property object of the fetched site descriptor.
+
+Example
+
+Fetch application site descriptor:
+
+```typescript
+import {getSite} from '/lib/xp/schema';
+
+const result = getSite({
+    application: 'myapp'
+});
+```
+
+Return value:
+
+```typescript
+const expected = {
+    application: 'myapp',
+    resource: <!-- resource string value -->,
+    modifiedTime: '2021-02-25T10:44:33.170079900Z',
+    form: [
+        {
+            formItemType: 'Input',
+            name: 'input',
+            label: 'Input',
+            maximize: true,
+            inputType: 'Double',
+            occurrences: {
+                maximum: 1,
+                minimum: 0
+            },
+            config: {}
+        }
+    ],
+    xDataMappings: [
+        {
+            name: 'myapplication:my',
+            optional: false
+        }
+    ]
+};
+```
+
+### updateSite
+
+Updates dynamic site descriptor in a virtual application.
+
+Parameters
+
+| Name | Type | Description |  |  |
+| --- | --- | --- | --- | --- |
+| params | object | JSON with parameters      Properties                Name | Type | Description |
+| application | string | Dynamic application key |  |  |
+| resource | string | Dynamic site descriptor resource value |  |  |
+
+Returns
+
+**object** : ([`Site`](#site)) Property object of the modified site descriptor.
+
+Example
+
+Updates application site descriptor:
+
+```typescript
+import {updateSite} from '/lib/xp/schema';
+
+const resource = `<?xml version='1.0' encoding='UTF-8'?>
+<site xmlns='urn:enonic:xp:model:1.0'>
+    <x-data name='myapp1:menu-item'/>
+    <x-data name='myapp2:my-meta-mixin'/>
+    <form>
+    <input type='TextLine' name='some-name'>
+        <label>Textline</label>
+        <immutable>false</immutable>
+        <indexed>false</indexed>
+        <custom-text/>
+        <help-text/>
+        <occurrences minimum='0' maximum='1'/>
+    </input>
+    </form>
+    <processors>
+    <response-processor name='filter1' order='10'/>
+    <response-processor name='filter2' order='20'/>
+    </processors>
+    <mappings>
+    <mapping controller='/site/page/person/person.js' order='10'>
+        <pattern>/person/*</pattern>
+    </mapping>
+    <mapping controller='controller1.js'>
+        <match>_path:'/*/fisk'</match>
+    </mapping>
+    <mapping controller='controller2.js' order='5'>
+        <pattern invert='true'>/.*</pattern>
+        <match>type:'portal:fragment'</match>
+    </mapping>
+    </mappings>
+</site>`;
+
+const result = updateSite({
+    application: 'myapp',
+    resource
+});
+```
+
+Return value:
+
+```typescript
+const expected = {
+    application: 'myapp',
+    modifiedTime: '2021-09-25T10:00:00Z',
+    resource: <!-- resource string value -->,
+    form: [
+        {
+            formItemType: 'Input',
+            name: 'some-name',
+            label: 'Textline',
+            customText: '',
+            maximize: true,
+            inputType: 'TextLine',
+            occurrences: {
+                maximum: 1,
+                minimum: 0
+            },
+            config: {}
+        }
+    ],
+    xDataMappings: [
+        {
+            name: 'myapp1:menu-item',
+            optional: false,
+            allowContentTypes: ''
+        },
+        {
+            name: 'myapp2:my-meta-mixin',
+            optional: false,
+            allowContentTypes: ''
+        }
+    ]
+};
+```
+
+## Type Definitions
+
+### Schema
+
+(abstract for [ContentType](#content_type), [Mixin](#mixin) and [XData](#xdata))
+
+Type
+
+**object**
+
+Properties
+
+| Name | Type | Description |
+| --- | --- | --- |
+| name | string | Component name |
+| displayName | string | Display name |
+| displayNameI18nKey | string | Display name i18n key |
+| description | string | Schema description |
+| descriptionI18nKey | string | Schema description i18n key |
+| createdTime | string | Created zulu time |
+| creator | string | Creator principal key |
+| modifiedTime | string | Modified zulu time |
+| modifier | string | Modifier principal key |
+| resource | string | Schema resource value |
+| type | string | Schema type(`CONTENT_TYPE`, `MIXIN`, `XDATA`) |
+| form | object[] | Schema form |
+| icon | [Icon](#icon) | Schema icon |
+
+### ContentType
+
+(extends [`Schema`](#schema))
+
+Type
+
+**object**
+
+Properties
+
+| Name | Type | Description |
+| --- | --- | --- |
+| config | object | Content type config |
+| xDataNames | string[] | Form x-data names |
+
+### Mixin
+
+(extends [`Schema`](#schema))
+
+Type
+
+**object**
+
+### XData
+
+(extends [`Schema`](#schema))
+
+Type
+
+**object**
+
+### Component
+
+(abstract for [Page](#page), [Part](#part) and [Layout](#layout))
+
+Type
+
+**object**
+
+Properties
+
+| Name | Type | Description |
+| --- | --- | --- |
+| key | string | Component key |
+| displayName | string | Display name |
+| displayNameI18nKey | string | Display name i18n key |
+| description | string | Component description |
+| descriptionI18nKey | string | Component description i18n key |
+| componentPath | string | Component path |
+| modifiedTime | string | Modified zulu time |
+| resource | string | Component resource value |
+| type | string | Component type(`PAGE`, `PART`, `LAYOUT`) |
+| form | object[] | Component form |
+| config | object | Component config |
+
+### Page
+
+(extends [`Component`](#component))
+
+Type
+
+**object**
+
+Properties
+
+| Name | Type | Description |
+| --- | --- | --- |
+| regions | string[] | Page regions |
+
+### Layout
+
+(extends [`Component`](#component))
+
+Type
+
+**object**
+
+Properties
+
+| Name | Type | Description |
+| --- | --- | --- |
+| regions | string[] | Layout regions |
+
+### Part
+
+(extends [`Component`](#component))
+
+Type
+
+**object**
+
+Properties
+
+| Name | Type | Description |
+| --- | --- | --- |
+| icon | [Icon](#icon) | Part icon |
+
+### Site
+
+Type
+
+**object**
+
+Properties
+
+| Name | Type | Description |
+| --- | --- | --- |
+| application | string | Application key |
+| modifiedTime | string | Site zulu modified time |
+| resource | string | Site xml resource value |
+| form | object[] | Site descriptor form |
+| xDataMappings | [XDataMapping[]](#xDataMapping) | XData mappings |
+
+### Styles
+
+Type
+
+**object**
+
+Properties
+
+| Name | Type | Description |
+| --- | --- | --- |
+| application | string | Application key |
+| cssPath | string | CSS path |
+| modifiedTime | string | Styles zulu modified time |
+| resource | string | Styles xml resource value |
+| elements | [StyleElement[]](#element) | style elements |
+
+### XDataMapping
+
+Type
+
+**object**
+
+Properties
+
+| Name | Type | Description |
+| --- | --- | --- |
+| name | object | xdata name |
+| optional | boolean | `true` if optional |
+| allowContentTypes | string | allowed content type pattern |
+
+### StyleElement
+
+Type
+
+**object**
+
+Properties
+
+| Name | Type | Description |
+| --- | --- | --- |
+| name | object | Style element name |
+| displayName | object | Style element display name |
+| element | object | Style element value |
+
+### Icon
+
+Type
+
+**object**
+
+Properties
+
+| Name | Type | Description |
+| --- | --- | --- |
+| data | object | icon stream data |
+| mimeType | string | icon mime type |
+| modifiedTime | string | icon modified time |

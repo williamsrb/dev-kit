@@ -1,0 +1,4 @@
+interface:
+  display_name: "Tesseract OCR"
+  short_description: "Extract image text locally with Tesseract"
+  default_prompt: "Use $tesseract-cli to extract text from this image locally."

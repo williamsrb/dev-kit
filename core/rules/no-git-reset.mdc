@@ -1,0 +1,14 @@
+---
+description: Do not git reset unless the user explicitly asks
+alwaysApply: true
+---
+
+# Git reset on explicit order
+
+Do not run `git reset` in any form unless the user explicitly asked for that reset.
+
+Forms include: `git reset`, `git reset HEAD`, `git reset HEAD~N`, `--soft`, `--mixed`, `--hard`, `git reset <commit>`, `git reset -- <paths>`, or any variant used to unstage, move `HEAD`, rewrite history, or undo a commit.
+
+Do not "clean up" a user's commit with reset on your own. Completing a task is not an implicit reset.
+
+When the user **explicitly orders** `git commit --amend`, that is not a reset — see `git-amend-explicit-order`. Do not approximate an amend with `git reset`.

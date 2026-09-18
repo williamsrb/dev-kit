@@ -1,0 +1,36 @@
+image:
+  repository: registry.example.com/group/{PROJECT_SHORT_NAME}
+  pullPolicy: Always
+  tag: "prototype"
+
+imagePullSecrets:
+  - name: {PROJECT_SHORT_NAME}-registry
+
+alwaysRoll: true
+
+ingress:
+  sslIssuer: "letsencrypt-prod"
+  ssl: True
+  redirectFromWWW: true
+  maxBodySize: 500m
+  hosts:
+    - host: prototype.{PROJECT_SHORT_NAME}.k8s.example.com
+
+resources:
+  {}
+
+nodeSelector:
+  node: workloads
+
+tolerations:
+  - key: "dedicated"
+    operator: "Equal"
+    value: "workloads"
+    effect: "NoSchedule"
+
+replicaCount: 1
+
+keda:
+  enabled: false
+  settings:
+    cooldownPeriod: 64800 # 18 Hours

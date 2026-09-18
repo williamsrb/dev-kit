@@ -1,0 +1,1225 @@
+<!-- src:https://developer.enonic.com/docs/platform/stable/config/system generated:2026-07-24T21:49:28Z format:llm-dense xp:8.x -->
+#DOC docs/platform/stable/config/system.md
+
+# System Configuration
+
+This section describes system-level configuration files for Enonic XP. These are primarily relevant when hosting XP on your own infrastructure.
+
+## System Properties
+
+`system.properties`
+
+Changes to this file requires a full restart of the XP instance in order to take effect.
+
+Sample version of system.properties
+
+```properties
+# Installation settings
+xp.name = demo
+
+# Global security settings
+xp.suPassword = {sha512}8340debf081a4504ac696618e587f3d9306b54b54d3250c8f0815734cf8e287a4e301b7243c70f459e42e3ef398d73b680f11396eea84c96563872e25390f845
+
+# Initialization and termination settings
+xp.init.maxTries = 900
+xp.stop.gracePeriod = 600000
+
+# Configuration FileMonitor properties
+felix.fileinstall.poll = 1000
+
+# Config loading properties
+xp.config.paths = ${xp.home}/appconfig,/usr/local/xp/${node.role},/etc/xp/config
+```
+
+xp.name
+
+Sets the name displayed to users from the admin console main menu, use to clarify what environment the user is working in
+
+xp.suPassword
+
+Hash of System `su` user’s password. Only `sha256`, `sha512` hashes are supported. Empty value disables `su` password based login.
+
+> **Tip:** To generate `sha512` hash suitable for `xp.suPassword`, you can use the following Linux command:
+
+```terminal
+printf '{sha512}%s\n' "$(echo -n 'YourStrongRandomPassword' | sha512sum | cut -d' ' -f1)"
+```
+
+xp.init.maxTries
+
+Number of attampts system initializers will do to check if initialization is done. Default is `300` (which equals to 5 minutes).
+
+xp.stop.gracePeriod
+
+Time in milliseconds XP waits for all services to stop. Default is `600000` (10 minutes).
+
+felix.fileinstall.poll
+
+Frequency in ms for how often the configuration folders are scanned for changes
+
+xp.config.paths
+
+Config folders to scan in addition to `XP_HOME/config/`. Useful for fine grained control over configuration management. Folders will be scanned in the defined order. The first file found per configuration will be used.
+
+## Security
+
+`com.enonic.xp.web.security.cfg`
+
+Security service configuration.
+
+auditlog.enabled
+
+Set to `false` to disable the creation of audit log entries on security API operations such IAM and application changes. Default: `true`.
+
+> **Important:** Audit log can be globally disabled in `[Audit log config](docs/platform/stable/config/logging.md#audit_enabled)`.
+
+password.policy
+
+Define the password hashing algorithm and parameters to be used when storing user passwords. Default: `$pbkdf2-sha512$i=210000,l=64,slen=16` - which is PBKDF2 with SHA-512, 210,000 iterations, hash length of 64 bytes and salt length of 16 bytes.
+
+Sample security configuration
+
+```properties
+auditlog.enabled = true
+password.policy = $pbkdf2-sha512$i=210000,l=64,slen=16
+```
+
+## Mail
+
+`com.enonic.xp.mail.cfg`
+
+Use this file to configure global mail server settings for XP.
+
+Sample mail configuration with authentication and TLS enabled
+
+```properties
+smtpHost=mail.server.com
+smtpPort=25
+smtpAuth=true
+smtpUser=user
+smtpPassword=secret
+smtpTLS=true
+defaultFromEmail=noreply@domain.com
+```
+
+smtpHost
+
+Host name of the SMTP server. Default: `localhost`.
+
+smtpPort
+
+TCP port of the SMTP server. Default: `25`.
+
+smtpAuth
+
+Enable authentication with SMTP server. Default: `false`
+
+smtpUser
+
+User to be used during authentication with the SMTP server, if `smtpAuth = true`.
+
+smtpPassword
+
+Password to be used during authentication with the SMTP server, if `smtpAuth = true`.
+
+smtpTLS
+
+Turns on Transport Layer Security (TLS) security for SMTP if required. Default: `false`.
+
+defaultFromEmail
+
+Default email address to use as sender for all emails sent from XP if sender is not explicitly specified.
+
+## Repo
+
+`com.enonic.xp.repo.cfg`
+
+Use this file to configure the node repository layer.
+
+Example below uses default settings
+
+```properties
+auditlog.enabled = true
+cache.capacity = 10%
+snapshots.dir = ${xp.home}/snapshots
+dumps.dir = ${xp.home}/dump
+```
+
+auditlog.enabled
+
+Set to `false` to disable the creation of audit log entries on repository operations. Default: `true`.
+
+> **Important:** Audit log can be disabled by the common `[enabled](#audit_enabled)` property. Repository flag will not have any effect in this case.
+
+cache.capacity
+
+Defines Heap memory limit for node version cache. The value is set in percentage of total Heap, or in memory units (`mb`, `gb`, …​). Default: `10%`
+
+snapshots.dir
+
+Specifies the root location for where to find and place snapshot files. Default: `${xp.home}/snapshots`
+
+> **Note:** If you change this value, remember to update value for `path.repo` in `com.enonic.xp.elasticsearch.cfg` as well.
+
+dumps.dir
+
+Specifies the root location for where to find and place dump files. Default: `${xp.home}/dump`
+
+## Blobstore
+
+`com.enonic.xp.blobstore.cfg`
+
+Control settings for the blobstore persistence layer.
+
+Sample showing default settings
+
+```properties
+provider = file
+cache = true
+cache.sizeThreshold = 1mb
+cache.FCapacity = 100mb
+```
+
+provider
+
+is the blobstore provider to use. Default value is `file`. Other providers will be made available in future releases. Each provider will have a separate configuration file named `com.enonic.xp.blobstore..cfg`
+
+cache
+
+enables or disables memory caching of blobs fetched from the blobstore. Default: true
+
+cache.sizeThreshold
+
+specifies the maximum size for objects to be cached. Default: 1mb. The size notation accepts a number plus byte-size identifier (b/kb/mb/gb/tb/pb)
+
+cache.memoryCapacity
+
+is the maximum memory footprint of the blob cache. Default: 100mb. The size notation accepts a number plus byte-size identifier (b/kb/mb/gb/tb/pb)
+
+## File blobstore
+
+`com.enonic.xp.blobstore.file.cfg`
+
+Control settings for the file-based blobstore implementation
+
+Sample showing default settings
+
+```properties
+baseDir = ${xp.home}/repo/blob
+readThrough.provider = none
+readThrough.enabled = false
+readThrough.sizeThreshold = 100mb
+```
+
+baseDir
+
+specifies root of blobs. Default: `${xp.home}/repo/blob`.
+
+readThrough.enabled
+
+enables or disables readthough provider. Default: `false`.
+
+readThrough.sizeThreshold
+
+specifies he maximum size of objects to be cache in readthrough provider. Default: 100mb. The size notation accepts a number plus byte-size idenfier (b/kb/mb/gb/tb/pb)
+
+## Cluster
+
+`com.enonic.xp.cluster.cfg`
+
+Basic cluster settings
+
+Sample cluster configuration
+
+```properties
+cluster.enabled = false
+node.name = Anode
+
+discovery.unicast.hosts = 127.0.0.1
+network.host = 127.0.0.1
+network.publish.host = 127.0.0.1
+```
+
+cluster.enabled
+
+When `true` node wil try to join a cluster. Default: `false`.
+
+node.name
+
+should normally not be set. Default: auto generated value
+
+discovery.unicast.hosts
+
+is an explicit list of nodes that can join the cluster. Default: `127.0.0.1`.
+
+network.host
+
+sets the bind address. Default: `127.0.0.1`. Can be an explicit IP-address, a host-name or an alias. Use `0.0.0.0` to bind on all interfaces. See the section below for an overview of aliases.
+
+network.publish.host
+
+sets the address other nodes will use to communicate with this node. Default: not set, the address is derived from `network.host`. Cannot be more than one IP-address. Can be an explicit IP-address, a host-name or an alias. See the section below for an overview of aliases.
+
+> **Note:** Using host-name values is not recommended because DNS can be spoofed. NOTE: Values set as host-name are resolved to a single IP-address of the host-name.
+
+Network host aliases:
+
+- `_local_` : Resolves to the loopback address, e.g. `127.0.0.1`.
+
+- `_[networkInterface]_` : Resolves to the ip address of the provided network interface. For example `_en0_`
+
+- `_[networkInterface]:ipv4_` : Resolves to the ipv4 address of the provided network interface. For example `_en0:ipv4_`
+
+- `_[networkInterface]:ipv6_` : Resolves to the ipv6 address of the provided network interface. For example `_en0:ipv6_`
+
+> **Note:** Only up and running network interfaces are considered. When the protocol version is not specified, the JVM settings (`java.net.preferIPv4Stack`, `java.net.preferIPv6Addresses`) decide between ipv4 and ipv6 addresses.
+
+> **Note:** The XP distribution launch scripts include `-Djava.net.preferIPv4Stack=true` in the default `JAVA_OPTS`, so ipv4 addresses are preferred unless this is overridden — for example by appending `-Djava.net.preferIPv4Stack=false` to `XP_OPTS`.
+
+## Elasticsearch
+
+`com.enonic.xp.elasticsearch.cfg`
+
+Tuning of all relevant settings for the embedded Elasticsearch component
+
+Sample ES configuration
+
+```properties
+node.data = true
+node.master = true
+
+path = ${xp.home}/repo/index
+path.data = ${path}/data
+path.repo = ${xp.home}/snapshots
+path.work = ${path}/work
+path.conf = ${path}/conf
+path.logs = ${path}/logs
+path.plugins = ${path}/plugins
+
+cluster.name = mycluster
+cluster.routing.allocation.disk.threshold_enabled = false
+
+http.enabled = false
+transport.tcp.port = 9300-9400
+
+gateway.expected_nodes = 1
+gateway.recover_after_time = 5m
+gateway.recover_after_nodes = 1
+discovery.zen.minimum_master_nodes = 1
+discovery.unicast.port = 9300
+index.recovery.initial_shards = 1
+
+discovery.unicast.sockets =
+```
+
+node.data
+
+Allow data to be distributed to this node. Default: `true`.
+
+node.master
+
+Allow this node to be eligible as a master node. Default: `true`.
+
+path
+
+Path to directory where elasticsearch stores files. Default: `${xp.home}/repo/index`. Should be on a local file-system, not sharded.
+
+path.data
+
+Path to directory where to store index data allocated for this node. Default: `$path/data`.
+
+path.repo
+
+Allowed location for placing snapshots. NB! Use same value as for `snapshots.dir` as specified in `com.enonic.xp.repo.cfg`
+
+path.work
+
+Path to temporary files. Default: `${xp.home}/repo/index/work`.
+
+path.conf
+
+Path to directory containing configuration. Default: `$path/conf`.
+
+path.logs
+
+Path to log files. Default: `${xp.home}/repo/index/logs`.
+
+path.plugins
+
+Path to where plugins are installed. Default: `$path/plugins`.
+
+cluster.name
+
+Elasticsearch cluster name. Default: `mycluster`.
+
+cluster.routing.allocation.disk.threshold_enabled
+
+Prevent shard allocation on nodes depending on disk usage. Default: `false`.
+
+http.enabled
+
+Enable the HTTP module. Default false.
+
+transport.tcp.port
+
+Custom port for the node to node communication. Default: `9300-9400`.
+
+gateway.expected_nodes
+
+Number of nodes expected to be in the cluster to start the recovery immediately. Default: `1`.
+
+gateway.recover_after_time
+
+Time to wait until recovery happens once the nodes are met. Default: `5m`.
+
+gateway.recover_after_nodes
+
+Number of nodes expected to be in the cluster to start the recovery after gateway.recover_after_time. Default: `1`.
+
+discovery.unicast.port
+
+List of ports to perform discovery when new nodes are started. Default: `9300`.
+
+discovery.unicast.sockets
+
+Comma separated list of hosts to be discovered as seed nodes.
+
+index.recovery.initial_shards
+
+Number of shards expected to be found on full cluster restart per index. Default: `quorum`.
+
+index.auto_expand_replicas
+
+Auto-expand the number of replicas based on the number of available nodes. Set to a dash delimited lower and upper bound (e.g. 0-5) or use all for the upper bound (e.g. 0-all). Defaults to `false` (i.e. disabled).
+
+## Hazelcast
+
+`com.enonic.xp.hazelcast.cfg`
+
+Tuning of all relevant settings for the embedded Hazelcast component
+
+Sample Hazelcast configuration
+
+```properties
+network.port=5702
+network.join.tcpIp.members=127.0.0.1:5701,127.0.0.1:5702
+system.hazelcast.initial.min.cluster.size=2
+```
+
+Sample Hazelcast configuration for Kubernetes DNS discovery
+
+```properties
+clusterConfigDefaults=false
+system.hazelcast.initial.min.cluster.size=2
+network.join.tcpIp.enabled=false
+network.join.kubernetes.enabled=true
+network.join.kubernetes.serviceDns=main.default.svc.cluster.local
+```
+
+Sample Hazelcast configuration for Kubernetes API discovery
+
+```properties
+clusterConfigDefaults=false
+system.hazelcast.initial.min.cluster.size=2
+network.join.tcpIp.enabled=false
+network.join.kubernetes.enabled=true
+network.join.kubernetes.serviceName=cluster-discovery
+network.join.kubernetes.namespace=my-namespace
+network.join.kubernetes.kubernetesApiRetries=10
+network.join.kubernetes.resolveNotReadyAddresses=true
+```
+
+clusterConfigDefaults
+
+If true some properties set based on xp cluster configuration. Default: `true`
+
+liteMember
+
+Hazelcast Lite member which does not own any partitions. Default: `false`.
+
+network.port
+
+Custom port for the node to node communication. Default: `5701`.
+
+network.portCount
+
+How many ports try to bind while searching for available port. Default: `100`.
+
+network.portAutoIncrement
+
+Enables available port search. Default: `false`.
+
+network.publicAddress
+
+Overrides the public address of a member. It should be set in the format "host IP address:port number". Ignored when clusterConfigDefaults is `true`.
+
+network.join.multicast.enabled
+
+Enable Multicast discovery. Default: `false`.
+
+network.join.kubernetes.enabled
+
+Enable Kubernetes discovery. Default: `false`.
+
+network.join.kubernetes.serviceDns
+
+Service DNS for Kubernetes discovery. If not set, discovery over Kubernetes API is used. Default is not set.
+
+network.join.kubernetes.namespace
+
+Kubernetes Namespace where Hazelcast is running. Default is not set.
+
+network.join.kubernetes.serviceName
+
+Service name used to scan only PODs connected to the given service. Default is not set.
+
+network.join.kubernetes.serviceLabelName
+
+Service label used to tag services that should form the Hazelcast cluster together. Default is not set.
+
+network.join.kubernetes.serviceLabelValue
+
+Service value used to tag services that should form the Hazelcast cluster together. Default is not set.
+
+network.join.kubernetes.podLabelName
+
+POD label used to tag PODs that should form the Hazelcast cluster together. Default is not set.
+
+network.join.kubernetes.podLabelValue
+
+POD value used to tag PODs that should form the Hazelcast cluster together. Default is not set.
+
+network.join.kubernetes.resolveNotReadyAddresses
+
+If set to `true`, it checks also the addresses of PODs which are not ready. Default: `false`.
+
+network.join.kubernetes.useNodeNameAsExternalAddress
+
+If set to `true`, uses the node name to connect to a NodePort service instead of looking up the external IP using the API. Default: `false`.
+
+network.join.kubernetes.kubernetesApiRetries
+
+Number of retries in case of issues while connecting to Kubernetes API. Default: `3`.
+
+network.join.tcpIp.enabled
+
+Enable TcpIP discovery. Default: `true`.
+
+network.join.tcpIp.members
+
+Comma separated list of well-known members. If not provided and clusterDefaults=true then cluster’s discovery.unicast.hosts used instead.
+
+network.interfaces.enabled
+
+Enables specification of which network interfaces that Hazelcast should use. Default: `false`. Ignored when clusterConfigDefaults is `true`.
+
+network.interfaces
+
+Comma separated list of ip addresses for binding. Ignored when clusterConfigDefaults is `true`.
+
+network.restApi.enabled
+
+Enable Hazelcast REST API. Default: `false`.
+
+network.restApi.restEndpointGroups
+
+Comma separated list of REST API Endpoint Groups. Default: `HEALTH_CHECK, CLUSTER_READ`.
+
+partition.group.enabled
+
+Enable partition grouping. Default: `false`.
+
+partition.group.groupType
+
+Partition grouping type. Default: `PER_MEMBER`.
+
+system.hazelcast.phone.home.enabled
+
+Enable or disable the sending of phone home data to Hazelcast’s phone home server. Default: `true`.
+
+system.hazelcast.socket.bind.any
+
+Bind both server-socket and client-sockets to any local interface. Default: `true`.
+
+system.hazelcast.initial.min.cluster.size
+
+Initial expected cluster size to wait before the node to start completely. Default: `2`.
+
+system.hazelcast.prefer.ipv4.stack
+
+Prefer IPv4 Stack, don’t use IPv6. Default: `true`.
+
+system.hazelcast.tcp.join.port.try.count
+
+The number of incremental ports, starting with the port number defined in the network configuration, that is used to connect to a host. Default: `1`.
+
+system.hazelcast.max.no.heartbeat.seconds
+
+Maximum timeout of heartbeat in seconds for a member to assume it is dead. Default: `60`.
+
+system.hazelcast.heartbeat.interval.seconds
+
+Heartbeat send interval in seconds. Default: `5`.
+
+system.hazelcast.mastership.claim.timeout.seconds
+
+Timeout which defines when master candidate gives up waiting for response to its mastership claim. Default: `120`.
+
+hazelcast.wait.seconds.before.join
+
+Wait time in seconds before join operation. Default: `5`.
+
+hazelcast.max.wait.seconds.before.join
+
+Maximum wait time in seconds before join operation Default: `20`.
+
+> **Note:** In case of using Kubernetes API discovery each node makes a call to Kubernetes Master in order to discover PODs. It also requires granting certain permissions. You can find more information in the documentation of [Hazelcast Discovery Plugin for Kubernetes](https://github.com/hazelcast/hazelcast-kubernetes/tree/1.5.x).
+
+## Universal API
+
+`com.enonic.xp.api.cfg`
+
+Manage settings for the Universal API
+
+Sample API configuration
+
+```properties
+api.index.enabled=auto|on|off|
+```
+
+api.index.enabled
+
+Enable or disable the `/api` index page. Default: `auto` → enabled if in dev mode, otherwise disabled.
+
+## Jetty
+
+`com.enonic.xp.web.jetty.cfg`
+
+Selected options to configure the embedded servlet engine Jetty
+
+Sample Jetty configuration
+
+```properties
+host = _auto_
+sendServerHeader = false
+
+# Connection
+timeout = 60000
+
+# HTTP settings
+http.enabled = true
+http.web.port = 8080
+http.web.host =
+http.management.port = 4848
+http.management.host =
+http.statistics.port = 2609
+http.statistics.host =
+http.requestHeaderSize = 32768
+http.responseHeaderSize = 32768
+
+# Session
+session.timeout = 60
+session.cookieName = JSESSIONID
+
+# Multipart
+multipart.store =
+multipart.maxFileSize = 16106127360
+multipart.maxRequestSize = 16106127360
+multipart.fileSizeThreshold = 10240
+
+# Compression
+gzip.enabled = false
+gzip.minSize = 32
+
+# Logging
+log.enabled = false
+log.file = ${xp.home}/logs/jetty-yyyy_mm_dd.request.log
+log.append = true
+log.extended = true
+log.timeZone = GMT
+log.retainDays = 31
+
+# Thread Pool
+threadPool.maxThreads = 200
+threadPool.minThreads = 8
+threadPool.idleTimeout = 60000
+
+# Websocket
+websocket.idleTimeout = 300000
+websocket.defaultOriginCheck = true
+```
+
+host
+
+bind address used by all connectors unless overridden per connector. Can be an explicit IP-address, a host-name or an alias — same syntax as the cluster `network.host`, see [Cluster](#cluster). Default: `_auto_` — resolves to the loopback address in dev mode and to all interfaces in prod mode.
+
+sendServerHeader
+
+True to send server name in header. Default: `false`.
+
+timeout
+
+specifies socket timeout for connections in ms.
+
+http.enabled
+
+true enables HTTP connections. Default: `true`.
+
+http.web.port
+
+http port of the web connector, serving sites and apps. Default: `8080`. Replaces the deprecated `http.xp.port`.
+
+http.web.host
+
+bind address of the web connector. Overrides `host`.
+
+http.management.port
+
+http port of the management connector. Default: `4848`.
+
+http.management.host
+
+bind address of the management connector. Overrides `host`.
+
+http.statistics.port
+
+http port of the statistics (monitoring) connector. Default: `2609`. Replaces the deprecated `http.monitor.port`.
+
+http.statistics.host
+
+bind address of the statistics connector. Overrides `host`.
+
+http.requestHeaderSize
+
+Maximum request header size. Default: 32K.
+
+http.responseHeaderSize
+
+Maximum response header size. Default: 32K.
+
+session.timeout
+
+Session timeout (when inactive) in minutes. Default: `60`.
+
+session.cookieSameSite
+
+Specifies SameSite flag for session cookie. Can be `Lax`, `None`, `Strict` or unspecified. Default: `Lax`.
+
+session.cookieAlwaysSecure
+
+If true, forces session cooke Secure flag even for HTTP connections. Default: `false`.
+
+session.cookiename
+
+Cookie name to use for sessions. Default: `JSESSIONID`.
+
+multipart.store
+
+Directory where multipart uploads are buffered. Default: the Java temporary directory.
+
+multipart.maxFileSize
+
+Maximum size of a single uploaded file, in bytes (`-1` for unlimited). Default: `16106127360` (15 GiB).
+
+multipart.maxRequestSize
+
+Maximum size of a complete multipart request, in bytes (`-1` for unlimited). Default: `16106127360` (15 GiB).
+
+multipart.fileSizeThreshold
+
+Size in bytes above which an uploaded file is written to disk instead of being kept in memory. Default: `10240`.
+
+gzip.enabled
+
+Enables GZIP compression for responses. Default: `false`.
+
+gzip.minsize
+
+Minimum number of bytes in response to consider compressing the response. Default: `32`.
+
+log.enabled
+
+Turns on request logging. Default: `false`.
+
+log.file
+
+Request log file location. Default: `${xp.home}/logs/jetty-yyyy_mm_dd.request.log`.
+
+log.append
+
+append to existing file, or create new one when started. Default: `true`.
+
+log.extended
+
+turns on extended logging format. Default: `true`.
+
+log.timeZone
+
+Timezone to display timestamp in. Default: `GMT`.
+
+log.retainDays
+
+Number of days to retain the logs. Default: `31`.
+
+threadPool.maxThreads
+
+Maximum number of threads. Default: `200`.
+
+threadPool.minThreads
+
+Minimum number of threads. Default: `8`.
+
+threadPool.idleTimeout
+
+Thread idle timeout (in milliseconds). Default: `60000`.
+
+websocket.idleTimeout
+
+The time (in milliseconds) that a websocket may be idle before closing. Default: `300000`.
+
+websocket.defaultOriginCheck
+
+Enforce the platform’s built-in same-origin check on WebSocket handshakes. When `false`, the handshake accepts any `Origin` unless a controller supplies its own `checkOrigin` function. Disable only as a fallback for deployments where the reverse proxy does not propagate the public scheme/host/port to Jetty and the proxy configuration cannot be fixed. Default: `true`.
+
+> **Warning:** Setting `session.cookieAlwaysSecure` to `true` would make session-involved login on HTTP connections impossible.
+
+## SessionStore
+
+`com.enonic.xp.web.sessionstore.cfg`
+
+Sample SessionStore configuration
+
+```properties
+storeMode = replicated
+saveOnCreate = true
+flushOnResponseCommit = true
+```
+
+storeMode
+
+Switches between SessionStore mode. Can be `replicated`, `file` or `non-persistent`. In `replicated` mode sessions are distributed over nodes in the cluster using Jetty-Hazelcast integration. In `file` mode sessions are persisted to disk, allowing them to survive graceful restarts of standalone instances. Default: `non-persistent`.
+
+storeDir
+
+Directory where sessions are stored on disk. Only used in `file` storeMode. Default: `${xp.home}/work/sessions`.
+
+savePeriodSeconds
+
+A non-zero value means that session won’t be persisted if only the access time changed, and it has been less than savePeriodSeconds since the last time the session was written. Has no effect in `non-persistent` storeMode. Default: `0`.
+
+gracePeriodSeconds
+
+Specifies how many seconds to wait for non-session-owner nodes to be checked to verify an expired session is in fact expired throughout the cluster before closing it. Has no effect in `non-persistent` storeMode. Default: `3600`.
+
+saveOnCreate
+
+Controls whether a session that is newly created will be immediately (true) or lazily (false) persisted as the last request for the session exits. Has no effect in `non-persistent` storeMode. Default: `false`.
+
+flushOnResponseCommit
+
+Controls whether a session that is changed ("dirty") will be persisted as the response is about to commit. If false, a dirty session will only be persisted when the last simultaneous request for it leaves the session. Has no effect in `non-persistent` storeMode. Default: `false`.
+
+## Mime types
+
+`com.enonic.xp.media.cfg`
+
+Specify additional mime types if you are missing something.
+
+Asset Service, Image Service as well as lib-io and lib-mail use this config for detection of media type by file extension.
+
+Sample additional mime types
+
+```properties
+# Media type mappings
+ext.mp3 = audio/mpeg3
+ext.p = text/x-pascal
+```
+
+ext.<file-extension>
+
+value must match a defined mime type
+
+## OSGi shell
+
+`com.enonic.xp.server.shell.cfg`
+
+Optionally activate shell to manage OSGi bundles remotely
+
+Sample config to activate shell
+
+```properties
+enabled = true
+telnet.ip = 127.0.0.1
+telnet.port = 5555
+telnet.maxConnect = 2
+telnet.socketTimeout = 0
+```
+
+enabled
+
+turns on shell service. Default: `false`.
+
+telnet.ip
+
+Default: `127.0.0.1`
+
+telnet.port
+
+Port to use for service. Default: `5555`.
+
+telnet.maxConnect
+
+Maximum number of concurrent connections. Default: `2`.
+
+telnet.socketTimeout
+
+Default: `0`
+
+## DoS filter
+
+`com.enonic.xp.web.dos.cfg`
+
+Activate and configure the DoS (Denial Of Service) feature.
+
+Sample config to activate shell
+
+```properties
+enabled = true
+
+maxRequestsPerSec = 25
+delayMs = 100
+maxWaitMs = 50
+throttledRequests = 5
+throttleMs = 30000
+maxRequestMs = 30000
+maxIdleTrackerMs = 30000
+insertHeaders = true
+trackSessions = true
+remotePort = false
+ipWhitelist =
+```
+
+enabled
+
+enables the DOS filter. Default: `false`.
+
+maxRequestsPerSec
+
+Maximum number of requests from a connection per second. Requests in excess of this are first delayed, then throttled. Default: `25`.
+
+delayMs
+
+Delay imposed on all requests over the rate limit. -1 = reject request, 0 delay. Default: `100`.
+
+maxWaitMs
+
+Duration in ms to blocking wait for the throttle semaphore. Default: `50`.
+
+throttledRequests
+
+Number of requests over the rate limit to be considered at once. Default: `5`.
+
+throttleMs
+
+Duration in ms to async wait for semaphore. Default: `30000`.
+
+maxRequestMs
+
+Duration in ms to allow the request to run. Default: `30000`.
+
+maxIdleTrackersMs
+
+Duration in ms to keep track of request rates for a connection, before deciding that the user has gone away, and discarding it. Default: `30000`.
+
+insertHeaders
+
+If true, insert the DoSFilter headers into the response. Default: `true`.
+
+trackSessions
+
+If true, usage rate is tracked by session if a session exists. Default: `true`.
+
+remotePort
+
+If true and session tracking is not used, then rate is tracked by IP+port (effectively connection). Default: `false`.
+
+ipWhitelist
+
+A comma-separated list of IP addresses that will not be rate limited.
+
+## Header Filter
+
+`com.enonic.xp.web.header.cfg`
+
+Configure default HTTP response headers.
+
+Cross site scripting prevention headers
+
+```properties
+headerConfig = set X-Frame-Options: SAMEORIGIN,set X-Content-Type-Options: nosniff
+```
+
+headerConfig
+
+Customizes default HTTP response headers. Accepts the following format: `[action] [header name]: [header value](,[action] [header name]: [header value])`. Supported header actions are `set`, `add`, `setDate` and `addDate`. Default value varies across XP releases and adheres to up-to-date security best practices.
+
+## Market
+
+`com.enonic.xp.market.cfg`
+
+Enonic Market configuration options:
+
+Default config file settings
+
+```properties
+marketUrl = https://market.enonic.com/applications
+```
+
+## UDC
+
+`com.enonic.xp.server.udc.cfg`
+
+UDC (Usage Data Collector) is passing anonymous usage data 10 minutes after startup and then every 24 hours. This is only used to see what platforms are used and improve platform stability.
+
+Sample UDC config file - default true
+
+```properties
+enabled = true
+```
+
+## System IDprovider
+
+`com.enonic.xp.app.standardidprovider.cfg`
+
+The `system` IdProvider uses an implementation called the standard ID provider. There are several options you may configure:
+
+Sample config file for system IDP
+
+```properties
+loginWithoutUser = true
+idprovider.system.autologin.jwt.enabled = true
+idprovider.system.autologin.jwt.acceptLeewaySeconds = -1
+idprovider.system.autologin.jwt.maxLifetimeSeconds = 30
+```
+
+loginWithoutUser
+
+Set to false to force creation of user before logging in. Default: `true`.
+
+idprovider.system.autologin.jwt.enabled
+
+Set to false to disable auto-login with JWT token. Default: `true`.
+
+idprovider.system.autologin.jwt.acceptLeewaySeconds
+
+This option allows you to set the default time window in seconds during which the `Not Before`, `Issued At`, and `Expires At` claims will remain valid. To enable this option, the value must be a positive number. By default, this option is disabled with a value of `-1`.
+
+idprovider.system.autologin.jwt.maxLifetimeSeconds
+
+This option allows you to limit the lifetime of the JWT token in the XP environment to avoid the usage of long-lived tokens. The default value is `30`.
+
+## Vacuum
+
+`com.enonic.xp.vacuum.cfg`
+
+Configure default properties for vacuum process. .Sample vacuum config file
+
+```properties
+ageThreshold = P21D
+```
+
+ageThreshold
+
+Age of data to be vacuumed. The format is based on the ISO-8601 duration format PnDTnHnMn.nS with days considered to be exactly 24 hours. Default: `P21D` (21 days).
+
+## Application
+
+`com.enonic.xp.app.cfg`
+
+Configure applications behavior.
+
+Deny all applications (system and local apps will still be installed)
+
+```properties
+filter = !*
+```
+
+Deny snapshotter app to be installed (still possible to install locally), all other applications allowed.
+
+```properties
+filter = !com.enonic.app.snapshotter,*
+```
+
+Allow only applications with "my.secure.corp." prefix.
+
+```properties
+filter = my.secure.corp.*
+```
+
+filter
+
+Comma separated values `rule(,rule)*` of allow/deny rules. Default: `*` (allow all).
+
+Rule can be prefixed with `!` - that it is a `deny` rule, otherwise it is an `allow` rule. Rule can be suffixed with `*` - that is a wildcard rule.
+
+> **Note:** Application names that start with `!` or end with `*` or contain `,` or contain ` ` (space) are not supported.
+
+Rules applied in order. First matching rule wins. If no matching rule found, application is denied.
+
+System and local applications are not filtered. Global application installation is denied (error is thrown), if filter denies it. Stored application installation is skipped if filter denies it.
+
+> **Note:** Filter rules apply separately on different nodes in cluster. If one cluster node denies an app, another cluster node may still allow it.
+
+virtual.enabled
+
+Allows the use of virtual applications. If set to `true` then schemas from virtual applications will be visible as resources. Default: `false`.
+
+virtual.schema.override
+
+When set to `true`, virtual application schemes will have a priority over schemes in a real application with the same name. When set to `false` virtual application schemes have no affect if real application with the same name exists. Default: `true`.
+
+Disables virtual applications.
+
+```properties
+virtual.enabled = false
+```
+
+Disables priority of schemas from virtual applications.
+
+```properties
+virtual.schema.override = false
+```
+
+## Application management API
+
+`com.enonic.xp.server.management.app.cfg`
+
+Configure the security policy for the management Applications API on Port 4848 (`/api/server:app/*`). Currently controls the `/installUrl` endpoint, which installs an application from a remote URL.
+
+Default configuration
+
+```properties
+installUrl.allowedUrls = https://*
+installUrl.checksumRequired = true
+```
+
+installUrl.allowedUrls
+
+Comma-separated wildcard patterns of URLs allowed by `/installUrl`. A trailing `****`** matches any suffix; otherwise the pattern is matched exactly as a string prefix. Set to an empty string to disable `/installUrl` entirely. Default: `https://`** (any https URL).
+
+installUrl.checksumRequired
+
+When `true`, every `/installUrl` request must include a non-empty `sha512` field; the download is rejected if the computed digest does not match. Set to `false` to allow installs without a checksum (not recommended). Default: `true`.
+
+Restrict installs to the official Enonic public repository
+
+```properties
+installUrl.allowedUrls = https://repo.enonic.com/public/*
+```
+
+Allow several explicit hosts
+
+```properties
+installUrl.allowedUrls = https://repo.enonic.com/public/*, https://my.cdn.com/apps/*
+```
+
+Disable /installUrl entirely (uploads via /install are unaffected)
+
+```properties
+installUrl.allowedUrls =
+```
+
+## Task
+
+`com.enonic.xp.task.cfg`
+
+Configure the task behaviour.
+
+Sample task config file
+
+```properties
+distributable.acceptInbound = false
+clustered.timeout = PT10S
+```
+
+distributable.acceptInbound
+
+If true, accept inbound distributable tasks. Default: `true`.
+
+clustered.timeout
+
+The time (in ISO-8601 Period format) the node waits for a job (task or task-info job) to be submitted to another cluster node. Default: `PT5S` (5 seconds).
+
+## Scheduler
+
+`com.enonic.xp.scheduler.cfg`
+
+Configure default custom jobs to be created for scheduling when an XP instance start. Skip creation if a job with the same name exists already. Only recurring (cron) jobs can be created by the config file. There is no guaranteed order for distributed environment, so the first started node will create its version of a job for the whole cluster.
+
+Properties prefixed with `init-job.` will describe properties of a job with `` name.
+
+| Property | Type | Description |
+| --- | --- | --- |
+| `init-job.<my-job-name>.enabled` | required | `true` - a created job will be able to be run according to its cron value and timezone. `false` - the job will be created, but never run until this property is set to true". |
+| `init-job.<my-job-name>.cron` | required | Cron value describes how often the described task should be run. See string [format](https://www.unix.com/man-page/linux/5/crontab). |
+| `init-job.<my-job-name>.timezone` | optional | Timezone used for cron. See string [format](https://docs.oracle.com/en/java/javase/17/docs/api/java.base/java/util/TimeZone.html). JVM value will be used if nothing is set. |
+| `init-job.<my-job-name>.descriptor` | required | Descriptor of the task to be scheduled. Format: `<idProvider>:<user>` |
+| `init-job.<my-job-name>.config` | optional | JSON string with params for described task. |
+| `init-job.<my-job-name>.user` | required | Principal key of the task submitter. Format: `<applicationKey>:<taskName>` |
+| `init-job.<my-job-name>.description` | optional | contains string-format description of scheduled job. |
+
+Sample scheduler config file
+
+```properties
+init-job.my-job1.enabled=true
+init-job.my-job1.cron=* * * * *
+init-job.my-job1.descriptor=com.enonic.xp.app.myapp:task1
+init-job.my-job1.description=Job to run `myapp:task1` every minute without params
+init-job.my-job1.user=system:user1
+
+init-job.my-job2.enabled=false
+init-job.my-job2.cron=0 5 * * *
+init-job.my-job2.timezone=GMT+2:00
+init-job.my-job2.descriptor=com.enonic.xp.app.myapp:task2
+init-job.my-job2.description=Job to run `myapp:task2` at 5:00AM every day according to it's timezone.
+init-job.my-job2.user=system:user1
+init-job.my-job2.config={"myparam1":"value1","myset":{"myparam2":"value2"}}
+```
+
+Properties prefixed with `init-job.my-job1` describe properties of `my-job1` job.
+
+init-job.my-job1.enabled
+
+true - job will be scheduled at server start.
+
+init-job.my-job1.cron
+
+* * * * * - will be run every minute.
+
+Properties prefixed with `init-job.my-job2` describe properties of `my-job2` job.
+
+init-job.my-job2.enabled
+
+False - job will be created, but never run until it changes.
+
+init-job.my-job2.cron
+
+0 5 * * * - job will be created to run task at 5:00AM every day according to it’s timezone.
+
+## Export
+
+`com.enonic.xp.export.cfg`
+
+Configure exports service behaviour.
+
+Sample content config file
+
+```properties
+exports.dir = /xp-exports
+```
+
+exports.dir
+
+Defines location of exports directory. Default: `${xp.home}/data/export`
+
+> **Note:** Exports dir should be a shared storage for cluster environments.

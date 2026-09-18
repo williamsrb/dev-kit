@@ -1,0 +1,6 @@
+interface:
+  display_name: "Set Up Enonic React4XP"
+  short_description: "Bootstrap a standard Enonic React4XP project"
+  default_prompt: "Use $set-up-enonic-react4xp to bootstrap a new Enonic React4XP project."
+policy:
+  allow_implicit_invocation: false

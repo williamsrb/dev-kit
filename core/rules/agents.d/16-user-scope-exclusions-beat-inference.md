@@ -1,0 +1,9 @@
+When the user limits an element to a narrow change ("only the order", "do not change other details", "separate Jira for X"):
+
+1. **User exclusion wins** over Figma composition, PRD inference, and conflicting plan ACs.
+2. Allowed delta only. Do **not** change that element's alignment/side, typography, colors, underline, font-size, or markup/classes beyond the minimal change.
+3. **Inherited layout counts** — parent `align-items`/flex rules that move the excluded element are still out of scope.
+4. Record exclusions in plan **Constraints** + **Non-Goals**, not only copy/URL.
+5. Plan validate: do not rewrite the plan to widen scope toward Figma. Delivery QA: any extra property delta on the excluded element is a **Blocker** — restore pre-change placement/styles.
+
+Full procedure: `~/.agents/kb/validation/How-to-respect-user-scope-exclusions.md`

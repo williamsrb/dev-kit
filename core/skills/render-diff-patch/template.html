@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en-us">
+  <head>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="github.min.css" />
+    <link rel="stylesheet" type="text/css" href="diff2html.min.css" />
+    <script type="text/javascript" src="diff2html-ui.min.js"></script>
+  </head>
+  <body>
+    <div id="myDiffElement"></div>
+    <script>
+      const diffString = `
+<DIFF STRING GOES HERE>
+      `;
+
+      document.addEventListener('DOMContentLoaded', function () {
+        var targetElement = document.getElementById('myDiffElement');
+        var configuration = {
+          drawFileList: true,
+          fileListToggle: false,
+          fileListStartVisible: false,
+          fileContentToggle: false,
+          matching: 'lines',
+          outputFormat: 'side-by-side',
+          synchronisedScroll: true,
+          highlight: true,
+          renderNothingWhenEmpty: false,
+        };
+        var diff2htmlUi = new Diff2HtmlUI(targetElement, diffString, configuration);
+        diff2htmlUi.draw();
+        diff2htmlUi.highlightCode();
+      });
+    </script>
+  </body>
+</html>

@@ -117,10 +117,7 @@
     "core/skills/render-diff-patch/diff2html-ui.min.js"
   ],
   "allow": {
-    "_comment": [
-      "Exemptions, each with the reason it is safe. An exemption is a claim that a",
-      "human reads that line and no program resolves it."
-    ],
+    "_comment": "tests/test_devkit.py holds deliberate positive fixtures for these rules: a test that proves the rule fires must contain the string the rule matches.",
     "README.md": [
       "literal-home",
       "tilde-in-machine-position"
@@ -138,6 +135,13 @@
     ],
     "devkit.yaml": [
       "tilde-in-machine-position"
+    ],
+    "tests/test_devkit.py": [
+      "literal-home",
+      "literal-home-macos",
+      "tilde-in-machine-position",
+      "quoted-tilde",
+      "home-fallback"
     ]
   },
   "shell": {

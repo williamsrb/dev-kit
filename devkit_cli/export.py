@@ -27,12 +27,28 @@ TEXT_SUFFIXES = {".md", ".mdc", ".json", ".toml", ".sh", ".py", ".cjs", ".js",
 
 
 def _excluded(rel: str, hard_excludes: list[str]) -> bool:
+    """Is this export-relative path hard-excluded?
+
+    Patterns are anchored at the export root unless they start with `**/`. That
+    distinction is load-bearing: an unanchored `graft/` also matches
+    `skills/graft/`, which silently dropped a real skill from the export. Write
+    `**/name/` when you mean "a directory called this, anywhere".
+    """
     parts = rel.split("/")
     for pattern in hard_excludes:
-        if pattern.endswith("/"):
-            if pattern.rstrip("/") in parts:
+        anywhere = pattern.startswith("**/")
+        body = pattern[3:] if anywhere else pattern
+        if body.endswith("/"):
+            name = body.rstrip("/")
+            if anywhere:
+                if name in parts[:-1]:
+                    return True
+            elif rel == name or rel.startswith(name + "/"):
                 return True
-        elif fnmatch.fnmatch(rel, pattern) or fnmatch.fnmatch(parts[-1], pattern):
+        elif anywhere:
+            if fnmatch.fnmatch(parts[-1], body) or fnmatch.fnmatch(rel, body):
+                return True
+        elif fnmatch.fnmatch(rel, body):
             return True
     return False
 

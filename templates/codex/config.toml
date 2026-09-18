@@ -1,0 +1,23 @@
+# Codex settings for one profile instance (plan devkit, A3).
+#
+# Lives at ${PROFILE_CONFIG_DIR}/config.toml, which Codex finds through
+# CODEX_HOME. Measured 2026-09-18: CODEX_HOME relocates config, logs, and the
+# state/logs/goals/memories sqlite databases, while the runtime package stays
+# shared in the user's real Codex install directory (Q2).
+#
+# ${...} tokens are rendered by install.py.
+
+model = "${PROFILE_CODEX_MODEL}"
+sandbox_mode = "workspace-write"
+approval_policy = "on-request"
+
+[codex]
+allowed_paths = ["${PROFILE_CONFIG_DIR}/"]
+prompt_for_file_access = false
+
+[sandbox_workspace_write]
+writable_roots = [
+  "${PROFILE_WORKSPACE}",
+  "${PROFILE_HARNESS_DIR}",
+  "${PROFILE_CONFIG_DIR}",
+]

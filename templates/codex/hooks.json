@@ -1,0 +1,18 @@
+{
+  "_comment": [
+    "Codex hooks for one profile instance (plan devkit, A3).",
+    "Commands are absolute after rendering: a hook runs with no guarantee about cwd."
+  ],
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "command": ["python3", "${PROFILE_HARNESS_DIR}/hooks/codex-history-adapter.py"]
+      }
+    ],
+    "Stop": [
+      {
+        "command": ["python3", "${PROFILE_HARNESS_DIR}/hooks/codex-history-adapter.py"]
+      }
+    ]
+  }
+}

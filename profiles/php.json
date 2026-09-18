@@ -1,0 +1,40 @@
+{
+  "_comment": [
+    "PHP profile SKELETON (plan devkit, A9). Deliberately unfinished.",
+    "",
+    "The PHP project structure was not available during planning, so nothing about",
+    "it is assumed here. This is authored with a PHP teammate, not guessed at: the",
+    "deps below are the uncontroversial floor, and skills/kb stay empty until",
+    "someone who does the work says what belongs.",
+    "",
+    "It is committed empty on purpose. A guessed profile that half-works is worse",
+    "than an obviously unfinished one."
+  ],
+
+  "name": "php",
+  "extends": "core",
+  "color": { "light": "#8892bf", "dark": "#4f5b93" },
+
+  "deps": [
+    { "provides": ["php"], "apt": "php-cli", "dnf": "php-cli", "pacman": "php" },
+    { "provides": ["composer"], "apt": "composer", "dnf": "composer", "pacman": "composer" }
+  ],
+
+  "skills": [],
+  "rules": [],
+  "kb": [],
+
+  "mcp": ["context7", "graft"],
+
+  "instances": [
+    { "vendor": "claude", "kind": "cli+desktop" },
+    { "vendor": "codex", "kind": "cli" }
+  ],
+
+  "todo": [
+    "Confirm the PHP version floor with the team (8.2? 8.3?).",
+    "Decide whether docker compose is a dep or stays the project's business (Non-Goals says the latter).",
+    "Author the PHP skills; none exist in the harness today.",
+    "Decide whether xdebug and phpunit are profile deps or per-project."
+  ]
+}

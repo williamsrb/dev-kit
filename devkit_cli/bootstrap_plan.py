@@ -29,28 +29,48 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from devkit_cli import manifest  # noqa: E402
 from devkit_cli.errors import DevkitError  # noqa: E402
 
-# Packages that are not in the base repositories on RHEL derivatives. D13: never
-# enable a third-party repo silently; prompt, and treat a decline as "skipped",
-# never as a failure.
-NEEDS_THIRD_PARTY_ON_RHEL = {"ffmpeg"}
+# Which repository a package needs is declared per dependency (`needs_repo`),
+# measured rather than guessed. D13: never enable a third-party repo silently;
+# prompt, and treat a decline as a fall-through to the dep's `fallback`, or as
+# "skipped" — never as a failure.
 
 
-def emit_plan(profile: dict, manager: str) -> None:
+def _emit_installer(spec: dict, provides: list[str]) -> None:
+    installer = spec.get("installer")
+    if installer == "nvm":
+        print(f"nvm\t{spec.get('version', 'lts')}")
+    elif installer == "npm":
+        print(f"npm\t{spec['package']}")
+    elif installer == "uv":
+        print(f"uv\t{spec['package']}")
+    elif installer == "binary":
+        print(f"binary\t{spec.get('binary', provides[0])}={spec['repo']}")
+
+
+def emit_plan(profile: dict, manager: str, family: str) -> None:
     for dep in manifest.dependencies(profile):
-        installer = dep.get("installer")
-        if installer == "nvm":
-            print(f"nvm\t{dep.get('version', 'lts')}")
-        elif installer == "npm":
-            print(f"npm\t{dep['package']}")
-        elif installer == "uv":
-            print(f"uv\t{dep['package']}")
-        elif installer == "binary":
-            print(f"binary\t{dep['provides'][0]}={dep['repo']}")
-        elif manager in dep:
-            package = dep[manager]
-            print(f"pkg\t{package}")
-            if manager == "dnf" and package.lower() in NEEDS_THIRD_PARTY_ON_RHEL:
-                print(f"thirdparty\t{package}")
+        provides = dep.get("provides", [])
+        if dep.get("installer"):
+            _emit_installer(dep, provides)
+            continue
+
+        package = dep.get(manager)
+        if package is None:
+            # This manager has no package for it; the dep says what to do instead.
+            fallback = dep.get("fallback")
+            if fallback:
+                _emit_installer(fallback, provides)
+            else:
+                print(f"unavailable\t{provides[0] if provides else '?'}")
+            continue
+
+        print(f"pkg\t{package}")
+        repo = (dep.get("needs_repo") or {}).get(family)
+        if repo:
+            print(f"thirdparty\t{package}\t{repo}")
+            fallback = dep.get("fallback")
+            if fallback:
+                print(f"iffy\t{package}")
 
 
 def verify(profile: dict) -> int:
@@ -98,6 +118,9 @@ def main() -> int:
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--profile", default="core")
     parser.add_argument("--manager", default="apt", choices=["apt", "dnf", "pacman"])
+    parser.add_argument("--family", default=None,
+                        help="Distribution family (debian, rhel, fedora, arch). "
+                             "needs_repo keys on this, not on the manager.")
     parser.add_argument("--verify", action="store_true")
     args = parser.parse_args()
 
@@ -109,7 +132,7 @@ def main() -> int:
 
     if args.verify:
         return verify(profile)
-    emit_plan(profile, args.manager)
+    emit_plan(profile, args.manager, args.family or args.manager)
     return 0
 
 

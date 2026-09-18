@@ -8,7 +8,8 @@
     "agree across apt, dnf and pacman, where the same tool has three names.",
     "",
     "Package names for dnf and pacman are PROPOSED, not verified (R15). The A6",
-    "container matrix is their acceptance test."
+    "container matrix is their acceptance test.",
+    "needs_repo is keyed by distribution FAMILY, not package manager: Fedora and RHEL both use dnf, but EPEL is Fedora's packages backported to RHEL, so on Fedora these are in the base repos and epel-release does not exist. Measured on rockylinux:9 and fedora:41."
   ],
   "name": "core",
   "extends": null,
@@ -23,7 +24,10 @@
       ],
       "apt": "ripgrep",
       "dnf": "ripgrep",
-      "pacman": "ripgrep"
+      "pacman": "ripgrep",
+      "needs_repo": {
+        "rhel": "epel"
+      }
     },
     {
       "provides": [
@@ -71,15 +75,24 @@
       ],
       "apt": "shellcheck",
       "dnf": "ShellCheck",
-      "pacman": "shellcheck"
+      "pacman": "shellcheck",
+      "needs_repo": {
+        "rhel": "epel"
+      }
     },
     {
       "provides": [
         "shfmt"
       ],
       "apt": "shfmt",
-      "dnf": "shfmt",
-      "pacman": "shfmt"
+      "dnf": null,
+      "pacman": "shfmt",
+      "fallback": {
+        "installer": "binary",
+        "repo": "mvdan/sh",
+        "binary": "shfmt"
+      },
+      "note": "Not packaged for RHEL, even in EPEL; falls back to the upstream release binary."
     },
     {
       "provides": [
@@ -87,7 +100,10 @@
       ],
       "apt": "codespell",
       "dnf": "codespell",
-      "pacman": "codespell"
+      "pacman": "codespell",
+      "needs_repo": {
+        "rhel": "epel"
+      }
     },
     {
       "provides": [
@@ -95,15 +111,23 @@
       ],
       "apt": "qpdf",
       "dnf": "qpdf",
-      "pacman": "qpdf"
+      "pacman": "qpdf",
+      "needs_repo": {
+        "rhel": "epel"
+      }
     },
     {
       "provides": [
         "ocrmypdf"
       ],
       "apt": "ocrmypdf",
-      "dnf": "ocrmypdf",
-      "pacman": "ocrmypdf"
+      "dnf": null,
+      "pacman": null,
+      "fallback": {
+        "installer": "uv",
+        "package": "ocrmypdf"
+      },
+      "note": "Not in EPEL, and AUR-only on Arch — and nothing here may require the AUR. Installs from PyPI through uv on both."
     },
     {
       "provides": [
@@ -131,7 +155,10 @@
       "apt": "ffmpeg",
       "dnf": "ffmpeg",
       "pacman": "ffmpeg",
-      "note": "On RHEL derivatives ffmpeg needs RPM Fusion. D13 forbids enabling a third-party repo silently: prompt, and on decline record it skipped rather than failing the run."
+      "note": "On RHEL derivatives ffmpeg needs RPM Fusion. D13 forbids enabling a third-party repo silently: prompt, and on decline record it skipped rather than failing the run.",
+      "needs_repo": {
+        "rhel": "rpmfusion"
+      }
     },
     {
       "provides": [
@@ -141,7 +168,10 @@
       "apt": "imagemagick",
       "dnf": "ImageMagick",
       "pacman": "imagemagick",
-      "note": "ImageMagick 7 ships `magick` and may not ship `convert`. Callers must try magick first (4.8)."
+      "note": "ImageMagick 7 ships `magick` and may not ship `convert`. Callers must try magick first (4.8).",
+      "needs_repo": {
+        "rhel": "epel"
+      }
     },
     {
       "provides": [
@@ -157,9 +187,9 @@
         "make"
       ],
       "apt": "build-essential",
-      "dnf": "@development-tools",
+      "dnf": "gcc gcc-c++ make",
       "pacman": "base-devel",
-      "note": "Needed to compile npm native modules. graft pulls tree-sitter grammars that build through node-gyp, which fails with a wall of gyp errors on a slim image. Found by the clean-room container build, not by reasoning about it."
+      "note": "Needed to compile npm native modules: graft pulls tree-sitter grammars that build through node-gyp. Explicit packages rather than @development-tools, because that group id does not exist on Rocky 9 and the failure is 'Nothing to do', not a missing package."
     },
     {
       "provides": [

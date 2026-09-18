@@ -23,6 +23,7 @@ PROFILE="core"
 APPLY=0
 WIRE_PATH=0
 ALLOW_THIRD_PARTY=""
+SKIPPED_PACKAGES=""
 LOCAL_BIN="$HOME/.local/bin"
 
 usage() {
@@ -54,6 +55,14 @@ while [ $# -gt 0 ]; do
   esac
 done
 
+# This script installs into $LOCAL_BIN, so it has to be able to see what it just
+# installed. Without this, uv lands in ~/.local/bin and the very next
+# `command -v uv` fails, silently skipping every Python tool.
+case ":$PATH:" in
+  *":$LOCAL_BIN:"*) ;;
+  *) PATH="$LOCAL_BIN:$PATH"; export PATH ;;
+esac
+
 say()  { printf '%s\n' "$*"; }
 warn() { printf 'warning: %s\n' "$*" >&2; }
 die()  { printf 'error: %s\n' "$1" >&2; [ -n "${2:-}" ] && printf 'fix:   %s\n' "$2" >&2; exit 1; }
@@ -68,7 +77,10 @@ detect_family() {
   local candidates="${ID:-} ${ID_LIKE:-}"
   case " $candidates " in
     *" debian "*|*" ubuntu "*) echo debian ;;
-    *" fedora "*|*" rhel "*|*" centos "*) echo rhel ;;
+    # Fedora before rhel: Fedora lists no ID_LIKE, but RHEL derivatives list
+    # "fedora" in theirs. Checking rhel first would call Rocky "fedora".
+    *" rhel "*|*" centos "*) echo rhel ;;
+    *" fedora "*) echo fedora ;;
     *" arch "*) echo arch ;;
     *) echo "${ID:-unknown}" ;;
   esac
@@ -78,6 +90,7 @@ FAMILY="$(detect_family)"
 case "$FAMILY" in
   debian) PKG_MANAGER=apt;    PKG_KEY=apt ;;
   rhel)   PKG_MANAGER=dnf;    PKG_KEY=dnf ;;
+  fedora) PKG_MANAGER=dnf;    PKG_KEY=dnf ;;
   arch)   PKG_MANAGER=pacman; PKG_KEY=pacman ;;
   *) die "unsupported distribution family: $FAMILY" \
          "supported: debian/ubuntu, rhel/fedora, arch. Open an issue with your /etc/os-release." ;;
@@ -98,7 +111,7 @@ say ""
 # the manifest with python3 when it exists and fall back to a minimal parse when
 # it does not.
 if command -v python3 >/dev/null 2>&1; then
-  PLAN="$(python3 "$KIT_DIR/devkit_cli/bootstrap_plan.py" --profile "$PROFILE" --manager "$PKG_KEY")"
+  PLAN="$(python3 "$KIT_DIR/devkit_cli/bootstrap_plan.py" --profile "$PROFILE" --manager "$PKG_KEY" --family "$FAMILY")"
 else
   warn "python3 is absent; installing it first, then re-reading the plan"
   case "$PKG_MANAGER" in
@@ -111,7 +124,7 @@ else
     say "Dry run stops here: the rest of the plan needs python3 to read the manifest."
     exit 0
   fi
-  PLAN="$(python3 "$KIT_DIR/devkit_cli/bootstrap_plan.py" --profile "$PROFILE" --manager "$PKG_KEY")"
+  PLAN="$(python3 "$KIT_DIR/devkit_cli/bootstrap_plan.py" --profile "$PROFILE" --manager "$PKG_KEY" --family "$FAMILY")"
 fi
 
 PACKAGES="$(printf '%s\n' "$PLAN" | awk -F'\t' '$1=="pkg"     {print $2}')"
@@ -119,30 +132,66 @@ NPM_PKGS="$(printf '%s\n' "$PLAN" | awk -F'\t' '$1=="npm"     {print $2}')"
 UV_PKGS="$(printf '%s\n'  "$PLAN" | awk -F'\t' '$1=="uv"      {print $2}')"
 BINARIES="$(printf '%s\n' "$PLAN" | awk -F'\t' '$1=="binary"  {print $2}')"
 NEEDS_NODE="$(printf '%s\n' "$PLAN" | awk -F'\t' '$1=="nvm"   {print $2}')"
-THIRD_PARTY="$(printf '%s\n' "$PLAN" | awk -F'\t' '$1=="thirdparty" {print $2}')"
+THIRD_PARTY="$(printf '%s\n'   "$PLAN" | awk -F'\t' '$1=="thirdparty" {print $2}')"
+THIRD_PARTY_REPOS="$(printf '%s\n' "$PLAN" | awk -F'\t' '$1=="thirdparty" {print $3}' | sort -u)"
+UNAVAILABLE="$(printf '%s\n'   "$PLAN" | awk -F'\t' '$1=="unavailable" {print $2}')"
 
 # ------------------------------------------------- third-party repos (D13)
 
-if [ -n "$THIRD_PARTY" ] && [ "$FAMILY" = "rhel" ]; then
+enable_repo() {
+  case "$1" in
+    epel)
+      run sudo dnf install -y epel-release dnf-plugins-core
+      # Several EPEL packages depend on CodeReady Builder. Enabling EPEL without
+      # it gives you the package list and then unresolvable dependencies.
+      run sudo dnf config-manager --set-enabled crb
+      ;;
+    rpmfusion)
+      local release
+      release="$(rpm -E %rhel 2>/dev/null || echo 9)"
+      run sudo dnf install -y \
+        "https://download1.rpmfusion.org/free/el/rpmfusion-free-release-${release}.noarch.rpm"
+      ;;
+    *) warn "unknown third-party repository: $1" ;;
+  esac
+}
+
+if [ -n "$THIRD_PARTY" ]; then
   say "These packages need a third-party repository on $FAMILY:"
-  printf '  %s\n' $THIRD_PARTY
+  printf '%s\n' "$PLAN" | awk -F'\t' '$1=="thirdparty" {printf "  %-16s %s\n", $2, $3}'
+  say ""
+  say "  Repositories: $(printf '%s ' $THIRD_PARTY_REPOS)"
+  say "  These are third-party and are never enabled silently (D13)."
   say ""
   if [ -z "$ALLOW_THIRD_PARTY" ]; then
     if [ -t 0 ]; then
-      printf 'Enable it? [y/N] '; read -r reply
+      printf 'Enable them? [y/N] '; read -r reply
       case "$reply" in [Yy]*) ALLOW_THIRD_PARTY=yes ;; *) ALLOW_THIRD_PARTY=no ;; esac
     else
       ALLOW_THIRD_PARTY=no
       say "  not a terminal; declining by default. Pass --third-party yes to enable."
     fi
   fi
-  if [ "$ALLOW_THIRD_PARTY" != "yes" ]; then
-    say "  declined. Those packages resolve from a lower rung or are recorded as skipped."
+  if [ "$ALLOW_THIRD_PARTY" = "yes" ]; then
+    for repo in $THIRD_PARTY_REPOS; do
+      say "Enabling $repo:"
+      enable_repo "$repo"
+    done
+  else
+    say "  declined. Those packages drop to a lower rung or are recorded as skipped."
     say "  The run continues; this is never a hard failure (D13)."
     for skipped in $THIRD_PARTY; do
       PACKAGES="$(printf '%s\n' "$PACKAGES" | grep -vx "$skipped" || true)"
+      SKIPPED_PACKAGES="$SKIPPED_PACKAGES $skipped"
     done
   fi
+  say ""
+fi
+
+if [ -n "$UNAVAILABLE" ]; then
+  say "No package on $PKG_MANAGER and no fallback declared:"
+  printf '  %s\n' $UNAVAILABLE
+  say "  Install these by hand if you need them."
   say ""
 fi
 
@@ -268,6 +317,12 @@ if [ -n "$NEEDS_NODE" ] && [ -s "${NVM_DIR:-$HOME/.nvm}/nvm.sh" ]; then
 fi
 
 # ---------------------------------------------------------------- verify
+
+if [ -n "$SKIPPED_PACKAGES" ]; then
+  say "Skipped (third-party repository declined):"
+  for item in $SKIPPED_PACKAGES; do say "  $item"; done
+  say ""
+fi
 
 if [ -n "$FAILED_OPTIONAL" ]; then
   say "These installs failed and were skipped:"

@@ -47,12 +47,12 @@ def _write(plan: Plan, target: Path, content: str, force: bool,
     existing = target.read_text(encoding="utf-8") if target.is_file() else None
     if existing == content:
         return
-    if existing is not None and not force and target.name != instances.PROVENANCE_NAME:
-        # Regenerating our own template output is not a collision; a file we did
-        # not write is. Templates carry the generated marker.
-        if "devkit" not in existing:
-            raise DevkitError(f"{target} exists and was not written by devkit",
-                              "re-run with --force to back it up and proceed")
+    # Regenerating our own template output is not a collision; a file we did not
+    # write is. Templates carry the generated marker.
+    if (existing is not None and not force and "devkit" not in existing
+            and target.name != instances.PROVENANCE_NAME):
+        raise DevkitError(f"{target} exists and was not written by devkit",
+                          "re-run with --force to back it up and proceed")
     plan.record(f"{'update' if existing is not None else 'write '} {label or target}")
     if not plan.apply:
         return

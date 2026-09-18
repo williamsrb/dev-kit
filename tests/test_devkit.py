@@ -6,20 +6,31 @@ requirement, not just the code.
 
 from __future__ import annotations
 
+import argparse
+import io
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
 import unittest
+from contextlib import redirect_stdout
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO))
 
-from devkit_cli import export, instances, manifest, paths, privilege  # noqa: E402
+from devkit_cli import export, instances, manifest, paths, privilege, update  # noqa: E402
+from devkit_cli.common import Plan  # noqa: E402
 from devkit_cli.errors import DevkitError  # noqa: E402
+from devkit_cli.profiles import materialize  # noqa: E402
+
+
+def _kit_lineage() -> str:
+    from devkit_cli.profiles import _kit_metadata
+    return _kit_metadata()["lineage_id"]
 
 
 def run(*args: str) -> subprocess.CompletedProcess:
@@ -85,7 +96,6 @@ class PathContractTests(unittest.TestCase):
     def test_container_paths_are_not_flagged_as_home_paths(self):
         contract = json.loads((REPO / "path-contract.json").read_text())
         rule = next(r for r in contract["rules"] if r["id"] == "literal-home")
-        import re
         pattern = re.compile(rule["pattern"])
         self.assertIsNone(pattern.search("cp /enonic-xp/home/deploy/app.jar ."))
         self.assertIsNone(pattern.search("-e JAVA_HOME=/home/builder/.enonic/x"))
@@ -94,7 +104,6 @@ class PathContractTests(unittest.TestCase):
     def test_tilde_in_a_markdown_link_is_an_error(self):
         contract = json.loads((REPO / "path-contract.json").read_text())
         rule = next(r for r in contract["rules"] if r["id"] == "tilde-in-markdown-link")
-        import re
         self.assertIsNotNone(re.compile(rule["pattern"]).search("see [guide](~/.agents/x.md)"))
 
 
@@ -155,9 +164,18 @@ class ProfileCompositionTests(unittest.TestCase):
         self.assertEqual([i["vendor"] for i in php["instances"]], ["claude", "codex"])
 
     def test_inheritance_loop_is_named(self):
+        """A loop must be reported by name, not hit the recursion limit."""
         with tempfile.TemporaryDirectory() as tmp:
-            # A loop must be reported, not hit the recursion limit.
-            self.assertTrue(hasattr(manifest, "load"))
+            kit = Path(tmp)
+            (kit / "profiles").mkdir()
+            (kit / "export-allowlist.json").write_text("{}", encoding="utf-8")
+            for name, parent in (("a", "b"), ("b", "a")):
+                (kit / "profiles" / f"{name}.json").write_text(
+                    json.dumps({"name": name, "extends": parent}), encoding="utf-8")
+            with self.assertRaises(DevkitError) as caught:
+                manifest.load("a", kit_root=kit)
+            self.assertIn("loops", str(caught.exception))
+            self.assertIn("a -> b", str(caught.exception))
 
     def test_hue_is_stable_and_distinct_per_profile(self):
         a = instances.profile_colors({"name": "alpha"})
@@ -214,10 +232,6 @@ class RenderingTests(unittest.TestCase):
         profile = manifest.load("core")
         tokens = instances.render_tokens(profile, "claude", Path("/home/someone-else"))
         self.assertTrue(tokens["PROFILE_CONFIG_DIR"].startswith("/home/someone-else/"))
-
-
-if __name__ == "__main__":
-    unittest.main()
 
 
 class DocsGateTests(unittest.TestCase):
@@ -295,3 +309,105 @@ class BootstrapPlanTests(unittest.TestCase):
                 plan = self._plan(manager, family)
                 self.assertIn("uv\tocrmypdf", plan)
                 self.assertNotIn("pkg\tocrmypdf", plan)
+
+
+class ModeTests(unittest.TestCase):
+    """'Under umask 077 and umask 022, resulting modes must be identical.'"""
+
+    def _install(self, umask: int, home: Path) -> list[str]:
+        previous = os.umask(umask)
+        try:
+            materialize(manifest.load("core"), ["claude"], home, Plan(apply=True), force=True)
+        finally:
+            os.umask(previous)
+        return sorted(f"{path.stat().st_mode & 0o777:o} {path.relative_to(home)}"
+                      for path in home.rglob("*") if not path.is_symlink())
+
+    def test_modes_do_not_inherit_the_umask(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            strict = self._install(0o077, Path(tmp) / "strict")
+            loose = self._install(0o022, Path(tmp) / "loose")
+        self.assertEqual(strict, loose)
+        self.assertIn("755 .local/bin/claude-core", strict)
+
+
+class UpdateApplyTests(unittest.TestCase):
+    """'update apply completes with the network down, from staged content.'
+
+    apply used to re-materialize from the local checkout while stamping the
+    staged commit into provenance, so the instance recorded a commit it had
+    never been built from.
+    """
+
+    MARKER = "# staged-payload marker\n"
+
+    def _stage(self, root: Path, commit: str) -> Path:
+        payload = root / commit
+        payload.mkdir(parents=True)
+        for item in ("profiles", "templates", "devkit.yaml", "export-allowlist.json"):
+            source = REPO / item
+            if source.is_dir():
+                shutil.copytree(source, payload / item)
+            else:
+                shutil.copy2(source, payload / item)
+        (payload / "core" / "skills").mkdir(parents=True)
+        wrapper = payload / "templates" / "shell" / "claude.sh"
+        wrapper.write_text(wrapper.read_text() + self.MARKER, encoding="utf-8")
+        (payload / ".devkit-staged.json").write_text(json.dumps({
+            "commit": commit,
+            "lineage_id": _kit_lineage(),
+            "upstream": "unused", "fetched_at": "20260101T000000Z"}), encoding="utf-8")
+        return payload
+
+    def test_apply_installs_the_staged_payload(self):
+        commit = "d" * 40
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp) / "home"
+            home.mkdir()
+            self._stage(Path(tmp) / "staged", commit)
+            materialize(manifest.load("core"), ["claude"], home, Plan(apply=True), force=True)
+
+            staging, home_fn = update.STAGING_ROOT, Path.home
+            update.STAGING_ROOT = Path(tmp) / "staged"
+            Path.home = staticmethod(lambda: home)
+            try:
+                with redirect_stdout(io.StringIO()):
+                    rc = update.cmd_apply(argparse.Namespace(profile="core", apply=True))
+            finally:
+                update.STAGING_ROOT, Path.home = staging, home_fn
+
+            wrapper = (home / ".local" / "bin" / "claude-core").read_text()
+            provenance = json.loads(
+                (home / ".agents-profiles" / "core" / "claude"
+                 / instances.PROVENANCE_NAME).read_text())
+
+        self.assertEqual(rc, 0)
+        self.assertIn(self.MARKER.strip(), wrapper)
+        self.assertEqual(provenance["source_commit"], commit)
+        self.assertEqual(provenance["history"][-1]["to"], commit)
+
+
+class WirePathTests(unittest.TestCase):
+    """'On a box with both .bash_profile and .profile, --wire-path must write to
+    .bash_profile.' bootstrap.sh prepends ~/.local/bin to its own PATH so it can
+    see what it installs, which made this check read the PATH it had just
+    fixed up and skip the report entirely."""
+
+    @unittest.skipUnless(any(shutil.which(m) for m in ("apt-get", "dnf", "pacman")),
+                         "no supported package manager to detect")
+    def test_wire_path_targets_bash_profile(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            for name in (".bash_profile", ".profile"):
+                (home / name).touch()
+            result = subprocess.run(
+                ["bash", str(REPO / "bootstrap.sh"), "--wire-path"],
+                capture_output=True, text=True, check=False,
+                env={"HOME": str(home), "PATH": "/usr/bin:/bin", "LANG": "C"})
+        self.assertIn("is not on your PATH", result.stdout)
+        self.assertIn(".bash_profile", result.stdout)
+        self.assertNotIn(str(home / ".profile"), result.stdout)
+
+
+if __name__ == "__main__":
+    unittest.main()

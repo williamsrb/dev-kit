@@ -29,10 +29,9 @@ docker run --rm -it -v "$PWD:/work" -w /work devkit:core
 The build runs the real `bootstrap.sh`, which is what makes it a useful test
 rather than a parallel install path that drifts.
 
-## Relationship to `examples/`
+## Why this is the only container
 
-`examples/` holds three GUI-in-Docker sketches from the isolation assessment,
-kept as the record of what was rejected and why. They are IDE launcher sketches,
-not harness images: none install python, node, tesseract or Playwright browsers,
-and `Dockerfile.x11` carries a real bug (`apt-get install -p -y`) that is left in
-place deliberately — it is evidence, not a template.
+The kit does not containerize the harness for profile isolation — see the
+"Why not Docker" section of the [README](../../README.md). GUI-in-Docker was
+assessed and rejected; this headless image is the one place Docker earns its
+keep.

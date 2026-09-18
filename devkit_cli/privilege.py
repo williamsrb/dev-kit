@@ -26,7 +26,7 @@ def invoking_user() -> str:
 
 def resolve_target_user(explicit: str | None) -> pwd.struct_passwd:
     """Who the install is for. Refuses root and /root homes outright."""
-    name = explicit or invoking_user() or pwd.getpwuid(os.getuid()).pw_name
+    name = explicit or pwd.getpwuid(os.getuid()).pw_name
     try:
         entry = pwd.getpwnam(name)
     except KeyError:
@@ -36,7 +36,7 @@ def resolve_target_user(explicit: str | None) -> pwd.struct_passwd:
         raise DevkitError("refusing to install for uid 0",
                           "pass --user <name> naming the account that will use the harness")
     home = Path(entry.pw_dir)
-    if home == Path("/root") or home.parts[:2] == ("/", "root"):
+    if home.parts[:2] == ("/", "root"):
         raise DevkitError(f"refusing to install into {home}",
                           "pass --user <name> naming a real user account")
     return entry

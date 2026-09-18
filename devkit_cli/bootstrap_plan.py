@@ -11,7 +11,8 @@ Output, one record per line:
     uv<TAB><package>
     binary<TAB><name>=<repo>
     nvm<TAB><version>
-    thirdparty<TAB><package>     needs a third-party repo on RHEL derivatives (D13)
+    thirdparty<TAB><package><TAB><repo>   needs a third-party repo here (D13)
+    unavailable<TAB><binary>     no package and no fallback on this manager
 
 With --verify it instead checks that every `provides` binary is on PATH and
 reports the rung each came from, exiting 1 if a required one is missing.
@@ -68,9 +69,6 @@ def emit_plan(profile: dict, manager: str, family: str) -> None:
         repo = (dep.get("needs_repo") or {}).get(family)
         if repo:
             print(f"thirdparty\t{package}\t{repo}")
-            fallback = dep.get("fallback")
-            if fallback:
-                print(f"iffy\t{package}")
 
 
 def verify(profile: dict) -> int:

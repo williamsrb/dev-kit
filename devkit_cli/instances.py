@@ -8,12 +8,11 @@ from __future__ import annotations
 import colorsys
 import hashlib
 import json
-import os
 import shutil
 import subprocess
 from pathlib import Path
 
-from .common import HOME_TOKEN, REPO_ROOT, timestamp
+from .common import FILE_MODE, REPO_ROOT, ensure_dir, timestamp
 from .errors import DevkitError
 
 PROVENANCE_NAME = ".devkit-profile.json"
@@ -70,7 +69,8 @@ def profile_colors(profile: dict) -> tuple[str, str]:
     hue = profile_hue(profile["name"])
     light = colorsys.hsv_to_rgb(hue, 0.75, 0.95)
     dark = colorsys.hsv_to_rgb(hue, 0.85, 0.45)
-    to_hex = lambda rgb: "#" + "".join(f"{int(c * 255):02x}" for c in rgb)
+    def to_hex(rgb) -> str:
+        return "#" + "".join(f"{int(c * 255):02x}" for c in rgb)
     return to_hex(light), to_hex(dark)
 
 
@@ -79,7 +79,7 @@ def imagemagick() -> list[str] | None:
     for candidate in ("magick", "convert"):
         found = shutil.which(candidate)
         if found:
-            return [found] if candidate == "magick" else [found]
+            return [found]
     return None
 
 
@@ -87,10 +87,13 @@ def recolor_icon(source: Path, dest: Path, color: str) -> bool:
     binary = imagemagick()
     if binary is None or not source.is_file():
         return False
-    dest.parent.mkdir(parents=True, exist_ok=True)
+    ensure_dir(dest.parent)
     command = [*binary, str(source), "-fill", color, "-colorize", "60%", str(dest)]
     result = subprocess.run(command, capture_output=True, text=True, check=False)
-    return result.returncode == 0 and dest.is_file()
+    if result.returncode != 0 or not dest.is_file():
+        return False
+    dest.chmod(FILE_MODE)
+    return True
 
 
 def first_existing(candidates: list[str]) -> str | None:

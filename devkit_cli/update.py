@@ -2,7 +2,8 @@
 
 One direction of travel. `check` never writes and is the only command safe to
 run unattended. `fetch` is the only one that touches the network. `apply` is
-offline and per-instance, and restores from backup if it fails mid-write.
+offline and per-instance, installs from the staged payload rather than from the
+local checkout, and restores from backup if it fails mid-write.
 
 The refusal messages name the fix, because a refusal the user cannot act on is
 just an outage.
@@ -207,19 +208,23 @@ def cmd_apply(args) -> int:
             continue
 
         # The provenance file is never updated before the tree it describes, so
-        # a failure leaves it describing the pre-apply state.
+        # a failure leaves it describing the pre-apply state. BaseException, not
+        # Exception: a Ctrl-C mid-write has to restore too, and KeyboardInterrupt
+        # is not an Exception.
         backup = back_up(config_dir)
         try:
             from .profiles import materialize
             inner = Plan(apply=True)
-            materialize(manifest.load(name), [vendor], Path.home(), inner, force=True)
-            prov["history"] = [*prov.get("history", []),
-                               {"from": prov.get("source_commit"),
-                                "to": marker["commit"], "at": timestamp()}]
-            prov["source_commit"] = marker["commit"]
-            write_json(config_dir / instances.PROVENANCE_NAME, prov)
+            materialize(manifest.load(name, kit_root=payload), [vendor], Path.home(),
+                        inner, force=True, kit_root=payload,
+                        source_commit=marker["commit"])
+            updated = instances.read_provenance(config_dir) or prov
+            updated["history"] = [*prov.get("history", []),
+                                  {"from": prov.get("source_commit"),
+                                   "to": marker["commit"], "at": timestamp()}]
+            write_json(config_dir / instances.PROVENANCE_NAME, updated)
             shutil.rmtree(backup, ignore_errors=True)
-        except Exception:
+        except BaseException:
             shutil.rmtree(config_dir, ignore_errors=True)
             shutil.move(str(backup), str(config_dir))
             raise DevkitError(f"{label}: apply failed and was rolled back from backup",

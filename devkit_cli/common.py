@@ -17,6 +17,21 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 # it expands only in a shell, unquoted, at word start.
 HOME_TOKEN = "${HOME}"
 
+# Modes are set explicitly rather than inherited from umask (FR-8, section 4.9):
+# an install under umask 077 must produce the same tree as one under umask 022.
+# These are the umask-022 values, which is what the A7 clean-room build verified.
+FILE_MODE = 0o644
+EXEC_MODE = 0o755
+DIR_MODE = 0o755
+
+
+def ensure_dir(path: Path) -> None:
+    """`mkdir -p` that sets the mode of every level it creates."""
+    created = [p for p in (path, *path.parents) if not p.exists()]
+    path.mkdir(parents=True, exist_ok=True)
+    for directory in created:
+        directory.chmod(DIR_MODE)
+
 
 def repo_file(name: str) -> Path:
     return REPO_ROOT / name
@@ -27,15 +42,16 @@ def load_json(path: Path, what: str) -> dict:
         return json.loads(path.read_text(encoding="utf-8"))
     except FileNotFoundError:
         raise DevkitError(f"{what} not found at {path}",
-                          f"check out the kit again, or pass an explicit path") from None
+                          "check out the kit again, or pass an explicit path") from None
     except ValueError as exc:
         raise DevkitError(f"{what} at {path} is not valid JSON: {exc}") from None
 
 
 def write_json(path: Path, payload: dict) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
+    ensure_dir(path.parent)
     path.write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n",
                     encoding="utf-8")
+    path.chmod(FILE_MODE)
 
 
 def render_home(text: str, home: str | os.PathLike[str] | None = None) -> str:
@@ -73,16 +89,6 @@ def back_up(target: Path) -> Path:
     else:
         shutil.copy2(target, dest, follow_symlinks=False)
     return dest
-
-
-def guard_collision(target: Path, force: bool) -> Path | None:
-    """D5: any write to an existing path aborts and names it; --force backs up first."""
-    if not target.exists() and not target.is_symlink():
-        return None
-    if not force:
-        raise DevkitError(f"{target} already exists",
-                          "re-run with --force to back it up and proceed")
-    return back_up(target)
 
 
 def relative_to_home(path: Path) -> str:

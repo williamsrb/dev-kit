@@ -58,6 +58,11 @@ done
 # This script installs into $LOCAL_BIN, so it has to be able to see what it just
 # installed. Without this, uv lands in ~/.local/bin and the very next
 # `command -v uv` fails, silently skipping every Python tool.
+#
+# INHERITED_PATH is what the user's shell actually gave us. The D19 check below
+# has to read that, not the PATH this block just fixed up in-process, or it
+# concludes the wiring is already done and --wire-path becomes a no-op.
+INHERITED_PATH="$PATH"
 case ":$PATH:" in
   *":$LOCAL_BIN:"*) ;;
   *) PATH="$LOCAL_BIN:$PATH"; export PATH ;;
@@ -181,7 +186,7 @@ if [ -n "$THIRD_PARTY" ]; then
     say "  declined. Those packages drop to a lower rung or are recorded as skipped."
     say "  The run continues; this is never a hard failure (D13)."
     for skipped in $THIRD_PARTY; do
-      PACKAGES="$(printf '%s\n' "$PACKAGES" | grep -vx "$skipped" || true)"
+      PACKAGES="$(printf '%s\n' "$PACKAGES" | grep -vxF "$skipped" || true)"
       SKIPPED_PACKAGES="$SKIPPED_PACKAGES $skipped"
     done
   fi
@@ -289,7 +294,7 @@ fi
 
 # ------------------------------------------------------------ PATH (D19)
 
-if ! printf '%s' ":$PATH:" | grep -q ":$LOCAL_BIN:"; then
+if ! printf '%s' ":$INHERITED_PATH:" | grep -q ":$LOCAL_BIN:"; then
   say "PATH: $LOCAL_BIN is not on your PATH."
   for candidate in "$HOME/.bash_profile" "$HOME/.profile" "$HOME/.zshrc" "$HOME/.bashrc"; do
     [ -f "$candidate" ] || continue
@@ -308,7 +313,7 @@ fi
 # fresh shell still cannot find node. Say so rather than letting the next command
 # fail with "node: not found".
 if [ -n "$NEEDS_NODE" ] && [ -s "${NVM_DIR:-$HOME/.nvm}/nvm.sh" ]; then
-  if ! env -i HOME="$HOME" PATH="$PATH" sh -lc 'command -v node' >/dev/null 2>&1; then
+  if ! env -i HOME="$HOME" PATH="$INHERITED_PATH" sh -lc 'command -v node' >/dev/null 2>&1; then
     say "Node: installed through nvm, but a fresh login shell cannot see it yet."
     say "  nvm adds it by sourcing \$NVM_DIR/nvm.sh from your shell startup file."
     say "  Open a new shell, or: . \"${NVM_DIR:-\$HOME/.nvm}/nvm.sh\""

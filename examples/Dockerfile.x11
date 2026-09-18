@@ -1,0 +1,17 @@
+FROM ubuntu:24.04
+
+# Instalar dependências básicas para aplicações X11/Electron
+RUN apt-get update && apt-get install -p -y \
+    libnss3 libatk1.0-0 libatk-bridge2.0-0 libcups2 libdrm2 \
+    libgtk-3-0 libgbm1 libasound2t64 wget fuse3 libxss1 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Criar um usuário não-root com o mesmo UID padrão do Ubuntu (1000)
+RUN useradd -m -u 1000 developer
+USER developer
+WORKDIR /home/developer
+
+# Supondo que você tenha o AppImage do Cursor extraído ou executável aqui
+# Para fins de exemplo, vamos simular o ponto de entrada
+CMD ["/home/developer/cursor-app/Cursor", "--no-sandbox"]
+

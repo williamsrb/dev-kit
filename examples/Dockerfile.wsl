@@ -1,0 +1,17 @@
+FROM ubuntu:24.04
+
+# Instalar dependências para aplicações GUI e suporte a fusíveis (AppImage)
+RUN apt-get update && apt-get install -y \
+    libxext6 libxrender1 libxtst6 libxi6 libfreetype6 \
+    libgtk-3-0 libxss1 libasound2 libnss3 libgbm1 \
+    curl ca-certificates git \
+    && rm -rf /var/lib/apt/lists/*
+
+# Criar um usuário não-root para rodar a aplicação com segurança
+RUN useradd -m devuser
+USER devuser
+WORKDIR /home/devuser
+
+# O download e execução do Cursor AppImage seriam configurados aqui ou montados via volume
+CMD ["/bin/bash"]
+

@@ -261,18 +261,37 @@ class BootstrapPlanTests(unittest.TestCase):
                 kinds = {line.split("\t")[0] for line in result.stdout.splitlines()}
                 self.assertTrue({"pkg", "npm", "uv", "binary"}.issubset(kinds))
 
-    def test_rhel_flags_the_third_party_package(self):
+    def _plan(self, manager: str, family: str | None = None) -> str:
+        args = ["--profile", "core", "--manager", manager]
+        if family:
+            args += ["--family", family]
+        return subprocess.run(
+            [sys.executable, str(REPO / "devkit_cli" / "bootstrap_plan.py"), *args],
+            capture_output=True, text=True, check=True).stdout
+
+    def test_rhel_flags_the_third_party_packages(self):
         """A declined third-party repo must be a skip, never a hard failure (D13),
-        which means the plan has to name which packages need one."""
-        result = subprocess.run(
-            [sys.executable, str(REPO / "devkit_cli" / "bootstrap_plan.py"),
-             "--profile", "core", "--manager", "dnf"],
-            capture_output=True, text=True, check=True)
-        self.assertIn("thirdparty\tffmpeg", result.stdout)
+        which means the plan has to name which packages need one, and which repo."""
+        plan = self._plan("dnf", "rhel")
+        self.assertIn("thirdparty\tffmpeg\trpmfusion", plan)
+        self.assertIn("thirdparty\tripgrep\tepel", plan)
+
+    def test_fedora_flags_nothing_although_it_also_uses_dnf(self):
+        """EPEL is Fedora's packages backported to RHEL. On Fedora they are in
+        base, and epel-release does not exist — so needs_repo cannot key on the
+        package manager."""
+        plan = self._plan("dnf", "fedora")
+        self.assertNotIn("thirdparty", plan)
+        self.assertIn("pkg\tripgrep", plan)
 
     def test_apt_does_not_flag_third_party(self):
-        result = subprocess.run(
-            [sys.executable, str(REPO / "devkit_cli" / "bootstrap_plan.py"),
-             "--profile", "core", "--manager", "apt"],
-            capture_output=True, text=True, check=True)
-        self.assertNotIn("thirdparty", result.stdout)
+        self.assertNotIn("thirdparty", self._plan("apt", "debian"))
+
+    def test_a_manager_without_a_package_uses_the_declared_fallback(self):
+        """ocrmypdf is absent from EPEL and AUR-only on Arch, and nothing here
+        may require the AUR."""
+        for manager, family in (("dnf", "rhel"), ("pacman", "arch")):
+            with self.subTest(manager=manager):
+                plan = self._plan(manager, family)
+                self.assertIn("uv\tocrmypdf", plan)
+                self.assertNotIn("pkg\tocrmypdf", plan)

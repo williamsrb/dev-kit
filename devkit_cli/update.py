@@ -33,6 +33,10 @@ def _git(*args: str, cwd: Path | None = None) -> subprocess.CompletedProcess:
                           capture_output=True, text=True, check=False)
 
 
+def _is_shallow(work: Path) -> bool:
+    return _git("rev-parse", "--is-shallow-repository", cwd=work).stdout.strip() == "true"
+
+
 def _installed_instances(profile_filter: str | None) -> list[tuple[str, str, Path, dict]]:
     home = Path.home()
     found = []
@@ -116,17 +120,20 @@ def cmd_fetch(args) -> int:
         raise DevkitError(f"{args.ref} does not exist in {upstream}")
     commit = head.stdout.strip()
 
-    roots = _git("rev-list", "--max-parents=0", commit, cwd=work)
-    fetched_lineage = roots.stdout.split()[-1] if roots.stdout.split() else None
+    def resolve_lineage() -> str | None:
+        roots = _git("rev-list", "--max-parents=0", commit, cwd=work).stdout.split()
+        return roots[-1] if roots else None
 
-    # A shallow clone has no root commit to resolve, so the lineage cannot be
-    # verified. Unshallow rather than silently accepting an unknown lineage.
-    if fetched_lineage is None or _git("rev-parse", "--is-shallow-repository",
-                                       cwd=work).stdout.strip() == "true":
-        unshallow = _git("fetch", "--unshallow", cwd=work)
-        if unshallow.returncode == 0:
-            roots = _git("rev-list", "--max-parents=0", commit, cwd=work)
-            fetched_lineage = roots.stdout.split()[-1] if roots.stdout.split() else None
+    fetched_lineage = resolve_lineage()
+
+    # A shallow clone's oldest commit is a graft point, not the lineage root, so
+    # trusting it compares this fork against itself and calls it foreign.
+    # Unshallow first. When the upstream is itself shallow that cannot succeed,
+    # and an unresolved lineage is the honest refusal — "fetch a full clone" is
+    # something the user can act on; "there is no escape hatch" is not.
+    if fetched_lineage is None or _is_shallow(work):
+        _git("fetch", "--unshallow", cwd=work)
+        fetched_lineage = None if _is_shallow(work) else resolve_lineage()
     if fetched_lineage is None:
         shutil.rmtree(work, ignore_errors=True)
         raise DevkitError("could not resolve the fetched repository's lineage",

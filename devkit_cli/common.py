@@ -13,13 +13,13 @@ from .errors import DevkitError
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
 # Written into kit source wherever a home-anchored path is unavoidable, and
-# rendered per context at install time (D6, section 4.5). `~` is never used:
+# rendered per context at install time. `~` is never used:
 # it expands only in a shell, unquoted, at word start.
 HOME_TOKEN = "${HOME}"
 
-# Modes are set explicitly rather than inherited from umask (FR-8, section 4.9):
-# an install under umask 077 must produce the same tree as one under umask 022.
-# These are the umask-022 values, which is what the A7 clean-room build verified.
+# Modes are set explicitly rather than inherited from umask: an install under
+# umask 077 must produce the same tree as one under umask 022. These are the
+# umask-022 values, which is what the clean-room build verified.
 FILE_MODE = 0o644
 EXEC_MODE = 0o755
 DIR_MODE = 0o755
@@ -82,7 +82,7 @@ def backup_path(target: Path) -> Path:
 
 
 def back_up(target: Path) -> Path:
-    """Copy target aside before it is overwritten (D5). Returns the backup path."""
+    """Copy target aside before it is overwritten. Returns the backup path."""
     dest = backup_path(target)
     if target.is_dir():
         shutil.copytree(target, dest, symlinks=True)

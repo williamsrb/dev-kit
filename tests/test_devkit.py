@@ -1,6 +1,6 @@
-"""Acceptance tests for devkit, drawn from the plan's validation.md checklist.
+"""Acceptance tests for devkit.
 
-Each test names the checklist line it covers so a failure points at the
+Each test names the requirement it covers so a failure points at the
 requirement, not just the code.
 """
 
@@ -59,7 +59,7 @@ NEEDS_SOURCE = unittest.skipIf(export_source() is None,
 class HelpContractTests(unittest.TestCase):
     """'devkit' and 'devkit --help' must produce identical stdout and exit 0;
     the same for every group. An unknown subcommand must write usage to stderr
-    and exit 2 (D14)."""
+    and exit 2."""
 
     GROUPS = ["profile", "update", "origin", "docs"]
 
@@ -149,7 +149,7 @@ class ExportBoundaryTests(unittest.TestCase):
                     continue
                 if "acme-group" in text or "k8s.example.com" in text:
                     offenders.append(str(path.relative_to(REPO)))
-        self.assertEqual(offenders, [], "A0/B3: core skills must not name a client")
+        self.assertEqual(offenders, [], "core skills must not name a client")
 
 
 class ProfileCompositionTests(unittest.TestCase):
@@ -284,7 +284,7 @@ class BootstrapPlanTests(unittest.TestCase):
             capture_output=True, text=True, check=True).stdout
 
     def test_rhel_flags_the_third_party_packages(self):
-        """A declined third-party repo must be a skip, never a hard failure (D13),
+        """A declined third-party repo must be a skip, never a hard failure,
         which means the plan has to name which packages need one, and which repo."""
         plan = self._plan("dnf", "rhel")
         self.assertIn("thirdparty\tffmpeg\trpmfusion", plan)

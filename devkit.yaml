@@ -1,4 +1,4 @@
-# Fork topology for this kit (plan devkit, section 4.7).
+# Fork topology for this kit.
 #
 # lineage_id is this repository's root commit. A commit cannot contain its own
 # SHA, so the root commit is made first and the next commit records it; the

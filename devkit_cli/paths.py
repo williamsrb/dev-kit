@@ -1,4 +1,4 @@
-"""`devkit lint-paths` — the path contract gate (A2, section 4.5, D6, F10).
+"""`devkit lint-paths` — the path contract gate.
 
 The finding this enforces: `~` is a shell construct, not a path. It expands only
 in a shell, unquoted, at word start. A renderer handed `[x](~/.agents/foo)` reads

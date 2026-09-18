@@ -3,7 +3,7 @@
 Refusal messages in this kit name the command that fixes them. If one sent you
 here, find it below.
 
-## `refusing to write configuration as root (D18)`
+## `refusing to write configuration as root`
 
 `install.py` and `devkit` write configuration as your own user. Run without
 `sudo`, or name the account:

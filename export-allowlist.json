@@ -1,9 +1,9 @@
 {
   "_comment": [
-    "What `devkit export` copies from ${HOME}/.agents into core/ (plan devkit, A1).",
-    "JSON rather than YAML per D21: the installer parses this with the stdlib only.",
+    "What `devkit export` copies from ${HOME}/.agents into core/.",
+    "JSON rather than YAML: the installer parses this with the stdlib only.",
     "",
-    "layer is the D3 split. 'core' ships in every profile. 'enonic' and 'client'",
+    "layer is the client/toolchain split. 'core' ships in every profile. 'enonic' and 'client'",
     "are overlays a profile opts into. Anything absent from this file is not",
     "exported, and hard_excludes wins over every allowlist entry.",
     "",
@@ -91,8 +91,8 @@
       "develop-godot-2d": "personal, not work tooling",
       "develop-godot-3d": "personal, not work tooling",
       "dsnote": "personal, not work tooling",
-      "enonic-marketplace": "no SKILL.md; a reference directory, not a skill (S3)",
-      "godot-game-dev-shared": "no SKILL.md; shared assets for the godot skills (S3)",
+      "enonic-marketplace": "no SKILL.md; a reference directory, not a skill",
+      "godot-game-dev-shared": "no SKILL.md; shared assets for the godot skills",
       "graphify": "opt-in, heavy, superseded by graft for this kit",
       "ppt-master": "gitignored multi-hundred-MB asset trees; 14 of the 23 broken links"
     }
@@ -193,7 +193,7 @@
     "excluded": {
       "actionlint": "vendored binary, gitignored",
       "review-auth": "reads the harness .auth/<user>.passwd; client credential flow",
-      "recolor-white-black-icons.sh": "generalized into install.py at A5 (4.8)"
+      "recolor-white-black-icons.sh": "generalized into install.py"
     }
   },
   "hooks": {

@@ -1,6 +1,6 @@
 {
   "_comment": [
-    "Claude Code settings for one profile instance (plan devkit, A3).",
+    "Claude Code settings for one profile instance.",
     "${PROFILE_*} and ${HOME} are rendered by install.py; nothing here is read raw.",
     "This file is merged, not clobbered, onto an existing settings.json via",
     "bin/merge-claude-config.py, so a user's own keys survive an update."

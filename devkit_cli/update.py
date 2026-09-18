@@ -1,4 +1,4 @@
-"""The update protocol: check, fetch, apply (section 4.7, D8, D9, D10).
+"""The update protocol: check, fetch, apply.
 
 One direction of travel. `check` never writes and is the only command safe to
 run unattended. `fetch` is the only one that touches the network. `apply` is

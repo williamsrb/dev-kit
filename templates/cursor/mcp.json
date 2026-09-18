@@ -1,6 +1,6 @@
 {
   "_comment": [
-    "Cursor MCP registration for one profile instance (plan devkit, A3).",
+    "Cursor MCP registration for one profile instance.",
     "Servers are filled from the profile's mcp list against core/mcp/catalog.json,",
     "which already uses ${HOME} templating and reads secrets from env files."
   ],

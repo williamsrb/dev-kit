@@ -11,7 +11,7 @@ Output, one record per line:
     uv<TAB><package>
     binary<TAB><name>=<repo>
     nvm<TAB><version>
-    thirdparty<TAB><package><TAB><repo>   needs a third-party repo here (D13)
+    thirdparty<TAB><package><TAB><repo>   needs a third-party repo here
     unavailable<TAB><binary>     no package and no fallback on this manager
 
 With --verify it instead checks that every `provides` binary is on PATH and
@@ -31,7 +31,7 @@ from devkit_cli import manifest  # noqa: E402
 from devkit_cli.errors import DevkitError  # noqa: E402
 
 # Which repository a package needs is declared per dependency (`needs_repo`),
-# measured rather than guessed. D13: never enable a third-party repo silently;
+# measured rather than guessed. Never enable a third-party repo silently:
 # prompt, and treat a decline as a fall-through to the dep's `fallback`, or as
 # "skipped" — never as a failure.
 
@@ -96,7 +96,7 @@ def verify(profile: dict) -> int:
 
 
 def _alternate(binary: str) -> str | None:
-    """ImageMagick 7 ships `magick` and may not ship `convert` (4.8)."""
+    """ImageMagick 7 ships `magick` and may not ship `convert`."""
     if binary in ("convert", "identify"):
         return shutil.which("magick")
     return None

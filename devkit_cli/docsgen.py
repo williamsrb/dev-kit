@@ -1,4 +1,4 @@
-"""`devkit docs generate` — the generated parts of the docs tree (A8, 6.3, D15).
+"""`devkit docs generate` — the generated parts of the docs tree.
 
 Only the mechanical sections are generated: the CLI reference and the profile
 table. Prose is written by hand, because generated prose is how a docs tree ends
@@ -118,7 +118,7 @@ def cmd_generate(args) -> int:
 
 
 def unreachable_docs() -> list[str]:
-    """Every file under docs/ must be reachable from README.md (validation.md)."""
+    """Every file under docs/ must be reachable from README.md."""
     readme = repo_file("README.md")
     docs_root = repo_file("docs")
     if not readme.is_file() or not docs_root.is_dir():

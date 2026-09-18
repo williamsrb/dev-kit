@@ -1,10 +1,10 @@
 {
   "_comment": [
-    "The Enonic profile (plan devkit, A4). Extends core, so it inherits every",
+    "The Enonic profile. Extends core, so it inherits every",
     "core dep, skill, rule and kb entry and adds only what XP work needs.",
     "",
     "The enonic CLI is absent on the reference machine, which confirmed that",
-    "toolchain deps are already profile-scoped in practice (F6)."
+    "toolchain deps are already profile-scoped in practice."
   ],
 
   "name": "enonic",

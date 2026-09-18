@@ -1,6 +1,6 @@
-"""Argument parsing for `devkit`, including the D14 help contract.
+"""Argument parsing for `devkit`, including the help contract.
 
-D14: bare invocation and `--help` produce identical stdout and exit 0,
+The contract: bare invocation and `--help` produce identical stdout and exit 0,
 recursively for every group. Only a genuine mistake — an unknown subcommand or
 a bad flag — writes usage to stderr and exits 2.
 

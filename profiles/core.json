@@ -1,13 +1,13 @@
 {
   "_comment": [
-    "The core profile (plan devkit, A4, D3). Every other profile extends this.",
+    "The core profile. Every other profile extends this.",
     "",
     "`provides` is the authoritative key, not the package name: a dependency is",
-    "satisfied when the binaries it provides are on PATH, whatever rung of the D11",
-    "ladder supplied them. That is what lets `agentctl tools audit` and bootstrap.sh",
+    "satisfied when the binaries it provides are on PATH, whatever rung of the",
+    "dependency ladder supplied them. That is what lets `agentctl tools audit` and bootstrap.sh",
     "agree across apt, dnf and pacman, where the same tool has three names.",
     "",
-    "Package names for dnf and pacman are PROPOSED, not verified (R15). The A6",
+    "Package names for dnf and pacman are PROPOSED, not verified. The CI",
     "container matrix is their acceptance test.",
     "needs_repo is keyed by distribution FAMILY, not package manager: Fedora and RHEL both use dnf, but EPEL is Fedora's packages backported to RHEL, so on Fedora these are in the base repos and epel-release does not exist. Measured on rockylinux:9 and fedora:41."
   ],
@@ -155,7 +155,7 @@
       "apt": "ffmpeg",
       "dnf": "ffmpeg",
       "pacman": "ffmpeg",
-      "note": "On RHEL derivatives ffmpeg needs RPM Fusion. D13 forbids enabling a third-party repo silently: prompt, and on decline record it skipped rather than failing the run.",
+      "note": "On RHEL derivatives ffmpeg needs RPM Fusion. Enabling a third-party repo silently is forbidden: prompt, and on decline record it skipped rather than failing the run.",
       "needs_repo": {
         "rhel": "rpmfusion"
       }
@@ -168,7 +168,7 @@
       "apt": "imagemagick",
       "dnf": "ImageMagick",
       "pacman": "imagemagick",
-      "note": "ImageMagick 7 ships `magick` and may not ship `convert`. Callers must try magick first (4.8).",
+      "note": "ImageMagick 7 ships `magick` and may not ship `convert`. Callers must try magick first.",
       "needs_repo": {
         "rhel": "epel"
       }

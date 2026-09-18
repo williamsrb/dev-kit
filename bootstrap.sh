@@ -4,7 +4,7 @@
 # Bash, not Python, for one reason: this runs before Python is guaranteed. Every
 # other helper in the kit is Python 3.12 stdlib (prefer-python-over-shell).
 #
-# Privilege rule (D18): sudo is scoped to package transactions. This script never
+# Privilege rule: sudo is scoped to package transactions. This script never
 # writes into a user's home and never touches configuration — that is install.py's
 # job, and install.py refuses to run as root.
 #
@@ -59,7 +59,7 @@ done
 # installed. Without this, uv lands in ~/.local/bin and the very next
 # `command -v uv` fails, silently skipping every Python tool.
 #
-# INHERITED_PATH is what the user's shell actually gave us. The D19 check below
+# INHERITED_PATH is what the user's shell actually gave us. The PATH check below
 # has to read that, not the PATH this block just fixed up in-process, or it
 # concludes the wiring is already done and --wire-path becomes a no-op.
 INHERITED_PATH="$PATH"
@@ -73,7 +73,7 @@ warn() { printf 'warning: %s\n' "$*" >&2; }
 die()  { printf 'error: %s\n' "$1" >&2; [ -n "${2:-}" ] && printf 'fix:   %s\n' "$2" >&2; exit 1; }
 run()  { if [ "$APPLY" -eq 1 ]; then say "  + $*"; "$@"; else say "  would run: $*"; fi; }
 
-# ---------------------------------------------------------------- family (D12)
+# ---------------------------------------------------------------- family
 
 detect_family() {
   [ -r /etc/os-release ] || { echo unknown; return; }
@@ -141,7 +141,7 @@ THIRD_PARTY="$(printf '%s\n'   "$PLAN" | awk -F'\t' '$1=="thirdparty" {print $2}
 THIRD_PARTY_REPOS="$(printf '%s\n' "$PLAN" | awk -F'\t' '$1=="thirdparty" {print $3}' | sort -u)"
 UNAVAILABLE="$(printf '%s\n'   "$PLAN" | awk -F'\t' '$1=="unavailable" {print $2}')"
 
-# ------------------------------------------------- third-party repos (D13)
+# ------------------------------------------------- third-party repos
 
 enable_repo() {
   case "$1" in
@@ -166,7 +166,7 @@ if [ -n "$THIRD_PARTY" ]; then
   printf '%s\n' "$PLAN" | awk -F'\t' '$1=="thirdparty" {printf "  %-16s %s\n", $2, $3}'
   say ""
   say "  Repositories: $(printf '%s ' $THIRD_PARTY_REPOS)"
-  say "  These are third-party and are never enabled silently (D13)."
+  say "  These are third-party and are never enabled silently."
   say ""
   if [ -z "$ALLOW_THIRD_PARTY" ]; then
     if [ -t 0 ]; then
@@ -184,7 +184,7 @@ if [ -n "$THIRD_PARTY" ]; then
     done
   else
     say "  declined. Those packages drop to a lower rung or are recorded as skipped."
-    say "  The run continues; this is never a hard failure (D13)."
+    say "  The run continues; this is never a hard failure."
     for skipped in $THIRD_PARTY; do
       PACKAGES="$(printf '%s\n' "$PACKAGES" | grep -vxF "$skipped" || true)"
       SKIPPED_PACKAGES="$SKIPPED_PACKAGES $skipped"
@@ -292,7 +292,7 @@ if [ -n "$BINARIES" ]; then
   say ""
 fi
 
-# ------------------------------------------------------------ PATH (D19)
+# ------------------------------------------------------------ PATH
 
 if ! printf '%s' ":$INHERITED_PATH:" | grep -q ":$LOCAL_BIN:"; then
   say "PATH: $LOCAL_BIN is not on your PATH."
@@ -304,7 +304,7 @@ if ! printf '%s' ":$INHERITED_PATH:" | grep -q ":$LOCAL_BIN:"; then
       break
     fi
   done
-  [ "$WIRE_PATH" -eq 1 ] || say "  not edited. Re-run with --wire-path, or add it yourself (D19)."
+  [ "$WIRE_PATH" -eq 1 ] || say "  not edited. Re-run with --wire-path, or add it yourself."
   say ""
 fi
 

@@ -1,9 +1,9 @@
-# Codex settings for one profile instance (plan devkit, A3).
+# Codex settings for one profile instance.
 #
 # Lives at ${PROFILE_CONFIG_DIR}/config.toml, which Codex finds through
 # CODEX_HOME. Measured 2026-09-18: CODEX_HOME relocates config, logs, and the
 # state/logs/goals/memories sqlite databases, while the runtime package stays
-# shared in the user's real Codex install directory (Q2).
+# shared in the user's real Codex install directory.
 #
 # ${...} tokens are rendered by install.py.
 

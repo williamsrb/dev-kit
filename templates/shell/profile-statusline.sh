@@ -1,5 +1,5 @@
 #!/bin/sh
-# Status line for profile ${PROFILE_NAME} (plan devkit, 4.2).
+# Status line for profile ${PROFILE_NAME}.
 #
 # Composes with the existing graft statusline rather than replacing it: the
 # profile name is prepended, and whatever graft prints follows.

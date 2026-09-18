@@ -14,9 +14,12 @@ TARGET="${3:?missing target directory}"
 
 command -v curl >/dev/null 2>&1 || { echo "error: curl is required" >&2; exit 1; }
 
+# Projects name the same architecture at least four ways. trivy ships
+# "Linux-64bit", gitleaks ships "linux_x64", others ship "amd64" — matching only
+# the uname spelling silently finds nothing and looks like a missing release.
 case "$(uname -m)" in
-  x86_64|amd64) ARCH_PATTERNS='x86_64|amd64|x64' ;;
-  aarch64|arm64) ARCH_PATTERNS='aarch64|arm64' ;;
+  x86_64|amd64) ARCH_PATTERNS='x86_64|amd64|x64|64bit' ;;
+  aarch64|arm64) ARCH_PATTERNS='aarch64|arm64|ARM64' ;;
   *) echo "error: unsupported architecture $(uname -m)" >&2; exit 1 ;;
 esac
 
@@ -26,7 +29,9 @@ ASSET_URL="$(curl -fsSL "$API" \
   | cut -d'"' -f4 \
   | grep -iE "linux" \
   | grep -iE "$ARCH_PATTERNS" \
-  | grep -ivE '\.(sha256|asc|sig|deb|rpm|apk)$' \
+  | grep -ivE '(^|[^0-9])(32bit|386|i686|armv[567])' \
+  | grep -ivE '\.(sha256|asc|sig|pem|deb|rpm|apk|msi|json|txt|sbom|spdx)$' \
+  | grep -ivE '(sigstore|checksums|attestation)' \
   | head -1)"
 
 if [ -z "$ASSET_URL" ]; then

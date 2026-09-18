@@ -56,7 +56,7 @@ done
 
 say()  { printf '%s\n' "$*"; }
 warn() { printf 'warning: %s\n' "$*" >&2; }
-die()  { printf 'error: %s\n' "$*" >&2; [ -n "${2:-}" ] && printf 'fix:   %s\n' "$2" >&2; exit 1; }
+die()  { printf 'error: %s\n' "$1" >&2; [ -n "${2:-}" ] && printf 'fix:   %s\n' "$2" >&2; exit 1; }
 run()  { if [ "$APPLY" -eq 1 ]; then say "  + $*"; "$@"; else say "  would run: $*"; fi; }
 
 # ---------------------------------------------------------------- family (D12)
@@ -179,10 +179,26 @@ if [ -n "$NEEDS_NODE" ] && ! command -v node >/dev/null 2>&1; then
   say ""
 fi
 
+# One package failing must not abort the other twenty. Collect the failures,
+# report them by name at the end, and let the --verify step decide whether the
+# run is actually short of anything required.
+FAILED_OPTIONAL=""
+
+try_install() {
+  # try_install <label> <command...>
+  local label="$1"; shift
+  if [ "$APPLY" -eq 0 ]; then say "  would run: $*"; return 0; fi
+  say "  + $*"
+  if "$@"; then return 0; fi
+  warn "$label failed; continuing"
+  FAILED_OPTIONAL="$FAILED_OPTIONAL $label"
+  return 0
+}
+
 if [ -n "$NPM_PKGS" ]; then
   say "npm packages:"
   if command -v npm >/dev/null 2>&1 || [ "$APPLY" -eq 0 ]; then
-    for pkg in $NPM_PKGS; do run npm install -g "$pkg"; done
+    for pkg in $NPM_PKGS; do try_install "npm:$pkg" npm install -g "$pkg"; done
   else
     warn "npm is not on PATH; skipping: $(printf '%s ' $NPM_PKGS)"
   fi
@@ -197,7 +213,7 @@ if [ -n "$UV_PKGS" ]; then
     run sh -c "curl -fsSL https://astral.sh/uv/install.sh | sh"
   fi
   if command -v uv >/dev/null 2>&1 || [ "$APPLY" -eq 0 ]; then
-    for pkg in $UV_PKGS; do run uv tool install "$pkg"; done
+    for pkg in $UV_PKGS; do try_install "uv:$pkg" uv tool install "$pkg"; done
   else
     warn "uv is not on PATH; skipping: $(printf '%s ' $UV_PKGS)"
   fi
@@ -216,7 +232,8 @@ if [ -n "$BINARIES" ]; then
       continue
     fi
     say "  $name from github.com/$repo"
-    run "$KIT_DIR/scripts/install-release-binary.sh" "$repo" "$name" "$LOCAL_BIN"
+    try_install "binary:$name" "$KIT_DIR/scripts/install-release-binary.sh" \
+      "$repo" "$name" "$LOCAL_BIN"
   done
   say ""
 fi
@@ -237,7 +254,27 @@ if ! printf '%s' ":$PATH:" | grep -q ":$LOCAL_BIN:"; then
   say ""
 fi
 
+# nvm puts node under $NVM_DIR/versions/..., reachable only in shells that source
+# nvm.sh. This script sources it in-process, so its own verify passes while a
+# fresh shell still cannot find node. Say so rather than letting the next command
+# fail with "node: not found".
+if [ -n "$NEEDS_NODE" ] && [ -s "${NVM_DIR:-$HOME/.nvm}/nvm.sh" ]; then
+  if ! env -i HOME="$HOME" PATH="$PATH" sh -lc 'command -v node' >/dev/null 2>&1; then
+    say "Node: installed through nvm, but a fresh login shell cannot see it yet."
+    say "  nvm adds it by sourcing \$NVM_DIR/nvm.sh from your shell startup file."
+    say "  Open a new shell, or: . \"${NVM_DIR:-\$HOME/.nvm}/nvm.sh\""
+    say ""
+  fi
+fi
+
 # ---------------------------------------------------------------- verify
+
+if [ -n "$FAILED_OPTIONAL" ]; then
+  say "These installs failed and were skipped:"
+  for item in $FAILED_OPTIONAL; do say "  $item"; done
+  say "  The verify step below decides whether any of them was actually required."
+  say ""
+fi
 
 if [ "$APPLY" -eq 1 ] && command -v python3 >/dev/null 2>&1; then
   say "Verifying what the profile declares:"

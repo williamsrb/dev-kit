@@ -1,0 +1,49 @@
+# Headless CLI-agent image (plan devkit, A8/A9).
+#
+# A vendor CLI plus agentctl plus the core skills, with the project bind-mounted.
+# No GUI. No Docker socket: a mounted socket is root-equivalent on the host,
+# which would erase the isolation this image exists for.
+#
+# It runs the real bootstrap.sh rather than a parallel install path, which is
+# what makes it a clean-room test of bootstrap.sh and not just another installer
+# that drifts from it.
+#
+#   docker build -f Dockerfile.agent -t devkit:core --build-arg PROFILE=core .
+#   docker run --rm -it -v "$PWD:/work" -w /work devkit:core
+
+ARG BASE=debian:stable-slim
+FROM ${BASE}
+
+ARG PROFILE=core
+ARG USERNAME=agent
+ARG UID=1000
+
+# Only what bootstrap.sh itself needs to start. Everything else is bootstrap's job.
+RUN apt-get update -qq \
+    && apt-get install -y -qq --no-install-recommends \
+        ca-certificates curl git sudo python3 \
+    && rm -rf /var/lib/apt/lists/*
+
+# install.py refuses to run as root, and that refusal is load-bearing rather than
+# something to work around in the image. So the image has a real user.
+RUN useradd --create-home --uid ${UID} --shell /bin/bash ${USERNAME} \
+    && echo "${USERNAME} ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/${USERNAME} \
+    && chmod 0440 /etc/sudoers.d/${USERNAME}
+
+WORKDIR /opt/devkit
+COPY --chown=${USERNAME}:${USERNAME} . /opt/devkit
+
+USER ${USERNAME}
+ENV PATH="/home/${USERNAME}/.local/bin:${PATH}"
+
+# Step 1: dependencies. Third-party repositories are declined, so this also
+# proves a decline is a skip and not a hard failure (D13).
+RUN ./bootstrap.sh --profile ${PROFILE} --apply --third-party no
+
+# Step 2: configuration, as the unprivileged user.
+RUN ./install.py --profile ${PROFILE} --apply
+
+RUN python3 devkit_cli/bootstrap_plan.py --profile ${PROFILE} --verify
+
+WORKDIR /work
+CMD ["bash"]

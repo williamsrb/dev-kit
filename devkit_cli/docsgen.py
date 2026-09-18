@@ -1,14 +1,148 @@
-"""Placeholder for the docsgen command group. Implemented in a later phase."""
+"""`devkit docs generate` — the generated parts of the docs tree (A8, 6.3, D15).
+
+Only the mechanical sections are generated: the CLI reference and the profile
+table. Prose is written by hand, because generated prose is how a docs tree ends
+up saying nothing. `--check` exits 1 on any diff, which is the gate that catches
+a CLI change nobody documented.
+"""
 
 from __future__ import annotations
 
+import difflib
+import io
+import json
+from contextlib import redirect_stdout
+from pathlib import Path
+
+from . import manifest
+from .common import repo_file
 from .errors import DevkitError
 
-
-def _not_yet(command: str, phase: str):
-    raise DevkitError(f"'devkit {command}' is not implemented yet ({phase})",
-                      "run 'devkit --help' for the commands that are")
+MARKER_START = "<!-- devkit:generated:{name} -->"
+MARKER_END = "<!-- /devkit:generated:{name} -->"
 
 
-def cmd_generate(args):
-    return _not_yet("docs generate", "A8")
+def _cli_reference() -> str:
+    from .cli import build_parser
+    parser = build_parser()
+    lines = ["```", _capture(parser.format_help).rstrip(), "```", ""]
+
+    actions = [a for a in parser._actions if hasattr(a, "choices") and a.choices]
+    for action in actions:
+        for name, sub in action.choices.items():
+            lines += [f"### `devkit {name}`", "", "```",
+                      _capture(sub.format_help).rstrip(), "```", ""]
+            nested = [a for a in sub._actions if hasattr(a, "choices") and a.choices]
+            for inner in nested:
+                for sub_name, sub_parser in inner.choices.items():
+                    lines += [f"#### `devkit {name} {sub_name}`", "", "```",
+                              _capture(sub_parser.format_help).rstrip(), "```", ""]
+    return "\n".join(lines)
+
+
+def _capture(fn) -> str:
+    buffer = io.StringIO()
+    with redirect_stdout(buffer):
+        print(fn())
+    return buffer.getvalue()
+
+
+def _profile_table() -> str:
+    rows = ["| Profile | Extends | Skills | Rules | Vendors | Required tools |",
+            "|---------|---------|--------|-------|---------|----------------|"]
+    for name in manifest.available():
+        profile = manifest.load(name)
+        lineage = profile.get("lineage", [name])
+        parent = lineage[-2] if len(lineage) > 1 else "—"
+        vendors = ", ".join(i["vendor"] for i in profile.get("instances", []))
+        required = len(manifest.provided_binaries(profile, include_optional=False))
+        rows.append(f"| `{name}` | `{parent}` | {len(profile.get('skills', []))} | "
+                    f"{len(profile.get('rules', []))} | {vendors} | {required} |")
+    return "\n".join(rows)
+
+
+GENERATORS = {
+    "cli-reference": _cli_reference,
+    "profile-table": _profile_table,
+}
+
+
+def _apply_blocks(text: str, name: str, body: str) -> str:
+    start, end = MARKER_START.format(name=name), MARKER_END.format(name=name)
+    if start not in text or end not in text:
+        return text
+    head = text.split(start)[0]
+    tail = text.split(end, 1)[1]
+    return f"{head}{start}\n\n{body.rstrip()}\n\n{end}{tail}"
+
+
+def cmd_generate(args) -> int:
+    docs_root = repo_file("docs")
+    targets = sorted(docs_root.rglob("*.md")) if docs_root.is_dir() else []
+    targets += [repo_file("README.md")] if repo_file("README.md").is_file() else []
+    if not targets:
+        raise DevkitError("no documentation files found",
+                          "create docs/ and README.md first")
+
+    stale: list[str] = []
+    for path in targets:
+        original = path.read_text(encoding="utf-8")
+        updated = original
+        for name, generator in GENERATORS.items():
+            updated = _apply_blocks(updated, name, generator())
+        if updated == original:
+            continue
+        stale.append(str(path.relative_to(repo_file(""))))
+        if not args.check:
+            path.write_text(updated, encoding="utf-8")
+        else:
+            diff = list(difflib.unified_diff(
+                original.splitlines(), updated.splitlines(),
+                f"{path.name} (committed)", f"{path.name} (generated)", lineterm="", n=1))
+            print("\n".join(diff[:40]))
+
+    orphans = unreachable_docs()
+    if orphans and args.check:
+        for orphan in orphans:
+            print(f"  unreachable from README.md: {orphan}")
+
+    if args.check:
+        if orphans:
+            print(f"\n{len(orphans)} doc(s) unreachable from README.md")
+            print("fix:   link them from README.md, or delete them")
+            return 1
+        if stale:
+            print(f"\ndocs are stale: {', '.join(stale)}")
+            print("fix:   devkit docs generate")
+            return 1
+        print(f"docs: up to date ({len(targets)} file(s) checked).")
+        return 0
+
+    if stale:
+        print(f"regenerated: {', '.join(stale)}")
+    else:
+        print(f"docs: already up to date ({len(targets)} file(s) checked).")
+    return 0
+
+
+def unreachable_docs() -> list[str]:
+    """Every file under docs/ must be reachable from README.md (validation.md)."""
+    readme = repo_file("README.md")
+    docs_root = repo_file("docs")
+    if not readme.is_file() or not docs_root.is_dir():
+        return []
+    linked, frontier = set(), [readme]
+    while frontier:
+        current = frontier.pop()
+        try:
+            text = current.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            continue
+        import re
+        for match in re.finditer(r"\]\(([^)#\s]+)", text):
+            target = (current.parent / match.group(1)).resolve()
+            if target.is_file() and target.suffix == ".md" and target not in linked:
+                linked.add(target)
+                frontier.append(target)
+    return sorted(str(p.relative_to(repo_file("")))
+                  for p in docs_root.rglob("*.md") if p.resolve() not in linked)

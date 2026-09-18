@@ -1,11 +1,12 @@
 # Fork topology for this kit (plan devkit, section 4.7).
 #
-# lineage_id is this repository's root commit. It is written once, by the first
-# commit, and is never edited by hand: it is what lets `devkit update` tell a
+# lineage_id is this repository's root commit. A commit cannot contain its own
+# SHA, so the root commit is made first and the next commit records it; the
+# value is written once and never edited by hand afterwards: it is what lets `devkit update` tell a
 # fork of this kit from a foreign kit that happens to share a command name.
 # A team forking the kit changes fork_id and sets upstream; lineage_id is
 # inherited unchanged.
-lineage_id: ba65fea0de8054a498c84041530a5822d662b0a9
+lineage_id: 689e75e6801860fdd3c546a5dc9315eaec164be3
 fork_id: devkit
 name: devkit
 upstream: null          # null on the origin fork

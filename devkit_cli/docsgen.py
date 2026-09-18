@@ -9,10 +9,7 @@ a CLI change nobody documented.
 from __future__ import annotations
 
 import difflib
-import io
-import json
-from contextlib import redirect_stdout
-from pathlib import Path
+import re
 
 from . import manifest
 from .common import repo_file
@@ -25,26 +22,19 @@ MARKER_END = "<!-- /devkit:generated:{name} -->"
 def _cli_reference() -> str:
     from .cli import build_parser
     parser = build_parser()
-    lines = ["```", _capture(parser.format_help).rstrip(), "```", ""]
+    lines = ["```", parser.format_help().rstrip(), "```", ""]
 
     actions = [a for a in parser._actions if hasattr(a, "choices") and a.choices]
     for action in actions:
         for name, sub in action.choices.items():
             lines += [f"### `devkit {name}`", "", "```",
-                      _capture(sub.format_help).rstrip(), "```", ""]
+                      sub.format_help().rstrip(), "```", ""]
             nested = [a for a in sub._actions if hasattr(a, "choices") and a.choices]
             for inner in nested:
                 for sub_name, sub_parser in inner.choices.items():
                     lines += [f"#### `devkit {name} {sub_name}`", "", "```",
-                              _capture(sub_parser.format_help).rstrip(), "```", ""]
+                              sub_parser.format_help().rstrip(), "```", ""]
     return "\n".join(lines)
-
-
-def _capture(fn) -> str:
-    buffer = io.StringIO()
-    with redirect_stdout(buffer):
-        print(fn())
-    return buffer.getvalue()
 
 
 def _profile_table() -> str:
@@ -84,12 +74,14 @@ def cmd_generate(args) -> int:
         raise DevkitError("no documentation files found",
                           "create docs/ and README.md first")
 
+    bodies = {name: generator() for name, generator in GENERATORS.items()}
+
     stale: list[str] = []
     for path in targets:
         original = path.read_text(encoding="utf-8")
         updated = original
-        for name, generator in GENERATORS.items():
-            updated = _apply_blocks(updated, name, generator())
+        for name, body in bodies.items():
+            updated = _apply_blocks(updated, name, body)
         if updated == original:
             continue
         stale.append(str(path.relative_to(repo_file(""))))
@@ -138,7 +130,6 @@ def unreachable_docs() -> list[str]:
             text = current.read_text(encoding="utf-8")
         except (OSError, UnicodeDecodeError):
             continue
-        import re
         for match in re.finditer(r"\]\(([^)#\s]+)", text):
             target = (current.parent / match.group(1)).resolve()
             if target.is_file() and target.suffix == ".md" and target not in linked:

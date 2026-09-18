@@ -101,7 +101,7 @@ def selected_files(source: Path, allowlist: dict, layers: set[str]) -> dict[str,
     return chosen
 
 
-def _copy(src: Path, dest: Path, source_root: Path) -> None:
+def _copy(src: Path, dest: Path) -> None:
     dest.parent.mkdir(parents=True, exist_ok=True)
     if src.is_symlink():
         link = src.readlink()
@@ -178,11 +178,14 @@ def cmd_export(args) -> int:
         if not stale and not orphans:
             print(f"{target} matches {source}: {len(chosen)} files.")
             return 0
+        shown = 0
         for rel in stale[:20]:
             print(f"  behind: {rel}")
+            shown += 1
         for rel in orphans[:20]:
             print(f"  orphan: {rel}")
-        extra = len(stale) + len(orphans) - 40
+            shown += 1
+        extra = len(stale) + len(orphans) - shown
         if extra > 0:
             print(f"  ... and {extra} more")
         print(f"\n{target} is behind {source} "
@@ -198,7 +201,7 @@ def cmd_export(args) -> int:
 
     if args.apply:
         for rel in stale:
-            _copy(chosen[rel], target / rel, source)
+            _copy(chosen[rel], target / rel)
         for rel in orphans:
             (target / rel).unlink()
         for directory in sorted((p for p in target.rglob("*") if p.is_dir()),

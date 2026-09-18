@@ -109,7 +109,6 @@
   "ignore": [
     ".git/**",
     "docs/**/*.png",
-    "examples/**",
     "**/__pycache__/**",
     "**/*.pyc",
     "path-contract.json",

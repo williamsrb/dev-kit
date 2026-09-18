@@ -89,8 +89,6 @@ def build_parser() -> argparse.ArgumentParser:
                       help="Files or directories to check. Default: the whole repo.")
     lint.add_argument("--contract", metavar="FILE",
                       help="Path contract. Default: path-contract.json.")
-    lint.add_argument("--fix", action="store_true",
-                      help="Rewrite literal home paths to ${HOME} where it is safe.")
     lint.set_defaults(func=paths.cmd_lint_paths)
 
     # -- doctor -------------------------------------------------------------

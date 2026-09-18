@@ -2,6 +2,9 @@
 __pycache__/
 *.pyc
 
+# Local scan output (agentctl security scan)
+.security-local/
+
 # Local install and staging state
 .cache/
 *.bak

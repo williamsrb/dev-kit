@@ -103,7 +103,6 @@ python3 -m unittest discover -s tests       # the acceptance checklist
 | `export-allowlist.json` | What ships, per layer, with a recorded reason for every exclusion. |
 | `path-contract.json` | The `${HOME}` rules `devkit lint-paths` enforces. |
 | `devkit.yaml` | Fork topology: `lineage_id`, `fork_id`, `upstream`. |
-| `examples/` | The rejected container-isolation sketches, kept as a record. |
 
 ## Why not Docker
 
@@ -111,9 +110,7 @@ The kit does not containerize the harness for profile isolation. A profile is
 two environment variables and a `.desktop` file; containerizing to obtain that
 would cost a rebuild per profile switch. A containerized harness driving
 `docker compose` or `enonic sandbox` needs a mounted Docker socket, which is
-root-equivalent on the host and erases the isolation the container was for. The
-sketches in `examples/` are kept as the record of that assessment — one of them
-has a real bug, deliberately left in place.
+root-equivalent on the host and erases the isolation the container was for.
 
 Docker does earn its place for a headless CLI-agent image: see
 [docs/maintainer/container.md](docs/maintainer/container.md).

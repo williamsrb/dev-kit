@@ -61,7 +61,7 @@ options:
 ### `devkit lint-paths`
 
 ```
-usage: devkit lint-paths [-h] [--contract FILE] [--fix] [PATH ...]
+usage: devkit lint-paths [-h] [--contract FILE] [PATH ...]
 
 Fail on home paths in machine-consumed positions.
 
@@ -71,7 +71,6 @@ positional arguments:
 options:
   -h, --help       show this help message and exit
   --contract FILE  Path contract. Default: path-contract.json.
-  --fix            Rewrite literal home paths to ${HOME} where it is safe.
 ```
 
 ### `devkit doctor`

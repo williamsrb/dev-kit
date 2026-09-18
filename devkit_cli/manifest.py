@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from .common import load_json, repo_file
+from .common import REPO_ROOT, load_json
 from .errors import DevkitError
 
 ALLOWLIST_PREFIX = "@allowlist:"
@@ -26,8 +26,8 @@ LAYER_KEYS = ("skills", "rules", "kb")
 OVERRIDE_KEYS = ("instances", "color", "settings", "client_overlay", "todo")
 
 
-def profile_path(name: str) -> Path:
-    return repo_file("profiles") / f"{name}.json"
+def profile_path(name: str, kit_root: Path | None = None) -> Path:
+    return (kit_root or REPO_ROOT) / "profiles" / f"{name}.json"
 
 
 def _resolve_allowlist_ref(ref: str, allowlist: dict) -> list[str]:
@@ -45,30 +45,39 @@ def _resolve_allowlist_ref(ref: str, allowlist: dict) -> list[str]:
     return list(value) if isinstance(value, list) else []
 
 
-def load(name: str, _seen: set[str] | None = None) -> dict:
-    """Load a profile with its ancestors composed in."""
+def load(name: str, _seen: set[str] | None = None,
+         kit_root: Path | None = None) -> dict:
+    """Load a profile with its ancestors composed in.
+
+    `kit_root` points the lookup at another checkout of the kit — `update apply`
+    reads the staged payload's profiles, not the local ones.
+    """
+    root = kit_root or REPO_ROOT
     seen = _seen or set()
     if name in seen:
-        chain = " -> ".join([*seen, name])
+        chain = " -> ".join([*sorted(seen), name])
         raise DevkitError(f"profile inheritance loops: {chain}",
                           "break the cycle by setting one profile's 'extends' to null")
     seen = seen | {name}
 
-    path = profile_path(name)
+    path = profile_path(name, root)
     if not path.is_file():
-        available = sorted(p.stem for p in repo_file("profiles").glob("*.json"))
+        available = sorted(p.stem for p in (root / "profiles").glob("*.json"))
         raise DevkitError(f"no profile named {name!r}",
                           f"available: {', '.join(available) or 'none'}")
     profile = load_json(path, f"profile {name}")
 
     parent_name = profile.get("extends")
-    composed: dict = load(parent_name, seen) if parent_name else {}
+    composed: dict = load(parent_name, seen, root) if parent_name else {}
 
-    allowlist = load_json(repo_file("export-allowlist.json"), "export allowlist")
+    # Read lazily: most profiles carry literal layer lists and never touch it.
+    allowlist: dict | None = None
     for key, value in profile.items():
         if key in ("_comment", "extends"):
             continue
         if key in LAYER_KEYS and isinstance(value, str) and value.startswith(ALLOWLIST_PREFIX):
+            if allowlist is None:
+                allowlist = load_json(root / "export-allowlist.json", "export allowlist")
             value = _resolve_allowlist_ref(value, allowlist)
         if key in OVERRIDE_KEYS:
             composed[key] = value
@@ -87,7 +96,7 @@ def load(name: str, _seen: set[str] | None = None) -> dict:
 
 
 def available() -> list[str]:
-    directory = repo_file("profiles")
+    directory = REPO_ROOT / "profiles"
     return sorted(p.stem for p in directory.glob("*.json")) if directory.is_dir() else []
 
 

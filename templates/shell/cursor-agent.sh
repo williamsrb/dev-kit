@@ -1,8 +1,8 @@
 #!/bin/sh
-# Tier 1 wrapper for cursor-agent, profile ${PROFILE_NAME} (plan devkit, A3).
+# Tier 1 wrapper for cursor-agent, profile ${PROFILE_NAME}.
 #
 # cursor-agent has no config-dir flag of its own. It reads XDG_CONFIG_HOME for
-# config and CURSOR_DATA_DIR for sessions (Q1b, measured 2026-09-18).
+# config and CURSOR_DATA_DIR for sessions (measured 2026-09-18).
 #
 # XDG_CONFIG_HOME is a GENERIC variable: exporting it would relocate the config
 # directory of every XDG-aware program in this shell. So it is set on the exec

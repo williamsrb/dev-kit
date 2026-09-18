@@ -1,4 +1,4 @@
-# gitleaks config for the export gate (plan devkit, A1).
+# gitleaks config for the export gate.
 #
 # Extends the default ruleset — it does not replace it. The only additions are
 # allowlists for findings verified as false positives, each scoped as tightly as
@@ -17,7 +17,7 @@ keywords = ["key", "api", "token", "secret", "client", "passwd", "password", "au
   # Enonic's own API documentation uses content and node UUIDs in every example
   # (`content.get({ key: '<uuid>' })`). They identify sample content in a doc
   # build, not a credential, and the docs are vendored verbatim so they cannot
-  # be edited to avoid the pattern. Verified in findings.md, "Verified clean".
+  # be edited to avoid the pattern. Verified by inspection.
   description = "Enonic doc example content/node UUIDs"
   paths = ['''core/kb/offline-reference/(xp7|xp8|react4xp-.*|content-studio-.*)/.*\.md$''']
   regexes = ['''^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$''']

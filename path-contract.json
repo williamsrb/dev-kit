@@ -1,8 +1,8 @@
 {
   "_comment": [
-    "The path contract (plan devkit, section 4.5, D6), enforced by `devkit lint-paths`.",
+    "The path contract, enforced by `devkit lint-paths`.",
     "",
-    "F10 is the finding behind it: `~` is a shell construct. It expands only in a",
+    "The finding behind it: `~` is a shell construct. It expands only in a",
     "shell, unquoted, at word start. It does NOT expand in a markdown link target,",
     "a JSON or TOML value, a .desktop Exec= line, a symlink target, cron's command",
     "position, or a quoted shell string — \"~/x\" stays literal even in bash.",
@@ -45,8 +45,8 @@
     "_comment": [
       "Shell and Python. ~/ is an error inside quotes and in any non-word-start",
       "position; $HOME and ${HOME} are correct. A literal home path is always an error.",
-      "The ${HOME:-/home/leanon} fallback pattern in the sync scripts is F4's",
-      "specific case: the fallback bakes in one machine's username."
+      "The ${HOME:-/home/leanon} fallback pattern in the sync scripts is the",
+      "specific case that motivated this: the fallback bakes in one machine's username."
     ],
     "suffixes": [
       ".sh",

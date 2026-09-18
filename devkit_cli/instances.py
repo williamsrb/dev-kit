@@ -1,6 +1,6 @@
 """What an instance materializes, and the provenance file that describes it.
 
-Sections 4.3 (layout), 4.5 (path rendering), 4.6 (provenance), 4.8 (icon colour).
+Layout, path rendering, provenance, and icon colour.
 """
 
 from __future__ import annotations
@@ -36,7 +36,7 @@ CURSOR_CLI_CANDIDATES = ["/usr/share/cursor/bin/cursor", "/opt/cursor/bin/cursor
 
 
 def paths_for(profile_name: str, vendor: str, home: Path) -> dict[str, Path]:
-    """The layout in 4.3, anchored at a real home."""
+    """The instance layout, anchored at a real home."""
     harness = home / ".agents-profiles" / profile_name
     return {
         "harness_dir": harness,
@@ -57,7 +57,7 @@ def _vendor_app_name(vendor: str) -> str:
 
 
 def profile_hue(profile_name: str) -> float:
-    """A stable hue per profile name, so two profiles never collide by accident (4.2)."""
+    """A stable hue per profile name, so two profiles never collide by accident."""
     digest = hashlib.sha256(profile_name.encode("utf-8")).digest()
     return (digest[0] << 8 | digest[1]) / 65535.0
 
@@ -75,7 +75,7 @@ def profile_colors(profile: dict) -> tuple[str, str]:
 
 
 def imagemagick() -> list[str] | None:
-    """IM7 ships `magick` and may not ship `convert` (4.8, R-icon)."""
+    """ImageMagick 7 ships `magick` and may not ship `convert`."""
     for candidate in ("magick", "convert"):
         found = shutil.which(candidate)
         if found:
@@ -104,7 +104,7 @@ def first_existing(candidates: list[str]) -> str | None:
 
 
 def render_tokens(profile: dict, vendor: str, home: Path) -> dict[str, str]:
-    """Every ${PROFILE_*} a template may reference, resolved for this context (4.5)."""
+    """Every ${PROFILE_*} a template may reference, resolved for this context."""
     layout = paths_for(profile["name"], vendor, home)
     settings = profile.get("settings") or {}
     light, _dark = profile_colors(profile)

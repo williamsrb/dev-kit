@@ -1,6 +1,6 @@
 {
   "_comment": [
-    "Codex hooks for one profile instance (plan devkit, A3).",
+    "Codex hooks for one profile instance.",
     "Commands are absolute after rendering: a hook runs with no guarantee about cwd."
   ],
   "hooks": {

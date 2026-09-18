@@ -1,6 +1,6 @@
 {
   "_comment": [
-    "Cursor hooks for one profile instance (plan devkit, A3).",
+    "Cursor hooks for one profile instance.",
     "Cursor resolves ./hooks/... relative to its config dir, so these stay relative;",
     "that is what keeps the projection working."
   ],

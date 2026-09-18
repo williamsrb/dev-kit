@@ -1,4 +1,4 @@
-"""`devkit export` — the one-way copy from the harness into core/ (A1, D7, D8).
+"""`devkit export` — the one-way copy from the harness into core/.
 
 The export is curated, not a mirror: `export-allowlist.json` names what ships,
 and `hard_excludes` wins over every allowlist entry so a directory carrying
@@ -20,7 +20,7 @@ from pathlib import Path
 from .common import Plan, load_json, repo_file, resolve_source, unrender_home
 from .errors import DevkitError
 
-# Text files get ${HOME} substitution on the way out (D6); everything else is
+# Text files get ${HOME} substitution on the way out; everything else is
 # copied byte for byte.
 TEXT_SUFFIXES = {".md", ".mdc", ".json", ".toml", ".sh", ".py", ".cjs", ".js",
                  ".yaml", ".yml", ".txt", ".desktop", ".cfg", ".ini"}

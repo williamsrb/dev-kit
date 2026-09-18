@@ -59,8 +59,8 @@ Two details worth knowing before you debug something:
 | Distribution family | Package manager | Status |
 |---------------------|-----------------|--------|
 | Debian / Ubuntu | apt | verified on the reference machine |
-| Fedora / RHEL / Rocky | dnf | package names proposed; the CI matrix is the test (R15) |
-| Arch | pacman | package names proposed; the CI matrix is the test (R15) |
+| Fedora / RHEL / Rocky | dnf | package names proposed; the CI matrix is the test |
+| Arch | pacman | package names proposed; the CI matrix is the test |
 
 Nothing on Arch may require the AUR.
 

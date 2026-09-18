@@ -1,8 +1,8 @@
 #!/bin/sh
-# Tier 1 wrapper for the Cursor IDE, profile ${PROFILE_NAME} (plan devkit, A3).
+# Tier 1 wrapper for the Cursor IDE, profile ${PROFILE_NAME}.
 #
-# --user-data-dir and --extensions-dir both work on the installed build (Q1,
-# measured 2026-09-18): the probe dir received User/, logs/, machineid and
+# --user-data-dir and --extensions-dir both work on the installed build
+# (measured 2026-09-18): the probe dir received User/, logs/, machineid and
 # CachedProfilesData while the default config dir kept its mtime.
 #
 # Note which binary: /usr/share/cursor/cursor is the GUI entry point and hangs

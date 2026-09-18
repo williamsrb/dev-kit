@@ -2,7 +2,7 @@
 
 Every write goes through Plan so `--dry-run` is the default and `--apply` is the
 exception (Definition of Done 7), and through `_write`, so an existing path the
-kit did not author aborts and names itself unless `--force` backs it up first (D5).
+kit did not author aborts and names itself unless `--force` backs it up first.
 """
 
 from __future__ import annotations
@@ -16,7 +16,7 @@ from .common import (EXEC_MODE, FILE_MODE, Plan, REPO_ROOT, back_up,
                      ensure_dir, relative_to_home, write_json)
 from .errors import DevkitError
 
-# 4.10 / F11: Claude Code and Codex walk up to $HOME collecting instruction
+# Claude Code and Codex walk up to $HOME collecting instruction
 # files, so a populated ~/CLAUDE.md loads in addition to the config-dir one and
 # leaks into every profile at once.
 HOME_ROOT_RULES = {
@@ -106,7 +106,7 @@ def materialize(profile: dict, vendors: list[str] | None, home: Path,
 
     `kit_root` and `source_commit` name which checkout: `update apply` installs
     from the staged payload rather than from whatever the local tree happens to
-    be at (4.7 — apply reads the staged payload).
+    be at: apply reads the staged payload.
     """
     root = kit_root or REPO_ROOT
     kit = _kit_metadata(root)
@@ -222,8 +222,8 @@ def _find_vendor_icon(vendor: str) -> Path | None:
 def _kit_metadata(root: Path | None = None) -> dict:
     """Read devkit.yaml without a YAML parser.
 
-    It is a flat file of `key: value` lines by design (D21 keeps YAML only where
-    nothing parses it at runtime), so a line reader is honest here. Inline `#`
+    It is a flat file of `key: value` lines by design — YAML is kept only where
+    nothing parses it at runtime — so a line reader is honest here. Inline `#`
     comments are stripped: the file documents itself heavily.
     """
     path = (root or REPO_ROOT) / "devkit.yaml"
@@ -365,7 +365,7 @@ def cmd_doctor(args) -> int:
                 problems.append(
                     f"{label}: {len(offenders)}+ path(s) not owned by you: {listed}\n"
                     f"    fix: sudo chown -R {uid} {layout['config_dir']} "
-                    f"— and stop installing config with sudo (D18)")
+                    f"— and stop installing config with sudo")
 
     problems += _home_root_problems(home)
 

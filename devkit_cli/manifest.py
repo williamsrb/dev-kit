@@ -1,4 +1,4 @@
-"""Profile manifest loading and composition (A4, section 4.2).
+"""Profile manifest loading and composition.
 
 `extends` composes, so a PHP profile gets core's kb without inheriting 3.4M of
 XP reference. Lists concatenate parent-first; scalars and dicts are overridden
@@ -106,7 +106,7 @@ def dependencies(profile: dict, include_optional: bool = True) -> list[dict]:
 
 
 def provided_binaries(profile: dict, include_optional: bool = True) -> list[str]:
-    """Every binary the profile expects on PATH. `provides` is authoritative (4.8)."""
+    """Every binary the profile expects on PATH. `provides` is authoritative."""
     names: list[str] = []
     for dep in dependencies(profile, include_optional):
         for binary in dep.get("provides", []):

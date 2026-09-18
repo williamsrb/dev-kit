@@ -1,4 +1,4 @@
-"""Privilege, ownership, and target-user resolution (section 4.9, D18).
+"""Privilege, ownership, and target-user resolution.
 
 The rule is: escalate for packages, never for configuration. `bootstrap.sh`
 scopes sudo to package transactions; `install.py` and `devkit` refuse to run as
@@ -48,7 +48,7 @@ def refuse_root(target_user: str | None = None) -> pwd.struct_passwd:
         who = invoking_user()
         hint = (f"re-run without sudo, or pass --user {who}" if who
                 else "re-run as the user who will use the harness, or pass --user <name>")
-        raise DevkitError("refusing to write configuration as root (D18)", hint)
+        raise DevkitError("refusing to write configuration as root", hint)
     return resolve_target_user(target_user)
 
 
@@ -63,7 +63,7 @@ def find_root_owned(root: Path, uid: int, limit: int = 20) -> list[Path]:
     """Paths under an instance that the target user does not own.
 
     A root-owned file inside a profile is the signature of an install run with
-    sudo that should not have been; `devkit doctor` reports it (4.9).
+    sudo that should not have been; `devkit doctor` reports it.
     """
     offenders: list[Path] = []
     if not root.exists():

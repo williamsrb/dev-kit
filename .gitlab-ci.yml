@@ -1,4 +1,4 @@
-# CI for devkit (plan section D17: CI is required infrastructure, not a nicety).
+# CI for devkit. CI is required infrastructure here, not a nicety.
 #
 # Every gate here also runs as an ordinary local command. That is the point: a
 # gate you can only run in CI is a gate nobody runs before pushing.
@@ -31,7 +31,8 @@ lint-paths:
 
 help-contract:
   stage: gate
-  # D14 is easy to regress and invisible until someone types the bare command.
+  # The help contract is easy to regress and invisible until someone types the
+  # bare command.
   script:
     - ./devkit > /tmp/bare.txt
     - ./devkit --help > /tmp/help.txt
@@ -68,16 +69,16 @@ shellcheck:
 
 # ---------------------------------------------------------------- matrix
 
-# R15: the dnf and pacman package names are proposed, not verified — foreign
+# The dnf and pacman package names are proposed, not verified — foreign
 # distro repositories are not queryable from a development machine. This matrix
 # is their acceptance test. A job passes when bootstrap.sh completes and every
 # `provides` binary the profile declares is resolvable, with its rung named.
 .matrix:
   stage: matrix
-  # debian is green: the A7 clean-room build ran bootstrap.sh and install.py
+  # debian is green: the clean-room build ran bootstrap.sh and install.py
   # from scratch and resolved every declared tool. The others stay
   # allow_failure until they have done the same at least once, because the dnf
-  # and pacman package names are still proposed (R15).
+  # and pacman package names are still proposed.
   allow_failure: true
   script:
     - ./bootstrap.sh --profile "${PROFILE:-core}" --apply --third-party no
@@ -85,7 +86,7 @@ shellcheck:
 
 debian:
   extends: .matrix
-  allow_failure: false     # verified by the A7 clean-room build
+  allow_failure: false     # verified by the clean-room build
   image: debian:stable-slim
   before_script:
     - apt-get update -qq && apt-get install -y -qq sudo curl ca-certificates python3
@@ -106,7 +107,7 @@ rocky:
   extends: .matrix
   # A RHEL derivative specifically: ffmpeg is not in the base repositories, so
   # this is the job that proves a declined third-party repo is a skip and not a
-  # hard failure (D13).
+  # hard failure.
   image: rockylinux:9
   before_script:
     - dnf install -y -q sudo curl python3

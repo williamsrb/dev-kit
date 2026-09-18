@@ -3,7 +3,7 @@
 
 Step 1 (bootstrap.sh) installs dependencies and writes no configuration. This
 writes configuration and installs no packages. Neither assumes the other had
-network access, and neither escalates privilege for the other's job (D18).
+network access, and neither escalates privilege for the other's job.
 
 This refuses to run as root. A config file written by root into a user's home is
 a support ticket, not an install. When you must run the whole thing under sudo
@@ -75,14 +75,14 @@ def main() -> int:
     parser.add_argument("--apply", action="store_true",
                         help="Write. Without it this is a dry run.")
     parser.add_argument("--force", action="store_true",
-                        help="Proceed past a collision, after a timestamped backup (D5).")
+                        help="Proceed past a collision, after a timestamped backup.")
     parser.add_argument("--user", metavar="NAME",
                         help="Install for this account. Required when running under sudo.")
     parser.add_argument("--verify", action="store_true",
                         help="Report installed state and exit. Writes nothing.")
     parser.add_argument("--fix-home-rules", action="store_true",
                         help="Also move a populated home-root CLAUDE.md/AGENTS.md "
-                             "into its vendor config dir (4.10).")
+                             "into its vendor config dir.")
     args = parser.parse_args()
 
     try:

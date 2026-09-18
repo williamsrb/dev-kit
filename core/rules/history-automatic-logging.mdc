@@ -5,13 +5,15 @@ alwaysApply: true
 
 # History (automatic)
 
-Every **Agent / Chat** prompt and its assistant result are logged automatically by **user-level hooks** — not by the agent writing files.
+Every chat prompt and its assistant result are logged automatically by user-level hooks — Cursor, Claude Code, and Codex share one script and one destination. The agent does **not** write these files.
 
-- **Root:** `~/.agents/history/` (`~/.cursor/history`, `~/.claude/history`, and `~/.claude_personal/history` are symlinks to it)
-- **Daily folder:** `[iso-date]/` (e.g. `2026-06-16/`)
-- **Prompt file:** `[iso-datetime]_prompt.md` (datetime slug uses `-` instead of `:` for paths, e.g. `2026-06-16T15-30-00Z_prompt.md`)
+- **Root:** `~/.agents/history/` (`~/.cursor/history`, `~/.claude/history`, `~/.claude_personal/history`, and `~/.codex/history` are symlinks to it)
+- **Daily folder:** `[iso-date]/`, e.g. `2026-06-16/`
+- **Prompt file:** `[iso-datetime]_prompt.md` — slug uses `-` instead of `:`, e.g. `2026-06-16T15-30-00Z_prompt.md`
 - **Result file:** matching `[iso-datetime]_result.md`
 
-**Do not** create `*_prompt.md` or `*_result.md` history files yourself unless the user explicitly asks for a manual export or fix.
+**Do not** create `*_prompt.md` or `*_result.md` yourself unless the user explicitly asks for a manual export or fix.
 
-Hooks live in `~/.cursor/hooks/history.py` (shared writer) plus per-harness adapters/wrappers. If logging fails, check `~/.agents/history/.state/hook-errors.log`.
+Hooks: `~/.agents/hooks/history.py` via `claude-history-adapter.py` (Claude Code `settings.json`) and `codex-history-adapter.py` (Codex `hooks.json`), wired as `UserPromptSubmit` + `Stop`. If logging fails, check `~/.agents/history/.state/hook-errors.log`.
+
+All hooks live in `~/.agents/hooks` (migrated there 2026-08-10); `~/.cursor/hooks` and `~/.codex/hooks` are symlinks to it, which is what keeps Cursor's relative `./hooks/…` commands working.

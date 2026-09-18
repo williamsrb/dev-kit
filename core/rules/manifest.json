@@ -134,8 +134,8 @@
       ],
       "layer": "core",
       "body": {
-        "from": "file",
-        "file": "10-history-logging-is-automatic.md"
+        "from": "mdc",
+        "file": "history-automatic-logging.mdc"
       }
     },
     {

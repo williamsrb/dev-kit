@@ -29,8 +29,16 @@ def _kit() -> dict:
 
 
 def _git(*args: str, cwd: Path | None = None) -> subprocess.CompletedProcess:
-    return subprocess.run(["git", *args], cwd=str(cwd or REPO_ROOT),
-                          capture_output=True, text=True, check=False)
+    """Run git, reporting an absent git as a failed call rather than raising.
+
+    Every caller reads returncode or stdout, so a missing binary degrades the
+    same way a failed command does.
+    """
+    try:
+        return subprocess.run(["git", *args], cwd=str(cwd or REPO_ROOT),
+                              capture_output=True, text=True, check=False)
+    except FileNotFoundError:
+        return subprocess.CompletedProcess(args, 127, "", "git is not installed")
 
 
 def _is_shallow(work: Path) -> bool:

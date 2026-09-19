@@ -367,14 +367,19 @@ class UpdateApplyTests(unittest.TestCase):
             self._stage(Path(tmp) / "staged", commit)
             materialize(manifest.load("core"), ["claude"], home, Plan(apply=True), force=True)
 
+            # The root guard is PrivilegeTests' subject, not this one's, and CI
+            # runs as root — where it would refuse before apply does anything.
             staging, home_fn = update.STAGING_ROOT, Path.home
+            guard = privilege.refuse_root
             update.STAGING_ROOT = Path(tmp) / "staged"
             Path.home = staticmethod(lambda: home)
+            privilege.refuse_root = lambda *_a, **_kw: None
             try:
                 with redirect_stdout(io.StringIO()):
                     rc = update.cmd_apply(argparse.Namespace(profile="core", apply=True))
             finally:
                 update.STAGING_ROOT, Path.home = staging, home_fn
+                privilege.refuse_root = guard
 
             wrapper = (home / ".local" / "bin" / "claude-core").read_text()
             provenance = json.loads(

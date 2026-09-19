@@ -166,6 +166,14 @@ def read_provenance(config_dir: Path) -> dict | None:
 
 
 def kit_commit() -> str:
-    result = subprocess.run(["git", "-C", str(REPO_ROOT), "rev-parse", "HEAD"],
-                            capture_output=True, text=True, check=False)
+    """The kit's HEAD, or "unknown" when it cannot be read.
+
+    check=False swallows a non-zero exit, not a missing binary, and git is a
+    dependency bootstrap.sh installs rather than one devkit can assume.
+    """
+    try:
+        result = subprocess.run(["git", "-C", str(REPO_ROOT), "rev-parse", "HEAD"],
+                                capture_output=True, text=True, check=False)
+    except FileNotFoundError:
+        return "unknown"
     return result.stdout.strip() if result.returncode == 0 else "unknown"

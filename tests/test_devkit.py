@@ -400,10 +400,16 @@ class WirePathTests(unittest.TestCase):
             home = Path(tmp)
             for name in (".bash_profile", ".profile"):
                 (home / name).touch()
+            # Drop only ~/.local/bin from the real PATH. Hard-coding one keeps
+            # bootstrap.sh from finding python3 wherever the image puts it, and
+            # it exits before the check under test.
+            without_local_bin = ":".join(
+                entry for entry in os.environ["PATH"].split(":")
+                if entry and not entry.rstrip("/").endswith("/.local/bin"))
             result = subprocess.run(
                 ["bash", str(REPO / "bootstrap.sh"), "--wire-path"],
                 capture_output=True, text=True, check=False,
-                env={"HOME": str(home), "PATH": "/usr/bin:/bin", "LANG": "C"})
+                env={"HOME": str(home), "PATH": without_local_bin, "LANG": "C"})
         self.assertIn("is not on your PATH", result.stdout)
         self.assertIn(".bash_profile", result.stdout)
         self.assertNotIn(str(home / ".profile"), result.stdout)

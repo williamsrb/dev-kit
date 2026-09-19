@@ -38,8 +38,11 @@ help-contract:
     - ./devkit --help > /tmp/help.txt
     - diff /tmp/bare.txt /tmp/help.txt
     - for g in profile update origin docs; do diff <(./devkit $g) <(./devkit $g --help); done
-    - "! ./devkit bogus 2>/dev/null"
-    - "./devkit bogus 2>&1 >/dev/null | grep -q usage:"
+    # `devkit bogus` is meant to exit 2, so it needs both a condition context
+    # (errexit) and no pipe (pipefail) — either one fails the job on the very
+    # behaviour this asserts.
+    - "rc=0; ./devkit bogus 2>/tmp/err.txt || rc=$?; test \"$rc\" -eq 2"
+    - "grep -q usage: /tmp/err.txt"
 
 export-drift:
   stage: gate
@@ -52,7 +55,11 @@ export-drift:
 
 secrets:
   stage: gate
-  image: zricethezav/gitleaks:latest
+  image:
+    name: zricethezav/gitleaks:latest
+    # The image's entrypoint is gitleaks itself, so the runner's `sh -c` would
+    # arrive as `gitleaks sh -c ...`. Clear it and call gitleaks from script.
+    entrypoint: [""]
   script:
     - gitleaks dir core --no-banner --config .gitleaks.toml
 

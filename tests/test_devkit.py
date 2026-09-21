@@ -667,23 +667,20 @@ class BootstrapPlanTests(unittest.TestCase):
 
         from devkit_cli import bootstrap_plan, manifest
         profile = manifest.load("core")
+        skippable = bootstrap_plan.third_party_binaries(profile, "dnf", "rhel")
+        self.assertTrue({"rg", "shellcheck", "ffmpeg", "convert"} <= skippable)
+        self.assertNotIn("jq", skippable)
+
         with mock.patch("devkit_cli.bootstrap_plan.shutil.which", return_value=None), \
              mock.patch("devkit_cli.bootstrap_plan._alternate", return_value=None):
-            # Without the flag, EPEL/rpmfusion binaries are hard failures.
             self.assertEqual(
                 bootstrap_plan.verify(profile, manager="dnf", family="rhel"), 1)
-            # With the flag they are skips; remaining failures would be
-            # non-third-party binaries that are also absent in this mock.
             self.assertEqual(
                 bootstrap_plan.verify(
                     profile, manager="dnf", family="rhel",
                     third_party_declined=True),
                 1)
-            # Third-party set itself must not be the only cause of failure.
-            skippable = bootstrap_plan.third_party_binaries(profile, "dnf", "rhel")
-            self.assertTrue({"rg", "shellcheck", "ffmpeg", "convert"} <= skippable)
-            self.assertNotIn("jq", skippable)
-            # Declined mode with everything present succeeds.
+
         with mock.patch("devkit_cli.bootstrap_plan.shutil.which",
                         side_effect=lambda b: f"/usr/bin/{b}"), \
              mock.patch("devkit_cli.bootstrap_plan._alternate", return_value=None):
@@ -692,11 +689,12 @@ class BootstrapPlanTests(unittest.TestCase):
                     profile, manager="dnf", family="rhel",
                     third_party_declined=True),
                 0)
-            # Absent third-party binaries are still ok when declined.
+
         def which_no_epel(binary: str):
             if binary in skippable:
                 return None
             return f"/usr/bin/{binary}"
+
         with mock.patch("devkit_cli.bootstrap_plan.shutil.which",
                         side_effect=which_no_epel), \
              mock.patch("devkit_cli.bootstrap_plan._alternate", return_value=None):

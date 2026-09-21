@@ -31,14 +31,17 @@ case "$(uname -m)" in
 esac
 
 API="https://api.github.com/repos/$REPO/releases/latest"
-mapfile -t MATCHES < <(fetch -H 'Accept: application/vnd.github+json' "$API" \
+# Fetch outside process substitution: mapfile < <(...) ignores the subshell
+# status under set -e, which used to turn an API 403/5xx into "no linux asset".
+API_JSON="$(fetch -H 'Accept: application/vnd.github+json' "$API")" || exit $?
+mapfile -t MATCHES < <(printf '%s\n' "$API_JSON" \
   | grep -oE '"browser_download_url": *"[^"]+"' \
   | cut -d'"' -f4 \
   | grep -iE "linux" \
   | grep -iE "$ARCH_PATTERNS" \
   | grep -ivE '(^|[^0-9])(32bit|386|i686|armv[567])' \
   | grep -ivE '\.(sha256|asc|sig|pem|deb|rpm|apk|msi|json|txt|sbom|spdx)$' \
-  | grep -ivE '(sigstore|checksums|attestation)')
+  | grep -ivE '(sigstore|checksums|attestation)' || true)
 
 # Accelerator builds (ollama mlx/rocm/jetpack) match "linux" + "amd64" and sort
 # ahead of the plain archive. Take a plain archive when one exists.

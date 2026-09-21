@@ -38,15 +38,15 @@ command groups:
   GROUP
     export          Copy the allowlisted subset of the harness into core/.
     lint-paths      Fail on home paths in machine-consumed positions.
-    doctor          Check instances for staleness, ownership, auth handlers,
-                    and desktop forks.
+    doctor          Check instances for staleness, ownership, auth handlers, and
+                    desktop forks.
     profile         Create, inspect, sync, and rebuild isolated harness
                     profiles.
     update          Check, stage, and apply kit updates (one direction).
     origin          Inspect and adopt the kit this instance came from.
     docs            Generate and verify the documentation tree.
-    fix-home-rules  Move a home-root CLAUDE.md/AGENTS.md into its vendor
-                    config dir.
+    fix-home-rules  Move a home-root CLAUDE.md/AGENTS.md into its vendor config
+                    dir.
 ```
 
 ### `devkit export`
@@ -138,20 +138,18 @@ options:
 #### `devkit profile create`
 
 ```
-usage: devkit profile create [-h] [--type TYPE] [--vendor VENDOR] [--apply]
-                             [--force]
-                             name
+usage: devkit profile create [-h] [--type TYPE] [--vendor VENDOR] [--apply] [--force] name
 
 positional arguments:
   name
 
 options:
   -h, --help       show this help message and exit
-  --type TYPE      Profile type (profiles/<TYPE>.json). Default: NAME when
-                   that type exists.
+  --type TYPE      Profile type (profiles/<TYPE>.json). Default: NAME when that
+                   type exists.
   --vendor VENDOR  Limit to these vendors (repeatable).
-  --apply          Write user-owned config, then print the desktop-fork plan
-                   and ask sudo. Default: dry run.
+  --apply          Write user-owned config, then print the desktop-fork plan and
+                   ask sudo. Default: dry run.
   --force          Proceed past a collision, after a timestamped backup. Does
                    not bypass a duplicate name.
 ```
@@ -166,16 +164,14 @@ positional arguments:
 
 options:
   -h, --help  show this help message and exit
-  --apply     Write user-owned config, then print the desktop-fork plan and
-              ask sudo. Default: dry run.
+  --apply     Write user-owned config, then print the desktop-fork plan and ask
+              sudo. Default: dry run.
 ```
 
 #### `devkit profile adopt`
 
 ```
-usage: devkit profile adopt [-h] [--type TYPE] --vendor VENDOR
-                            --config-dir CONFIG_DIR [--apply]
-                            name
+usage: devkit profile adopt [-h] [--type TYPE] --vendor VENDOR --config-dir CONFIG_DIR [--apply] name
 
 positional arguments:
   name
@@ -207,9 +203,7 @@ options:
 ```
 usage: devkit profile auth [-h] COMMAND ...
 
-Linux allows one default handler per URL scheme. Profile launchers do not
-claim vendor schemes; a NoDisplay dispatcher routes the callback to the
-profile that started login.
+Linux allows one default handler per URL scheme. Profile launchers do not claim vendor schemes; a NoDisplay dispatcher routes the callback to the profile that started login.
 
 options:
   -h, --help  show this help message and exit
@@ -222,9 +216,7 @@ commands:
 #### `devkit profile apps-sync`
 
 ```
-usage: devkit profile apps-sync [-h] [--user NAME] [--profile NAME]
-                                [--vendor VENDOR] [--install-hook]
-                                [--icons-only] [--apply]
+usage: devkit profile apps-sync [-h] [--user NAME] [--profile NAME] [--vendor VENDOR] [--install-hook] [--icons-only] [--apply]
 
 Rebuild per-profile desktop app forks from the stock packages. Same recipe as Claude Personal: rsync into /usr/lib/devkit/, patch desktopName / WM_CLASS, recolor in-tree icons. Never writes stock trees or Claude Personal. --apply prints the plan, then asks sudo.
 
@@ -316,8 +308,7 @@ options:
 #### `devkit origin adopt`
 
 ```
-usage: devkit origin adopt [-h] --fork-id FORK_ID --upstream UPSTREAM
-                           [--apply]
+usage: devkit origin adopt [-h] --fork-id FORK_ID --upstream UPSTREAM [--apply]
 
 options:
   -h, --help           show this help message and exit

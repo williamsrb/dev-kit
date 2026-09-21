@@ -89,6 +89,13 @@ shellcheck:
   allow_failure: true
   script:
     - ./bootstrap.sh --profile "${PROFILE:-core}" --apply --third-party no
+    # bootstrap.sh is a subprocess, so nvm and $HOME/.local/bin never land on
+    # this shell's PATH. Re-establish them before the independent --verify.
+    - export PATH="${HOME}/.local/bin:${PATH}"
+    - |
+      if [ -s "${NVM_DIR:-$HOME/.nvm}/nvm.sh" ]; then
+        . "${NVM_DIR:-$HOME/.nvm}/nvm.sh"
+      fi
     - python3 devkit_cli/bootstrap_plan.py --profile "${PROFILE:-core}" --verify
 
 debian:
@@ -117,7 +124,9 @@ rocky:
   # hard failure.
   image: rockylinux:9
   before_script:
-    - dnf install -y -q sudo curl python3
+    # The image ships curl-minimal, which Conflicts: curl.
+    - dnf install -y -q sudo python3
+    - command -v curl >/dev/null || dnf install -y -q curl
 
 arch:
   extends: .matrix

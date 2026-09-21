@@ -230,6 +230,10 @@ class PrivilegeTests(unittest.TestCase):
                         text.find(privilege.ELEVATION_BANNER))
 
     def test_run_privileged_invokes_sudo_after_printing(self):
+        # CI runs this suite as root. run_privileged refuses uid 0; this test
+        # is about print-then-sudo order, so pretend we still need to escalate.
+        original_is_root = privilege.is_root
+        privilege.is_root = lambda: False
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             sudo = root / "sudo"
@@ -256,6 +260,7 @@ class PrivilegeTests(unittest.TestCase):
                         steps=["rsync stock -> fork"],
                     )
             finally:
+                privilege.is_root = original_is_root
                 os.environ["PATH"] = saved_path
             self.assertEqual(rc, 0)
             text = buf.getvalue()

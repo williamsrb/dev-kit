@@ -22,10 +22,10 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO))
 
-from devkit_cli import export, instances, manifest, paths, privilege, update  # noqa: E402
+from devkit_cli import appfork, auth, export, instances, manifest, paths, privilege, update  # noqa: E402
 from devkit_cli.common import Plan  # noqa: E402
 from devkit_cli.errors import DevkitError  # noqa: E402
-from devkit_cli.profiles import materialize  # noqa: E402
+from devkit_cli.profiles import choose_first_profile, flag_given, load_for_create, materialize  # noqa: E402
 
 
 def _kit_lineage() -> str:
@@ -82,8 +82,10 @@ class HelpContractTests(unittest.TestCase):
         self.assertEqual(result.stdout, "")
         self.assertIn("usage:", result.stderr)
 
-    def test_bad_flag_does_not_slip_through_the_help_branch(self):
-        self.assertEqual(run("--nope").returncode, 2)
+    def test_profile_auth_bare_equals_help(self):
+        bare, helped = run("profile", "auth"), run("profile", "auth", "--help")
+        self.assertEqual(bare.returncode, 0, bare.stderr)
+        self.assertEqual(bare.stdout, helped.stdout)
 
 
 class PathContractTests(unittest.TestCase):
@@ -213,6 +215,64 @@ class PrivilegeTests(unittest.TestCase):
         with self.assertRaises(DevkitError) as caught:
             privilege.resolve_target_user("definitely-not-a-user")
         self.assertIn("definitely-not-a-user", str(caught.exception))
+
+    def test_elevation_prints_the_plan_before_sudo(self):
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            privilege.explain_elevation(
+                "they install packages into the system.",
+                ["sudo apt-get update", "sudo apt-get install -y python3"])
+        text = buf.getvalue()
+        self.assertIn("These steps need administrator privileges", text)
+        self.assertIn("sudo apt-get update", text)
+        self.assertIn(privilege.ELEVATION_BANNER, text)
+        self.assertLess(text.find("sudo apt-get update"),
+                        text.find(privilege.ELEVATION_BANNER))
+
+    def test_run_privileged_invokes_sudo_after_printing(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            sudo = root / "sudo"
+            marker = root / "order.txt"
+            sudo.write_text(
+                "#!/bin/sh\n"
+                f"echo sudo-ran >> '{marker}'\n"
+                "if [ \"$1\" = -- ]; then shift; fi\n"
+                "exec \"$@\"\n",
+                encoding="utf-8")
+            sudo.chmod(0o755)
+            inner = root / "inner.py"
+            inner.write_text(
+                f"open({str(marker)!r}, 'a').write('inner-ran\\n')\n",
+                encoding="utf-8")
+            saved_path = os.environ.get("PATH", "")
+            os.environ["PATH"] = f"{root}{os.pathsep}{saved_path}"
+            buf = io.StringIO()
+            try:
+                with redirect_stdout(buf):
+                    rc = privilege.run_privileged(
+                        [sys.executable, str(inner)],
+                        reason="they write into /usr/lib/devkit.",
+                        steps=["rsync stock -> fork"],
+                    )
+            finally:
+                os.environ["PATH"] = saved_path
+            self.assertEqual(rc, 0)
+            text = buf.getvalue()
+            self.assertIn("rsync stock -> fork", text)
+            self.assertIn(privilege.ELEVATION_BANNER, text)
+            self.assertIn("sudo --", text)
+            self.assertLess(text.find(privilege.ELEVATION_BANNER),
+                            text.find("sudo --"))
+            self.assertEqual(marker.read_text().splitlines(), ["sudo-ran", "inner-ran"])
+
+    def test_bootstrap_dry_run_labels_root_commands(self):
+        result = subprocess.run(
+            ["bash", str(REPO / "bootstrap.sh"), "--profile", "core"],
+            capture_output=True, text=True, check=False)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("would run (as root): sudo", result.stdout)
+        self.assertNotIn(privilege.ELEVATION_BANNER, result.stdout)
 
 
 class RenderingTests(unittest.TestCase):
@@ -390,6 +450,360 @@ class UpdateApplyTests(unittest.TestCase):
         self.assertIn(self.MARKER.strip(), wrapper)
         self.assertEqual(provenance["source_commit"], commit)
         self.assertEqual(provenance["history"][-1]["to"], commit)
+
+
+class InstanceNamingTests(unittest.TestCase):
+    def test_create_binds_a_free_form_name_to_a_type(self):
+        profile = load_for_create("dummy", "enonic")
+        self.assertEqual(profile["name"], "dummy")
+        self.assertEqual(profile["type"], "enonic")
+        self.assertEqual([i["vendor"] for i in profile["instances"]],
+                         ["claude", "codex", "cursor"])
+
+    def test_create_without_type_keeps_name_equals_type(self):
+        profile = load_for_create("php", None)
+        self.assertEqual(profile["name"], "php")
+        self.assertEqual(profile["type"], "php")
+
+    def test_unknown_name_without_type_is_named(self):
+        with self.assertRaises(DevkitError) as caught:
+            load_for_create("dummy", None)
+        self.assertIn("--type", str(caught.exception.fix))
+
+    def test_duplicate_name_is_refused_even_with_force(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            profile = load_for_create("dummy", "enonic")
+            materialize(profile, ["codex"], home, Plan(apply=True), force=True)
+            with self.assertRaises(DevkitError) as caught:
+                from devkit_cli.profiles import _refuse_duplicate
+                _refuse_duplicate(home, "dummy")
+            self.assertIn("already exists", str(caught.exception))
+
+    def test_slash_in_the_name_is_refused(self):
+        with self.assertRaises(DevkitError):
+            instances.validate_instance_name("enonic/dummy")
+
+    def test_provenance_records_type(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            profile = load_for_create("dummy", "enonic")
+            materialize(profile, ["codex"], home, Plan(apply=True), force=True)
+            prov = instances.read_provenance(
+                home / ".agents-profiles" / "dummy" / "codex")
+            self.assertEqual(prov["profile"], "dummy")
+            self.assertEqual(prov["type"], "enonic")
+            found = instances.discover_instances(home)
+            self.assertEqual([(n, v) for n, v, _d, _p in found], [("dummy", "codex")])
+
+    def test_missing_type_in_provenance_infers_name_equals_type(self):
+        self.assertEqual(instances.instance_type({}, "enonic"), "enonic")
+        self.assertEqual(instances.instance_type({"type": "php"}, "dummy"), "php")
+
+
+class FirstProfileOfferTests(unittest.TestCase):
+    def test_unattended_uses_type_as_the_name(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            chosen = choose_first_profile(Path(tmp), "enonic", offer=False)
+        self.assertEqual(chosen, ("enonic", "enonic"))
+
+    def test_unattended_honours_an_explicit_name(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            chosen = choose_first_profile(Path(tmp), "enonic", name="dummy", offer=False)
+        self.assertEqual(chosen, ("dummy", "enonic"))
+
+    def test_offer_declined_returns_none(self):
+        answers = iter(["n"])
+        with tempfile.TemporaryDirectory() as tmp:
+            chosen = choose_first_profile(
+                Path(tmp), "core", offer=True,
+                input_fn=lambda _p: next(answers), print_fn=lambda *_a: None)
+        self.assertIsNone(chosen)
+
+    def test_offer_accepts_free_form_name_and_type(self):
+        answers = iter(["y", "enonic", "dummy"])
+        with tempfile.TemporaryDirectory() as tmp:
+            chosen = choose_first_profile(
+                Path(tmp), "core", offer=True,
+                input_fn=lambda _p: next(answers), print_fn=lambda *_a: None)
+        self.assertEqual(chosen, ("dummy", "enonic"))
+
+    def test_offer_defaults_name_to_the_type(self):
+        answers = iter(["", "php", ""])
+        with tempfile.TemporaryDirectory() as tmp:
+            chosen = choose_first_profile(
+                Path(tmp), "core", offer=True,
+                input_fn=lambda _p: next(answers), print_fn=lambda *_a: None)
+        self.assertEqual(chosen, ("php", "php"))
+
+    def test_flag_given_ignores_argparse_defaults(self):
+        self.assertFalse(flag_given("--profile", ["--apply"]))
+        self.assertTrue(flag_given("--profile", ["--profile", "enonic"]))
+        self.assertTrue(flag_given("--name", ["--name=dummy"]))
+
+
+class CodexDesktopTests(unittest.TestCase):
+    def test_codex_desktop_sets_both_isolation_vars(self):
+        profile = load_for_create("dummy", "enonic")
+        tokens = instances.render_tokens(profile, "codex", Path("/home/example"))
+        rendered = instances.render(
+            (REPO / "templates" / "desktop" / "codex.desktop").read_text(), tokens)
+        self.assertIn("CODEX_HOME=/home/example/.agents-profiles/dummy/codex", rendered)
+        self.assertIn("CODEX_ELECTRON_USER_DATA_PATH=/home/example/.config/Codex-dummy",
+                      rendered)
+        self.assertIn("Name=Codex · dummy", rendered)
+        self.assertIn("/usr/lib/devkit/codex-dummy/codex-launcher", rendered)
+        self.assertIn("StartupWMClass=Codex-dummy", rendered)
+        self.assertNotIn("x-scheme-handler/", rendered)
+
+    def test_profile_desktops_do_not_claim_vendor_schemes(self):
+        tokens = instances.render_tokens(manifest.load("enonic"), "claude",
+                                         Path("/home/example"))
+        for name in ("claude.desktop", "cursor.desktop", "codex.desktop"):
+            text = instances.render(
+                (REPO / "templates" / "desktop" / name).read_text(), tokens)
+            self.assertNotIn("x-scheme-handler/", text, name)
+
+    def test_php_still_has_no_cursor_instance(self):
+        php = manifest.load("php")
+        self.assertEqual([i["vendor"] for i in php["instances"]], ["claude", "codex"])
+        self.assertTrue(all(i["kind"] == "cli+desktop" for i in php["instances"]))
+
+
+class ProfileCliPathTests(unittest.TestCase):
+    def test_wrappers_exec_the_stock_cli_token(self):
+        claude = (REPO / "templates" / "shell" / "claude.sh").read_text()
+        self.assertIn('exec "${PROFILE_CLAUDE_CLI}" "$@"', claude)
+        self.assertNotIn("exec claude ", claude)
+        codex = (REPO / "templates" / "shell" / "codex.sh").read_text()
+        self.assertIn('exec "${PROFILE_CODEX_CLI}" "$@"', codex)
+        agent = (REPO / "templates" / "shell" / "cursor-agent.sh").read_text()
+        self.assertIn('"${PROFILE_CURSOR_AGENT}" "$@"', agent)
+
+    def test_public_wrapper_is_not_a_stock_name(self):
+        layout = instances.paths_for("dummy", "claude", Path("/home/example"))
+        self.assertEqual(layout["wrapper"].name, "claude-dummy")
+        self.assertEqual(layout["bin_dir"] / "claude",
+                         Path("/home/example/.agents-profiles/dummy/bin/claude"))
+
+    def test_profile_bin_links_unprefixed_name_to_the_wrapper(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            materialize(load_for_create("dummy", "enonic"), ["claude"], home,
+                        Plan(apply=True), force=True)
+            wrapper = home / ".local" / "bin" / "claude-dummy"
+            link = home / ".agents-profiles" / "dummy" / "bin" / "claude"
+            self.assertTrue(wrapper.is_file())
+            self.assertTrue(link.is_symlink())
+            self.assertEqual(link.resolve(), wrapper.resolve())
+            text = wrapper.read_text()
+            self.assertIn("exec ", text)
+            self.assertNotIn("exec claude ", text)
+
+    def test_resolve_stock_cli_skips_devkit_wrappers_and_keeps_the_shim(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            bin_dir = Path(tmp)
+            stock = bin_dir / "claude"
+            stock.write_text("#!/bin/sh\n# vendor shim\n", encoding="utf-8")
+            stock.chmod(0o755)
+            wrapper = bin_dir / "claude-dummy"
+            wrapper.write_text("#!/bin/sh\n# Generated by devkit\nexec /tmp/claude\n",
+                               encoding="utf-8")
+            saved = os.environ.get("PATH")
+            os.environ["PATH"] = f"{bin_dir}{os.pathsep}{saved or ''}"
+            try:
+                self.assertEqual(instances.resolve_stock_cli("claude"), str(stock))
+            finally:
+                if saved is None:
+                    del os.environ["PATH"]
+                else:
+                    os.environ["PATH"] = saved
+
+    def test_desktop_launch_prepends_profile_bin(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            bin_dir = home / ".agents-profiles" / "dummy" / "bin"
+            bin_dir.mkdir(parents=True)
+            saved = os.environ.get("PATH", "")
+            os.environ["PATH"] = "/usr/bin"
+            try:
+                auth.prepend_profile_bin(home, "dummy")
+                self.assertEqual(os.environ["PATH"].split(os.pathsep)[0], str(bin_dir))
+                self.assertIn("/usr/bin", os.environ["PATH"])
+            finally:
+                os.environ["PATH"] = saved
+
+
+class AuthDispatcherTests(unittest.TestCase):
+    def test_pending_marker_wins(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            profile = load_for_create("dummy", "enonic")
+            materialize(profile, ["codex"], home, Plan(apply=True), force=True)
+            auth.write_pending(home, "dummy", "codex")
+            name, vendor = auth.resolve_target("codex://callback", home, running=[])
+            self.assertEqual((name, vendor), ("dummy", "codex"))
+
+    def test_one_running_instance_is_enough_without_pending(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            profile = load_for_create("dummy", "enonic")
+            materialize(profile, ["codex"], home, Plan(apply=True), force=True)
+            name, vendor = auth.resolve_target(
+                "codex://callback", home, running=["dummy"])
+            self.assertEqual((name, vendor), ("dummy", "codex"))
+
+    def test_ambiguous_running_instances_refuse(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            for name in ("alpha", "beta"):
+                materialize(load_for_create(name, "enonic"), ["codex"], home,
+                            Plan(apply=True), force=True)
+            with self.assertRaises(DevkitError) as caught:
+                auth.resolve_target("codex://callback", home, running=["alpha", "beta"])
+            self.assertIn("ambiguous", str(caught.exception))
+
+    def test_update_discovers_a_free_form_instance(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            materialize(load_for_create("dummy", "enonic"), ["codex"], home,
+                        Plan(apply=True), force=True)
+            original = Path.home
+            Path.home = staticmethod(lambda: home)
+            try:
+                found = update._installed_instances(None)
+            finally:
+                Path.home = original
+            self.assertEqual([(n, v) for n, v, _d, _p in found], [("dummy", "codex")])
+            self.assertEqual(found[0][3]["type"], "enonic")
+
+
+class AppForkTests(unittest.TestCase):
+    """Per-profile Electron forks follow the Claude Personal recipe:
+    rsync stock, patch identity, never write the stock tree, survive via
+    apt + dpkg hooks (Cursor's dual hook; Personal is apt-only)."""
+
+    def _asar(self, path: Path, desktop: str) -> None:
+        blob = (json.dumps({"name": "app", "desktopName": desktop,
+                            "productName": "Claude"}) + "\n").encode()
+        header = {
+            "files": {
+                "package.json": {
+                    "offset": "0",
+                    "size": len(blob),
+                    "integrity": appfork.integrity_for(blob, 4194304),
+                }
+            }
+        }
+        path.parent.mkdir(parents=True, exist_ok=True)
+        appfork.write_asar(path, header, blob, 0o644)
+
+    def test_asar_patch_changes_desktop_name_and_integrity(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "app.asar"
+            self._asar(path, "com.anthropic.Claude.desktop")
+            appfork.patch_asar_desktop_name(
+                path, "Claude-dummy.desktop", dry_run=False)
+            self.assertEqual(appfork.asar_desktop_name(path), "Claude-dummy.desktop")
+
+    def test_asar_dry_run_does_not_write(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "app.asar"
+            self._asar(path, "chatgpt.desktop")
+            before = path.read_bytes()
+            appfork.patch_asar_desktop_name(
+                path, "Codex-dummy.desktop", dry_run=True)
+            self.assertEqual(path.read_bytes(), before)
+
+    def test_cursor_unpacked_identity_patches_desktop_name_and_nameshort(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            stock = Path(tmp) / "stock"
+            dest = Path(tmp) / "forks" / "cursor-dummy"
+            app_dir = dest / "resources" / "app"
+            app_dir.mkdir(parents=True)
+            (app_dir / "package.json").write_text(
+                json.dumps({"name": "Cursor", "desktopName": "cursor.desktop",
+                            "version": "1.0.0"}) + "\n",
+                encoding="utf-8")
+            (app_dir / "product.json").write_text(
+                json.dumps({"nameShort": "Cursor",
+                            "linuxIconName": "co.anysphere.cursor"}) + "\n",
+                encoding="utf-8")
+            spec = appfork.Vendor(
+                name="cursor", package="cursor", stock_lib=stock,
+                binary="cursor", stock_desktop_name="cursor.desktop",
+                package_json_rel="resources/app/package.json",
+                product_json_rel="resources/app/product.json",
+                version_rel=None,
+            )
+            lines = appfork.patch_identity(spec, dest, "dummy", dry_run=False)
+            pkg = json.loads((app_dir / "package.json").read_text())
+            product = json.loads((app_dir / "product.json").read_text())
+            self.assertEqual(pkg["desktopName"], "Cursor-dummy.desktop")
+            self.assertEqual(product["nameShort"], "Cursor-dummy")
+            self.assertTrue(any("desktopName=Cursor-dummy.desktop" in line for line in lines))
+
+    def test_refuses_to_rsync_onto_stock_or_personal(self):
+        spec = appfork.VENDORS["claude"]
+        with self.assertRaises(RuntimeError) as caught:
+            appfork.rsync_stock(spec, spec.stock_lib, dry_run=True)
+        self.assertIn("stock", str(caught.exception))
+        with self.assertRaises(RuntimeError) as caught:
+            appfork.rsync_stock(spec, appfork.PERSONAL_LIB, dry_run=True)
+        self.assertIn("Personal", str(caught.exception))
+
+    def test_cheap_gate_skips_when_version_and_desktop_name_match(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            stock = Path(tmp) / "stock"
+            dest = Path(tmp) / "fork"
+            for tree in (stock, dest):
+                tree.mkdir()
+                (tree / "version").write_text("42.0.0\n", encoding="utf-8")
+                self._asar(tree / "resources" / "app.asar", "Claude-dummy.desktop")
+            spec = appfork.Vendor(
+                name="claude", package="claude-desktop", stock_lib=stock,
+                binary="claude-desktop",
+                stock_desktop_name="com.anthropic.Claude.desktop",
+                asar_rel="resources/app.asar",
+            )
+            with self.assertRaises(appfork.Skip) as caught:
+                appfork.cheap_gates(spec, dest, "dummy")
+            self.assertIn("already at 42.0.0", str(caught.exception))
+
+    def test_install_hook_writes_apt_and_dpkg_snippets(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            env = appfork.Env(
+                fork_root=root / "forks",
+                worker=root / "usr" / "local" / "bin" / "sync-devkit-profile-apps.py",
+                apt_conf=root / "etc" / "apt" / "apt.conf.d" / "99-devkit-profile-apps",
+                dpkg_conf=root / "etc" / "dpkg" / "dpkg.cfg.d" / "60devkit-profile-apps",
+                apparmor_dir=root / "etc" / "apparmor.d",
+                home_root=root / "home",
+                log_path=root / "var" / "log" / "devkit-profile-apps.log",
+            )
+            appfork.install_hook(env, dry_run=False)
+            apt = env.apt_conf.read_text()
+            dpkg = env.dpkg_conf.read_text()
+            self.assertIn("DPkg::Post-Invoke", apt)
+            self.assertIn("/usr/local/bin/sync-devkit-profile-apps.py", apt)
+            self.assertIn("|| true", apt)
+            self.assertIn("post-invoke", dpkg)
+            self.assertIn("does not run for bare dpkg", dpkg)
+            self.assertTrue(env.worker.is_file())
+            self.assertNotIn("99-cursor-recolor", apt)
+            self.assertNotIn("99-claude-personal-sync", apt)
+
+    def test_desktop_tokens_point_at_the_fork_not_stock(self):
+        tokens = instances.render_tokens(
+            load_for_create("dummy", "enonic"), "claude", Path("/home/example"))
+        self.assertEqual(tokens["PROFILE_GUI_BIN"],
+                         "/usr/lib/devkit/claude-dummy/claude-desktop")
+        self.assertEqual(tokens["PROFILE_WM_CLASS"], "Claude-dummy")
+        rendered = instances.render(
+            (REPO / "templates" / "desktop" / "claude.desktop").read_text(), tokens)
+        self.assertIn("/usr/lib/devkit/claude-dummy/claude-desktop", rendered)
+        self.assertNotIn("/usr/bin/claude-desktop", rendered)
 
 
 class WirePathTests(unittest.TestCase):

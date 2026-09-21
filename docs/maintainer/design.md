@@ -14,14 +14,29 @@ configuration must **not** have it, because a config file owned by root in a
 user's home is a support ticket. Keeping them in one script means one privilege
 level for both, and the wrong one for at least one of them.
 
+Every elevation prints the plan first, then asks `sudo` for a password.
+`bootstrap.sh --apply` lists the package commands; `install.py --apply` writes
+user-owned config, then lists the `/usr/lib/devkit` rsyncs. Dry-run labels the
+same commands `would run (as root):` and does not prompt.
+
 They also assume nothing about each other. Either can run on a machine where the
 other has not.
 
-## Profile isolation is environment variables, not containers
+## Profile isolation is config plus a GUI fork, not containers
 
-A profile is two environment variables and a `.desktop` file. Containerizing to
-obtain that would cost a rebuild per profile switch, and profile switching is
-the frequent operation.
+Config isolation is environment variables, a uniquely named CLI wrapper, and a
+`.desktop` file. Dock identity needs more: Electron bakes `desktopName` into
+`app.asar`, so several profiles of the same vendor would otherwise share one
+`WM_CLASS`. Each profile GUI is a Personal-style rsync of the stock app under
+`/usr/lib/devkit/`, with a patched identity. Stock Claude, ChatGPT, Cursor, and
+Claude Personal stay untouched.
+
+Linux also allows one default URL handler per scheme. Profile launchers do not
+claim `claude://` / `codex://` / `cursor://`; a `NoDisplay` dispatcher routes
+the callback.
+
+Containerizing to obtain that would cost a rebuild per profile switch, and
+profile switching is the frequent operation.
 
 The blocker is nested runtime, not the GUI. A containerized harness driving
 `docker compose` or `enonic sandbox` needs either DinD or a mounted

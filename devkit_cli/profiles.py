@@ -9,9 +9,10 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 from pathlib import Path
 
-from . import instances, manifest, privilege
+from . import appfork, auth, instances, manifest, privilege
 from .common import (EXEC_MODE, FILE_MODE, Plan, REPO_ROOT, back_up,
                      ensure_dir, relative_to_home, write_json)
 from .errors import DevkitError
@@ -158,6 +159,8 @@ def materialize(profile: dict, vendors: list[str] | None, home: Path,
             if plan.apply:
                 write_json(target, prov)
 
+    auth.install_dispatchers(plan, home, kit_root=root)
+
 
 def _write_vendor_config(plan: Plan, vendor: str, layout: dict,
                          tokens: dict, force: bool, root: Path) -> None:
@@ -180,14 +183,36 @@ def _write_wrapper(plan: Plan, vendor: str, layout: dict,
     rendered = instances.render(template.read_text(encoding="utf-8"), tokens)
     _write(plan, layout["wrapper"], rendered, force, executable=True,
            label=relative_to_home(layout["wrapper"]))
+    _link_profile_cli(plan, vendor, layout)
 
 
 def _wrapper_template(vendor: str) -> str:
     return {"cursor": "cursor-agent"}.get(vendor, vendor)
 
 
+def _link_profile_cli(plan: Plan, vendor: str, layout: dict) -> None:
+    """Unprefixed name under the profile bin/ so the GUI finds this CLI on PATH."""
+    names = instances.VENDOR_BINARIES.get(vendor) or []
+    if not names:
+        return
+    dest = layout["bin_dir"] / names[0]
+    target = layout["wrapper"]
+    if dest.is_symlink() and dest.readlink() == target:
+        return
+    plan.record(f"link   {relative_to_home(dest)} -> {relative_to_home(target)}")
+    if not plan.apply:
+        return
+    ensure_dir(dest.parent)
+    if dest.is_symlink() or dest.exists():
+        dest.unlink()
+    dest.symlink_to(target)
+
+
 def _write_desktop(plan: Plan, vendor: str, profile: dict, layout: dict,
                    tokens: dict, force: bool, root: Path) -> None:
+    if not instances.first_existing(instances.VENDOR_GUI_CANDIDATES.get(vendor, [])):
+        plan.record(f"skip   desktop {vendor} (GUI not installed)")
+        return
     template = root / "templates" / "desktop" / f"{vendor}.desktop"
     if not template.is_file():
         return
@@ -210,7 +235,8 @@ def _find_vendor_icon(vendor: str) -> Path | None:
              Path("/usr/share/icons/hicolor/256x256/apps"),
              Path("/usr/share/pixmaps")]
     stems = {"cursor": ["co.anysphere.cursor", "cursor"],
-             "claude": ["claude-desktop", "claude"]}.get(vendor, [vendor])
+             "claude": ["claude-desktop", "claude"],
+             "codex": ["chatgpt", "codex"]}.get(vendor, [vendor])
     for root in roots:
         for stem in stems:
             candidate = root / f"{stem}.png"
@@ -241,51 +267,145 @@ def _kit_metadata(root: Path | None = None) -> dict:
 
 # ---------------------------------------------------------------- commands
 
+def choose_first_profile(home: Path, default_type: str, *,
+                         name: str | None = None, offer: bool = False,
+                         input_fn=input, print_fn=print) -> tuple[str, str] | None:
+    """Pick (instance name, type) for a first install.
+
+    When `offer` is false, name defaults to the type (unattended / --profile given).
+    When `offer` is true, ask on a TTY. Decline returns None.
+    """
+    if not offer:
+        chosen_type = default_type
+        chosen_name = name or chosen_type
+        load_for_create(chosen_name, chosen_type)
+        return chosen_name, chosen_type
+    if instances.discover_instances(home):
+        chosen_type = default_type
+        chosen_name = name or chosen_type
+        load_for_create(chosen_name, chosen_type)
+        return chosen_name, chosen_type
+
+    types = manifest.available()
+    print_fn("No profile is installed yet.")
+    print_fn("Available types: " + (", ".join(types) or "none"))
+    reply = input_fn("Create a first profile? [Y/n] ").strip().lower()
+    if reply in ("n", "no"):
+        print_fn("Skipped. Later: devkit profile create NAME --type TYPE --apply")
+        return None
+    type_default = default_type if default_type in types else (types[0] if types else default_type)
+    raw_type = input_fn(f"  Type [{type_default}]: ").strip() or type_default
+    name_default = name or raw_type
+    raw_name = input_fn(f"  Name [{name_default}]: ").strip() or name_default
+    load_for_create(raw_name, raw_type)
+    return raw_name, raw_type
+
+
+def flag_given(flag: str, argv: list[str] | None = None) -> bool:
+    """True when the user passed `flag` (not merely an argparse default)."""
+    args = argv if argv is not None else sys.argv[1:]
+    return flag in args or any(a.startswith(flag + "=") for a in args)
+
+
+def load_for_create(name: str, type_name: str | None,
+                    kit_root: Path | None = None) -> dict:
+    """Bind a type JSON to a free-form instance name."""
+    instances.validate_instance_name(name)
+    chosen = type_name
+    if not chosen:
+        if manifest.profile_path(name, kit_root).is_file():
+            chosen = name
+        else:
+            available = ", ".join(manifest.available()) or "none"
+            raise DevkitError(
+                f"no type named {name!r} and --type was not given",
+                f"pass --type TYPE (available: {available})")
+    if not manifest.profile_path(chosen, kit_root).is_file():
+        available = ", ".join(manifest.available()) or "none"
+        raise DevkitError(f"no profile type named {chosen!r}",
+                          f"available: {available}")
+    return instances.bind_instance(manifest.load(chosen, kit_root=kit_root),
+                                   name, chosen)
+
+
+def load_for_instance(name: str, home: Path,
+                      kit_root: Path | None = None) -> dict:
+    """Load the type manifest for a materialized instance on disk."""
+    instances.validate_instance_name(name)
+    matches = [row for row in instances.discover_instances(home) if row[0] == name]
+    if not matches:
+        raise DevkitError(
+            f"no installed profile named {name!r}",
+            f"run 'devkit profile create {name} --type TYPE --apply' first")
+    type_name = instances.instance_type(matches[0][3], name)
+    return instances.bind_instance(manifest.load(type_name, kit_root=kit_root),
+                                   name, type_name)
+
+
+def _refuse_duplicate(home: Path, name: str) -> None:
+    existing = home / ".agents-profiles" / name
+    if existing.exists():
+        raise DevkitError(
+            f"profile {name!r} already exists at {existing}",
+            "pick a unique name, or run 'devkit profile sync "
+            f"{name} --apply' to re-materialize")
+
+
 def cmd_create(args) -> int:
     user = privilege.refuse_root(getattr(args, "user", None))
     home = Path(user.pw_dir)
-    profile = manifest.load(args.name)
+    profile = load_for_create(args.name, getattr(args, "type", None))
+    _refuse_duplicate(home, profile["name"])
     plan = Plan(args.apply)
     materialize(profile, args.vendor, home, plan, args.force)
     result = plan.report(f"profile {args.name}")
     if plan.apply and plan.actions:
         _report_home_root_rules(home)
+        finish_appforks(home, profile, user.pw_name)
     return result
 
 
 def cmd_sync(args) -> int:
     user = privilege.refuse_root(getattr(args, "user", None))
     home = Path(user.pw_dir)
-    profile = manifest.load(args.name)
+    profile = load_for_instance(args.name, home)
     plan = Plan(args.apply)
     materialize(profile, None, home, plan, force=True)
-    return plan.report(f"profile {args.name} (sync)")
+    result = plan.report(f"profile {args.name} (sync)")
+    if plan.apply:
+        finish_appforks(home, profile, user.pw_name)
+    return result
 
 
 def cmd_list(args) -> int:
     home = Path.home()
-    names = manifest.available()
-    if not names:
-        print("no profiles defined.")
+    found = instances.discover_instances(home)
+    if not found:
+        print("no installed profiles.")
         return 0
-    print(f"{'PROFILE':16s} {'EXTENDS':14s} {'VENDOR':8s} {'STATE':12s} CONFIG DIR")
-    for name in names:
-        profile = manifest.load(name)
-        parent = (profile.get("lineage") or [name])[-2:-1]
-        for instance in profile.get("instances", []):
-            vendor = instance["vendor"]
-            layout = instances.paths_for(name, vendor, home)
-            prov = instances.read_provenance(layout["config_dir"])
-            state = "installed" if prov else "-"
-            print(f"{name:16s} {(parent[0] if parent else '-'):14s} {vendor:8s} "
-                  f"{state:12s} {relative_to_home(layout['config_dir'])}")
+    print(f"{'PROFILE':16s} {'TYPE':14s} {'VENDOR':8s} {'STATE':12s} CONFIG DIR")
+    for name, vendor, config_dir, prov in found:
+        type_name = instances.instance_type(prov, name)
+        print(f"{name:16s} {type_name:14s} {vendor:8s} "
+              f"{'installed':12s} {relative_to_home(config_dir)}")
     return 0
 
 
 def cmd_show(args) -> int:
-    profile = manifest.load(args.name)
+    home = Path.home()
+    installed = [row for row in instances.discover_instances(home) if row[0] == args.name]
+    if installed:
+        profile = load_for_instance(args.name, home)
+    elif manifest.profile_path(args.name).is_file():
+        profile = manifest.load(args.name)
+        profile = instances.bind_instance(profile, args.name, args.name)
+    else:
+        raise DevkitError(
+            f"no profile named {args.name!r}",
+            "pass an installed instance name, or a type under profiles/")
     summary = {
         "name": profile["name"],
+        "type": profile.get("type") or profile["name"],
         "lineage": profile.get("lineage"),
         "colors": list(instances.profile_colors(profile)),
         "skills": len(profile.get("skills", [])),
@@ -305,7 +425,7 @@ def cmd_adopt(args) -> int:
     """Record an existing config dir as an instance without relocating anything."""
     user = privilege.refuse_root(getattr(args, "user", None))
     home = Path(user.pw_dir)
-    profile = manifest.load(args.name)
+    profile = load_for_create(args.name, getattr(args, "type", None))
     config_dir = Path(args.config_dir).expanduser().resolve()
     if not config_dir.is_dir():
         raise DevkitError(f"{config_dir} is not a directory",
@@ -331,6 +451,10 @@ def cmd_migrate(args) -> int:
     return update.migrate_profile(args)
 
 
+def cmd_auth_restore(args) -> int:
+    return auth.cmd_restore(args)
+
+
 def cmd_doctor(args) -> int:
     home = Path.home()
     uid = os.getuid()
@@ -338,39 +462,39 @@ def cmd_doctor(args) -> int:
     problems: list[str] = []
     checked = 0
 
-    for name in manifest.available():
+    for name, vendor, config_dir, prov in instances.discover_instances(home):
         if args.profile and name != args.profile:
             continue
-        profile = manifest.load(name)
-        for instance in profile.get("instances", []):
-            layout = instances.paths_for(name, instance["vendor"], home)
-            prov = instances.read_provenance(layout["config_dir"])
-            if not prov:
-                continue
-            checked += 1
-            label = f"{name}/{instance['vendor']}"
-            if prov.get("source_commit") != kit_commit:
-                problems.append(
-                    f"{label}: stale — installed from {str(prov.get('source_commit'))[:8]}, "
-                    f"kit is at {kit_commit[:8]}\n"
-                    f"    fix: devkit profile sync {name} --apply")
-            if prov.get("profile_schema_version", 0) > instances.PROFILE_SCHEMA_VERSION:
-                problems.append(
-                    f"{label}: installed by a newer devkit "
-                    f"(schema {prov['profile_schema_version']} > {instances.PROFILE_SCHEMA_VERSION})\n"
-                    f"    fix: update this kit; there is no override")
-            offenders = privilege.find_root_owned(layout["config_dir"], uid, limit=5)
-            if offenders:
-                listed = ", ".join(relative_to_home(p) for p in offenders[:3])
-                problems.append(
-                    f"{label}: {len(offenders)}+ path(s) not owned by you: {listed}\n"
-                    f"    fix: sudo chown -R {uid} {layout['config_dir']} "
-                    f"— and stop installing config with sudo")
+        checked += 1
+        label = f"{name}/{vendor}"
+        if prov.get("source_commit") != kit_commit:
+            problems.append(
+                f"{label}: stale — installed from {str(prov.get('source_commit'))[:8]}, "
+                f"kit is at {kit_commit[:8]}\n"
+                f"    fix: devkit profile sync {name} --apply")
+        if prov.get("profile_schema_version", 0) > instances.PROFILE_SCHEMA_VERSION:
+            problems.append(
+                f"{label}: installed by a newer devkit "
+                f"(schema {prov['profile_schema_version']} > {instances.PROFILE_SCHEMA_VERSION})\n"
+                f"    fix: update this kit; there is no override")
+        offenders = privilege.find_root_owned(config_dir, uid, limit=5)
+        if offenders:
+            listed = ", ".join(relative_to_home(p) for p in offenders[:3])
+            problems.append(
+                f"{label}: {len(offenders)}+ path(s) not owned by you: {listed}\n"
+                f"    fix: sudo chown -R {uid} {config_dir} "
+                f"— and stop installing config with sudo")
 
     problems += _home_root_problems(home)
+    auth_lines = auth.doctor_lines(home)
+    auth_ok = [line for line in auth_lines if "(want " not in line]
+    problems += [line for line in auth_lines if "(want " in line]
+    problems += appfork.doctor_lines(home)
 
     if not problems:
         print(f"doctor: clean ({checked} instance(s) checked).")
+        for line in auth_ok:
+            print(f"  {line}")
         return 0
     for problem in problems:
         print(f"  {problem}")
@@ -405,6 +529,122 @@ def _home_root_problems(home: Path) -> list[str]:
 def _report_home_root_rules(home: Path) -> None:
     for problem in _home_root_problems(home):
         print(f"\n  note: {problem}")
+
+
+def _appfork_steps() -> list[str]:
+    return [
+        "copy worker to /usr/local/bin/sync-devkit-profile-apps.py",
+        "write /etc/apt/apt.conf.d/99-devkit-profile-apps",
+        "write /etc/dpkg/dpkg.cfg.d/60devkit-profile-apps",
+        "rsync stock Claude/ChatGPT/Cursor into /usr/lib/devkit/<vendor>-<profile>/",
+        "patch desktopName / WM_CLASS in the copy only (never stock, never Personal)",
+        "recolor in-tree icons from stock; keep chrome-sandbox mode 4755",
+    ]
+
+
+def _devkit_cmd(*args: str) -> list[str]:
+    return [sys.executable, str(REPO_ROOT / "devkit"), *args]
+
+
+def finish_appforks(home: Path, profile: dict, user: str) -> None:
+    rc = escalate_appforks(home, profile, user)
+    if rc:
+        print(
+            f"note: desktop forks were not applied (exit {rc}).\n"
+            f"      Re-run after reviewing the plan above:\n"
+            f"      devkit profile apps-sync --user {user} "
+            f"--profile {profile['name']} --install-hook --apply"
+        )
+
+
+def escalate_appforks(home: Path, profile: dict | None, user: str) -> int:
+    """Print the fork plan, then sudo. Config writes must already have finished."""
+    missing = appfork.doctor_lines(home)
+    if profile:
+        prefix = f"{profile['name']}/"
+        missing = [line for line in missing
+                   if line.startswith(prefix) or "hooks are not installed" in line]
+    if not missing:
+        return 0
+    profile_name = None if profile is None else profile["name"]
+    env = appfork.Env()
+    if privilege.is_root():
+        for line in appfork.install_hook(env, dry_run=False):
+            print(line)
+        return appfork.sync_homes(
+            [home], env, dry_run=False, profile=profile_name)
+    print("Desktop identity forks need a Personal-style copy of each stock app.")
+    for line in appfork.install_hook(env, dry_run=True):
+        print(f"  {line}")
+    appfork.sync_homes([home], env, dry_run=True, profile=profile_name)
+    argv = _devkit_cmd(
+        "profile", "apps-sync", "--user", user, "--install-hook", "--apply")
+    if profile_name:
+        argv += ["--profile", profile_name]
+    return privilege.run_privileged(
+        argv,
+        reason="they copy vendor apps into /usr/lib/devkit and install apt/dpkg hooks.",
+        steps=_appfork_steps(),
+    )
+
+
+def cmd_apps_sync(args) -> int:
+    """Rebuild per-profile app forks. --apply prints the plan, then sudo."""
+    env = appfork.Env()
+    user = getattr(args, "user", None) or pwd_name()
+    dry_run = not args.apply
+    if dry_run:
+        if args.install_hook:
+            for line in appfork.install_hook(env, dry_run=True):
+                print(line)
+            print("dry-run: no writes")
+        homes = appfork.resolve_homes(getattr(args, "user", None), env)
+        return appfork.sync_homes(
+            homes, env, dry_run=True,
+            profile=getattr(args, "profile", None),
+            vendor=getattr(args, "vendor", None),
+            icons_only=getattr(args, "icons_only", False),
+        )
+    if not privilege.is_root():
+        if args.install_hook:
+            for line in appfork.install_hook(env, dry_run=True):
+                print(line)
+        homes = appfork.resolve_homes(getattr(args, "user", None), env)
+        appfork.sync_homes(
+            homes, env, dry_run=True,
+            profile=getattr(args, "profile", None),
+            vendor=getattr(args, "vendor", None),
+            icons_only=getattr(args, "icons_only", False),
+        )
+        argv = _devkit_cmd("profile", "apps-sync", "--user", user, "--apply")
+        if args.install_hook:
+            argv.append("--install-hook")
+        if getattr(args, "profile", None):
+            argv += ["--profile", args.profile]
+        if getattr(args, "vendor", None):
+            argv += ["--vendor", args.vendor]
+        if getattr(args, "icons_only", False):
+            argv.append("--icons-only")
+        return privilege.run_privileged(
+            argv,
+            reason="they copy vendor apps into /usr/lib/devkit and install apt/dpkg hooks.",
+            steps=_appfork_steps(),
+        )
+    if args.install_hook:
+        for line in appfork.install_hook(env, dry_run=False):
+            print(line)
+    homes = appfork.resolve_homes(getattr(args, "user", None), env)
+    return appfork.sync_homes(
+        homes, env, dry_run=False,
+        profile=getattr(args, "profile", None),
+        vendor=getattr(args, "vendor", None),
+        icons_only=getattr(args, "icons_only", False),
+    )
+
+
+def pwd_name() -> str:
+    import pwd
+    return pwd.getpwuid(os.getuid()).pw_name
 
 
 def cmd_fix_home_rules(args) -> int:

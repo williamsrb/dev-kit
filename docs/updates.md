@@ -44,6 +44,11 @@ The provenance file is never updated before the tree it describes. A failure
 mid-apply restores from the backup and leaves the provenance describing the
 pre-apply state, so the instance is never labelled as something it is not.
 
+After a kit apply, `devkit profile sync <name> --apply` refreshes launchers and
+wrappers. If desktop forks are missing or stale, that command prints the rsync
+plan and asks `sudo`. Apt/dpkg hooks rebuild forks when the original vendor
+package updates; they do not replace this step after a kit-only change.
+
 ## Forks and lineage
 
 `devkit.yaml` declares the topology:

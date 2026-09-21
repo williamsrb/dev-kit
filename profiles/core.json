@@ -318,7 +318,7 @@
     },
     {
       "vendor": "codex",
-      "kind": "cli"
+      "kind": "cli+desktop"
     },
     {
       "vendor": "cursor",

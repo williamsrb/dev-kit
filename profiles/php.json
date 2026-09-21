@@ -28,7 +28,7 @@
 
   "instances": [
     { "vendor": "claude", "kind": "cli+desktop" },
-    { "vendor": "codex", "kind": "cli" }
+    { "vendor": "codex", "kind": "cli+desktop" }
   ],
 
   "todo": [

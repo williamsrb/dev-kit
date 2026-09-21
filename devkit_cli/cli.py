@@ -22,13 +22,17 @@ DESCRIPTION = """\
 Install and manage isolated agent-harness profiles.
 
 devkit keeps several agent harnesses on one machine without collision: each
-profile has its own config dir, skills, rules, kb, MCP set, launcher and icon.
+profile has its own config dir, skills, rules, kb, MCP set, CLI wrapper,
+desktop launcher, and a Personal-style GUI fork (unique desktopName / WM_CLASS).
 
 Common examples:
   devkit export --check              # is core/ behind the export source?
   devkit lint-paths                  # no home paths in machine-consumed positions
   devkit profile list
-  devkit profile create enonic --vendor claude
+  devkit profile create dummy --type enonic
+  devkit profile create enonic
+  devkit profile apps-sync --apply   # prints the fork plan, then asks sudo
+  devkit profile auth restore
   devkit update check
   devkit doctor
 
@@ -92,12 +96,14 @@ def build_parser() -> argparse.ArgumentParser:
     lint.set_defaults(func=paths.cmd_lint_paths)
 
     # -- doctor -------------------------------------------------------------
-    doc = flat("doctor", "Check installed instances for staleness and bad ownership.")
+    doc = flat("doctor",
+               "Check instances for staleness, ownership, auth handlers, and desktop forks.")
     doc.add_argument("--profile", metavar="NAME", help="Check only this profile.")
     doc.set_defaults(func=profiles.cmd_doctor)
 
     # -- profile ------------------------------------------------------------
-    profile = group("profile", "Create, inspect, and sync harness profiles.")
+    profile = group("profile",
+                    "Create, inspect, sync, and rebuild isolated harness profiles.")
 
     p_list = profile.add_parser("list", help="Show known profiles and their instances.")
     p_list.set_defaults(func=profiles.cmd_list)
@@ -106,22 +112,33 @@ def build_parser() -> argparse.ArgumentParser:
     p_show.add_argument("name")
     p_show.set_defaults(func=profiles.cmd_show)
 
-    p_create = profile.add_parser("create", help="Materialize a profile's instances.")
+    p_create = profile.add_parser(
+        "create",
+        help="Materialize a named instance from a profile type.",
+    )
     p_create.add_argument("name")
+    p_create.add_argument("--type", metavar="TYPE",
+                          help="Profile type (profiles/<TYPE>.json). Default: NAME when that type exists.")
     p_create.add_argument("--vendor", action="append", metavar="VENDOR",
                           help="Limit to these vendors (repeatable).")
-    p_create.add_argument("--apply", action="store_true", help="Write. Default: dry run.")
+    p_create.add_argument("--apply", action="store_true",
+                          help="Write user-owned config, then print the desktop-fork "
+                               "plan and ask sudo. Default: dry run.")
     p_create.add_argument("--force", action="store_true",
-                          help="Proceed past a collision, after a timestamped backup.")
+                          help="Proceed past a collision, after a timestamped backup. Does not bypass a duplicate name.")
     p_create.set_defaults(func=profiles.cmd_create)
 
     p_sync = profile.add_parser("sync", help="Re-materialize after a manifest change.")
     p_sync.add_argument("name")
-    p_sync.add_argument("--apply", action="store_true", help="Write. Default: dry run.")
+    p_sync.add_argument("--apply", action="store_true",
+                        help="Write user-owned config, then print the desktop-fork "
+                             "plan and ask sudo. Default: dry run.")
     p_sync.set_defaults(func=profiles.cmd_sync)
 
     p_adopt = profile.add_parser("adopt", help="Record an existing dir as an instance.")
     p_adopt.add_argument("name")
+    p_adopt.add_argument("--type", metavar="TYPE",
+                         help="Profile type. Default: NAME when that type exists.")
     p_adopt.add_argument("--vendor", required=True)
     p_adopt.add_argument("--config-dir", required=True)
     p_adopt.add_argument("--apply", action="store_true", help="Write. Default: dry run.")
@@ -132,6 +149,48 @@ def build_parser() -> argparse.ArgumentParser:
     p_migrate.add_argument("--to-fork", required=True)
     p_migrate.add_argument("--apply", action="store_true", help="Write. Default: dry run.")
     p_migrate.set_defaults(func=profiles.cmd_migrate)
+
+    p_auth = profile.add_parser(
+        "auth",
+        help="Install or restore URL-redirect auth handlers.",
+        description=(
+            "Linux allows one default handler per URL scheme. Profile launchers "
+            "do not claim vendor schemes; a NoDisplay dispatcher routes the "
+            "callback to the profile that started login."
+        ),
+    )
+    p_auth.set_defaults(func=_help_action(p_auth))
+    auth_cmds = p_auth.add_subparsers(
+        dest="auth_action", required=False, title="commands", metavar="COMMAND"
+    )
+    p_auth_restore = auth_cmds.add_parser(
+        "restore", help="Put stock/Personal scheme handlers back.")
+    p_auth_restore.add_argument("--apply", action="store_true",
+                                help="Write. Default: dry run.")
+    p_auth_restore.set_defaults(func=profiles.cmd_auth_restore)
+
+    p_apps = profile.add_parser(
+        "apps-sync",
+        help="Rebuild per-profile desktop app forks (Personal-style rsync + asar identity).",
+        description=(
+            "Rebuild per-profile desktop app forks from the stock packages. "
+            "Same recipe as Claude Personal: rsync into /usr/lib/devkit/, patch "
+            "desktopName / WM_CLASS, recolor in-tree icons. Never writes stock "
+            "trees or Claude Personal. --apply prints the plan, then asks sudo."
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    p_apps.add_argument("--user", metavar="NAME",
+                        help="Account whose ~/.agents-profiles to sync. Default: you, or all homes from the apt hook.")
+    p_apps.add_argument("--profile", metavar="NAME", help="Only this profile.")
+    p_apps.add_argument("--vendor", metavar="VENDOR", help="Only this vendor.")
+    p_apps.add_argument("--install-hook", action="store_true",
+                        help="Install apt + dpkg post-invoke hooks and copy the worker to /usr/local/bin.")
+    p_apps.add_argument("--icons-only", action="store_true",
+                        help="Recolor fork icons from stock; skip rsync/asar.")
+    p_apps.add_argument("--apply", action="store_true",
+                        help="Write. Prints the plan, then asks sudo. Default: dry run.")
+    p_apps.set_defaults(func=profiles.cmd_apps_sync)
 
     # -- update -------------------------------------------------------------
     upd = group("update", "Check, stage, and apply kit updates (one direction).")

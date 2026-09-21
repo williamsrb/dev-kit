@@ -56,6 +56,21 @@ outside every profile, they leak into all of them at once.
 The kit never moves those files silently. See
 [profiles.md](profiles.md#home-root-instruction-files).
 
+## `<profile>/<vendor>: app fork missing` / `app fork stale`
+
+The launcher points at `/usr/lib/devkit/<vendor>-<profile>/`, which is a
+dpkg-unowned copy of the stock app. Create it, or rebuild it after an apt
+update of Claude / ChatGPT / Cursor:
+
+```bash
+./devkit profile apps-sync --user "$USER" --install-hook --apply
+```
+
+That prints the plan, then asks `sudo` for a password. The hooks
+(`99-devkit-profile-apps` and `60devkit-profile-apps`) do the same after
+future package updates. They do not replace the Claude Personal or Cursor
+recolor hooks. Config under `~/.agents-profiles` is not involved.
+
 ## `could not recolour <vendor> icon`
 
 ImageMagick is missing, or only version 7 is present and something is looking
@@ -77,6 +92,36 @@ Something in `core/` looks like a credential. Read the findings before anything
 else. If they are genuinely false positives, allowlist them in `.gitleaks.toml`
 scoped as tightly as the finding allows — by path *and* by pattern — so the rule
 keeps working everywhere else.
+
+## Login opened the wrong app (or nowhere)
+
+Browser OAuth returns through `claude://`, `codex://` or `cursor://`. Linux has
+one default handler per scheme. The kit's dispatcher should own those defaults
+after `profile create` / `profile sync`. Start login from that profile's
+launcher so a pending marker is written; `devkit doctor` reports the current
+handler.
+
+```bash
+./devkit doctor
+./devkit profile sync dummy --apply
+./devkit profile auth restore --apply    # back to stock/Personal handlers
+```
+
+### `ambiguous …:// callback`
+
+More than one copy of that vendor is running and nothing wrote a pending marker.
+Close the extras, or start login again from one profile's launcher.
+
+### `no profile claimed this …:// callback`
+
+No pending marker and no running profile GUI for that vendor. Open the
+profile's desktop launcher (or CLI) and start login from there.
+
+## `sudo is not on PATH`
+
+Desktop forks and package installs need `sudo`. Install it, or re-run the
+printed commands as root. The plan is always printed before that prompt; a
+cancelled password leaves user-owned config in place.
 
 ## Codex warns about helper binaries under a temporary directory
 

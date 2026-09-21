@@ -7,12 +7,16 @@ share a single skill, rule, or MCP registration.
 
 ```bash
 ./bootstrap.sh --profile enonic --apply    # step 1: dependencies, no config
-./install.py   --profile enonic --apply    # step 2: config, no packages
-claude-enonic                              # step 3: work
+./install.py --apply                       # step 2: offers a first profile
+# or skip the offer:
+./install.py --name dummy --profile enonic --apply
+claude-dummy
 ```
 
-Neither step assumes the other had network access. Step 1 scopes `sudo` to
-package transactions; step 2 refuses to run as root outright.
+Neither step assumes the other had network access. Privileged work prints its
+plan, then asks `sudo` — never the other way around. Step 1 uses that for
+package transactions. Step 2 writes configuration as your user (it refuses to
+write home as root) and only then asks `sudo` for the desktop identity forks.
 
 ## What a profile is
 
@@ -38,19 +42,22 @@ inheriting 3.4M of Enonic XP reference.
 
 Every row was measured on the reference machine, not inferred from
 documentation. "Tier 1" is a CLI wrapper; "Tier 2" adds a desktop launcher with
-its own window class and icon.
+an isolated config directory. "Tier 3" is a Personal-style fork of the GUI so
+each profile has its own `desktopName`, `WM_CLASS`, and in-app icons. Apt/dpkg
+hooks rebuild those forks after the original package updates.
 
-| Vendor | Tier 1 mechanism | Tier 2 | Status |
-|--------|------------------|--------|--------|
-| Claude Code / Desktop | `CLAUDE_CONFIG_DIR` | yes | verified |
-| Codex | `CODEX_HOME` | CLI only | verified |
-| Cursor (IDE) | `--user-data-dir` + `--extensions-dir` | yes | verified |
-| `cursor-agent` (CLI) | `XDG_CONFIG_HOME` + `CURSOR_DATA_DIR` | n/a | verified |
+| Vendor | Tier 1 mechanism | Tier 2 | Tier 3 fork | Status |
+|--------|------------------|--------|-------------|--------|
+| Claude Code / Desktop | `CLAUDE_CONFIG_DIR` | yes | `/usr/lib/devkit/claude-<profile>/` | verified |
+| Codex CLI / ChatGPT Desktop | `CODEX_HOME` + `CODEX_ELECTRON_USER_DATA_PATH` | yes | `/usr/lib/devkit/codex-<profile>/` | verified |
+| Cursor (IDE) | `--user-data-dir` + `--extensions-dir` | yes | `/usr/lib/devkit/cursor-<profile>/` | verified |
+| `cursor-agent` (CLI) | `XDG_CONFIG_HOME` + `CURSOR_DATA_DIR` | n/a | n/a | verified |
 
 Two details worth knowing before you debug something:
 
-- **Codex** relocates config, logs and its sqlite state, but the runtime package
-  stays shared. That is deliberate: a profile should not cost a second install.
+- **Codex** relocates config via `CODEX_HOME` and the ChatGPT Desktop Chromium
+  profile via `CODEX_ELECTRON_USER_DATA_PATH`. The stock ChatGPT package stays
+  shared as the rsync source; each profile launches its fork.
 - **`cursor-agent`** reads `XDG_CONFIG_HOME`, which is a *generic* variable.
   Its wrapper sets it on the `exec` line only, never exports it, because
   exporting it would relocate the config directory of every XDG-aware program in
@@ -99,16 +106,17 @@ python3 -m unittest discover -s tests       # the acceptance checklist
 | `devkit` | Profile, export, update and diagnostic CLI. |
 | `profiles/` | Profile manifests. `core` is the base; the rest extend it. |
 | `core/` | The curated export of the harness. Generated — never edit directly. |
-| `templates/` | Vendor configs, Tier 1 wrappers, Tier 2 launchers. |
+| `templates/` | Vendor configs, CLI wrappers, desktop launchers, auth dispatchers. |
 | `export-allowlist.json` | What ships, per layer, with a recorded reason for every exclusion. |
 | `path-contract.json` | The `${HOME}` rules `devkit lint-paths` enforces. |
 | `devkit.yaml` | Fork topology: `lineage_id`, `fork_id`, `upstream`. |
 
 ## Why not Docker
 
-The kit does not containerize the harness for profile isolation. A profile is
-two environment variables and a `.desktop` file; containerizing to obtain that
-would cost a rebuild per profile switch. A containerized harness driving
+The kit does not containerize the harness for profile isolation. Config
+isolation is environment variables, a wrapper, and a `.desktop` file; dock
+identity is a Personal-style copy of the vendor GUI. Containerizing to obtain
+that would cost a rebuild per profile switch. A containerized harness driving
 `docker compose` or `enonic sandbox` needs a mounted Docker socket, which is
 root-equivalent on the host and erases the isolation the container was for.
 

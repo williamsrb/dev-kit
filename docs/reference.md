@@ -15,13 +15,17 @@ usage: devkit [-h] GROUP ...
 Install and manage isolated agent-harness profiles.
 
 devkit keeps several agent harnesses on one machine without collision: each
-profile has its own config dir, skills, rules, kb, MCP set, launcher and icon.
+profile has its own config dir, skills, rules, kb, MCP set, CLI wrapper,
+desktop launcher, and a Personal-style GUI fork (unique desktopName / WM_CLASS).
 
 Common examples:
   devkit export --check              # is core/ behind the export source?
   devkit lint-paths                  # no home paths in machine-consumed positions
   devkit profile list
-  devkit profile create enonic --vendor claude
+  devkit profile create dummy --type enonic
+  devkit profile create enonic
+  devkit profile apps-sync --apply   # prints the fork plan, then asks sudo
+  devkit profile auth restore
   devkit update check
   devkit doctor
 
@@ -34,8 +38,10 @@ command groups:
   GROUP
     export          Copy the allowlisted subset of the harness into core/.
     lint-paths      Fail on home paths in machine-consumed positions.
-    doctor          Check installed instances for staleness and bad ownership.
-    profile         Create, inspect, and sync harness profiles.
+    doctor          Check instances for staleness, ownership, auth handlers,
+                    and desktop forks.
+    profile         Create, inspect, sync, and rebuild isolated harness
+                    profiles.
     update          Check, stage, and apply kit updates (one direction).
     origin          Inspect and adopt the kit this instance came from.
     docs            Generate and verify the documentation tree.
@@ -78,7 +84,7 @@ options:
 ```
 usage: devkit doctor [-h] [--profile NAME]
 
-Check installed instances for staleness and bad ownership.
+Check instances for staleness, ownership, auth handlers, and desktop forks.
 
 options:
   -h, --help      show this help message and exit
@@ -90,19 +96,22 @@ options:
 ```
 usage: devkit profile [-h] COMMAND ...
 
-Create, inspect, and sync harness profiles.
+Create, inspect, sync, and rebuild isolated harness profiles.
 
 options:
-  -h, --help  show this help message and exit
+  -h, --help   show this help message and exit
 
 commands:
   COMMAND
-    list      Show known profiles and their instances.
-    show      Show one profile's resolved manifest.
-    create    Materialize a profile's instances.
-    sync      Re-materialize after a manifest change.
-    adopt     Record an existing dir as an instance.
-    migrate   Move an instance to another fork.
+    list       Show known profiles and their instances.
+    show       Show one profile's resolved manifest.
+    create     Materialize a named instance from a profile type.
+    sync       Re-materialize after a manifest change.
+    adopt      Record an existing dir as an instance.
+    migrate    Move an instance to another fork.
+    auth       Install or restore URL-redirect auth handlers.
+    apps-sync  Rebuild per-profile desktop app forks (Personal-style rsync +
+               asar identity).
 ```
 
 #### `devkit profile list`
@@ -129,16 +138,22 @@ options:
 #### `devkit profile create`
 
 ```
-usage: devkit profile create [-h] [--vendor VENDOR] [--apply] [--force] name
+usage: devkit profile create [-h] [--type TYPE] [--vendor VENDOR] [--apply]
+                             [--force]
+                             name
 
 positional arguments:
   name
 
 options:
   -h, --help       show this help message and exit
+  --type TYPE      Profile type (profiles/<TYPE>.json). Default: NAME when
+                   that type exists.
   --vendor VENDOR  Limit to these vendors (repeatable).
-  --apply          Write. Default: dry run.
-  --force          Proceed past a collision, after a timestamped backup.
+  --apply          Write user-owned config, then print the desktop-fork plan
+                   and ask sudo. Default: dry run.
+  --force          Proceed past a collision, after a timestamped backup. Does
+                   not bypass a duplicate name.
 ```
 
 #### `devkit profile sync`
@@ -151,14 +166,15 @@ positional arguments:
 
 options:
   -h, --help  show this help message and exit
-  --apply     Write. Default: dry run.
+  --apply     Write user-owned config, then print the desktop-fork plan and
+              ask sudo. Default: dry run.
 ```
 
 #### `devkit profile adopt`
 
 ```
-usage: devkit profile adopt [-h] --vendor VENDOR --config-dir CONFIG_DIR
-                            [--apply]
+usage: devkit profile adopt [-h] [--type TYPE] --vendor VENDOR
+                            --config-dir CONFIG_DIR [--apply]
                             name
 
 positional arguments:
@@ -166,6 +182,7 @@ positional arguments:
 
 options:
   -h, --help            show this help message and exit
+  --type TYPE           Profile type. Default: NAME when that type exists.
   --vendor VENDOR
   --config-dir CONFIG_DIR
   --apply               Write. Default: dry run.
@@ -183,6 +200,44 @@ options:
   -h, --help         show this help message and exit
   --to-fork TO_FORK
   --apply            Write. Default: dry run.
+```
+
+#### `devkit profile auth`
+
+```
+usage: devkit profile auth [-h] COMMAND ...
+
+Linux allows one default handler per URL scheme. Profile launchers do not
+claim vendor schemes; a NoDisplay dispatcher routes the callback to the
+profile that started login.
+
+options:
+  -h, --help  show this help message and exit
+
+commands:
+  COMMAND
+    restore   Put stock/Personal scheme handlers back.
+```
+
+#### `devkit profile apps-sync`
+
+```
+usage: devkit profile apps-sync [-h] [--user NAME] [--profile NAME]
+                                [--vendor VENDOR] [--install-hook]
+                                [--icons-only] [--apply]
+
+Rebuild per-profile desktop app forks from the stock packages. Same recipe as Claude Personal: rsync into /usr/lib/devkit/, patch desktopName / WM_CLASS, recolor in-tree icons. Never writes stock trees or Claude Personal. --apply prints the plan, then asks sudo.
+
+options:
+  -h, --help       show this help message and exit
+  --user NAME      Account whose ~/.agents-profiles to sync. Default: you, or
+                   all homes from the apt hook.
+  --profile NAME   Only this profile.
+  --vendor VENDOR  Only this vendor.
+  --install-hook   Install apt + dpkg post-invoke hooks and copy the worker to
+                   /usr/local/bin.
+  --icons-only     Recolor fork icons from stock; skip rsync/asar.
+  --apply          Write. Prints the plan, then asks sudo. Default: dry run.
 ```
 
 ### `devkit update`

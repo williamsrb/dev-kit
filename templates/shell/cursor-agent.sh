@@ -15,4 +15,4 @@ exec env \
   XDG_CONFIG_HOME="${PROFILE_XDG_CONFIG_DIR}" \
   CURSOR_DATA_DIR="${PROFILE_DATA_DIR}" \
   CURSOR_WORKTREES_ROOT="${PROFILE_DATA_DIR}/worktrees" \
-  cursor-agent "$@"
+  "${PROFILE_CURSOR_AGENT}" "$@"

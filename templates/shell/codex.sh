@@ -7,4 +7,4 @@
 set -eu
 CODEX_HOME="${PROFILE_CONFIG_DIR}"
 export CODEX_HOME
-exec codex "$@"
+exec "${PROFILE_CODEX_CLI}" "$@"

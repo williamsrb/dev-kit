@@ -46,18 +46,10 @@ def _is_shallow(work: Path) -> bool:
 
 
 def _installed_instances(profile_filter: str | None) -> list[tuple[str, str, Path, dict]]:
-    home = Path.home()
-    found = []
-    for name in manifest.available():
-        if profile_filter and name != profile_filter:
-            continue
-        profile = manifest.load(name)
-        for instance in profile.get("instances", []):
-            layout = instances.paths_for(name, instance["vendor"], home)
-            prov = instances.read_provenance(layout["config_dir"])
-            if prov:
-                found.append((name, instance["vendor"], layout["config_dir"], prov))
-    return found
+    found = instances.discover_instances(Path.home())
+    if not profile_filter:
+        return found
+    return [row for row in found if row[0] == profile_filter]
 
 
 # ------------------------------------------------------------------ check
@@ -196,7 +188,7 @@ def cmd_apply(args) -> int:
     found = _installed_instances(getattr(args, "profile", None))
     if not found:
         raise DevkitError("no installed instances to update",
-                          "run 'devkit profile create <name> --apply' first")
+                          "run 'devkit profile create <name> --type TYPE --apply' first")
 
     plan = Plan(args.apply)
     for name, vendor, config_dir, prov in found:
@@ -230,7 +222,10 @@ def cmd_apply(args) -> int:
         try:
             from .profiles import materialize
             inner = Plan(apply=True)
-            materialize(manifest.load(name, kit_root=payload), [vendor], Path.home(),
+            type_name = instances.instance_type(prov, name)
+            profile = instances.bind_instance(
+                manifest.load(type_name, kit_root=payload), name, type_name)
+            materialize(profile, [vendor], Path.home(),
                         inner, force=True, kit_root=payload,
                         source_commit=marker["commit"])
             updated = instances.read_provenance(config_dir) or prov
@@ -282,21 +277,21 @@ def migrate_profile(args) -> int:
     kit = _kit()
     plan = Plan(args.apply)
     home = Path.home()
-    profile = manifest.load(args.name)
-    for instance in profile.get("instances", []):
-        layout = instances.paths_for(args.name, instance["vendor"], home)
-        prov = instances.read_provenance(layout["config_dir"])
-        if not prov:
-            continue
+    matches = [row for row in instances.discover_instances(home) if row[0] == args.name]
+    if not matches:
+        raise DevkitError(
+            f"no installed profile named {args.name!r}",
+            f"run 'devkit profile create {args.name} --type TYPE --apply' first")
+    for name, vendor, config_dir, prov in matches:
         if prov.get("lineage_id") != kit.get("lineage_id"):
             raise DevkitError(
-                f"{args.name}/{instance['vendor']}: foreign lineage",
+                f"{name}/{vendor}: foreign lineage",
                 "none; migrate moves between forks of one lineage, not between kits")
-        plan.record(f"migrate {args.name}/{instance['vendor']} "
+        plan.record(f"migrate {name}/{vendor} "
                     f"{prov.get('fork_id')} -> {args.to_fork}")
         if args.apply:
             prov["fork_id"] = args.to_fork
             prov["history"] = [*prov.get("history", []),
                                {"migrated_to_fork": args.to_fork, "at": timestamp()}]
-            write_json(layout["config_dir"] / instances.PROVENANCE_NAME, prov)
+            write_json(config_dir / instances.PROVENANCE_NAME, prov)
     return plan.report(f"migrate {args.name}")

@@ -4,9 +4,10 @@
 # Bash, not Python, for one reason: this runs before Python is guaranteed. Every
 # other helper in the kit is Python 3.12 stdlib (prefer-python-over-shell).
 #
-# Privilege rule: sudo is scoped to package transactions. This script never
-# writes into a user's home and never touches configuration — that is install.py's
-# job, and install.py refuses to run as root.
+# Privilege rule: sudo is scoped to package transactions, and every sudo
+# prints the plan before it asks for a password. This script never writes
+# into a user's home and never touches configuration — that is install.py's
+# job, and install.py refuses to write configuration as root.
 #
 # Usage:
 #   ./bootstrap.sh                    # dry run: print the plan, change nothing
@@ -31,10 +32,14 @@ usage() {
 Usage: bootstrap.sh [options]
 
 Installs the dependencies a profile declares. Writes no configuration.
+Privileged package commands print the plan, then ask sudo; they never
+prompt for a password before you have seen what will run.
 
 Options:
   --profile NAME       Profile whose deps to install (default: core)
-  --apply              Actually install. Without it this is a dry run.
+  --apply              Actually install. Prints privileged commands, then
+                       asks sudo. Without it this is a dry run (commands
+                       show as "would run (as root): sudo …").
   --wire-path          Add ~/.local/bin to PATH in your shell profile, after
                        reporting which file would change.
   --third-party yes|no Answer the third-party repository prompt up front.
@@ -72,6 +77,34 @@ say()  { printf '%s\n' "$*"; }
 warn() { printf 'warning: %s\n' "$*" >&2; }
 die()  { printf 'error: %s\n' "$1" >&2; [ -n "${2:-}" ] && printf 'fix:   %s\n' "$2" >&2; exit 1; }
 run()  { if [ "$APPLY" -eq 1 ]; then say "  + $*"; "$@"; else say "  would run: $*"; fi; }
+
+# Privileged commands print the plan, then invoke sudo (which may ask for a
+# password). Never the other way around.
+ELEVATION_ANNOUNCED=0
+ELEVATION_ASKED=0
+announce_elevation() {
+  say "These steps need administrator privileges: $1"
+  ELEVATION_ANNOUNCED=1
+}
+ask_elevation() {
+  if [ "$ELEVATION_ASKED" -eq 1 ]; then
+    return 0
+  fi
+  say "Asking for administrator privileges."
+  ELEVATION_ASKED=1
+}
+elevate() {
+  if [ "$APPLY" -eq 0 ]; then
+    say "  would run (as root): sudo $*"
+    return 0
+  fi
+  if [ "$ELEVATION_ANNOUNCED" -eq 0 ]; then
+    announce_elevation "they write into the system package locations."
+  fi
+  ask_elevation
+  say "  + sudo $*"
+  sudo "$@"
+}
 
 # ---------------------------------------------------------------- family
 
@@ -119,10 +152,18 @@ if command -v python3 >/dev/null 2>&1; then
   PLAN="$(python3 "$KIT_DIR/devkit_cli/bootstrap_plan.py" --profile "$PROFILE" --manager "$PKG_KEY" --family "$FAMILY")"
 else
   warn "python3 is absent; installing it first, then re-reading the plan"
+  if [ "$APPLY" -eq 1 ]; then
+    announce_elevation "python3 is missing and must be installed before the rest of the plan can be read."
+    case "$PKG_MANAGER" in
+      apt)    say "  sudo apt-get update"; say "  sudo apt-get install -y python3" ;;
+      dnf)    say "  sudo dnf install -y python3" ;;
+      pacman) say "  sudo pacman -Sy --noconfirm python" ;;
+    esac
+  fi
   case "$PKG_MANAGER" in
-    apt)    run sudo apt-get update; run sudo apt-get install -y python3 ;;
-    dnf)    run sudo dnf install -y python3 ;;
-    pacman) run sudo pacman -Sy --noconfirm python ;;
+    apt)    elevate apt-get update; elevate apt-get install -y python3 ;;
+    dnf)    elevate dnf install -y python3 ;;
+    pacman) elevate pacman -Sy --noconfirm python ;;
   esac
   if [ "$APPLY" -eq 0 ]; then
     say ""
@@ -146,15 +187,15 @@ UNAVAILABLE="$(printf '%s\n'   "$PLAN" | awk -F'\t' '$1=="unavailable" {print $2
 enable_repo() {
   case "$1" in
     epel)
-      run sudo dnf install -y epel-release dnf-plugins-core
+      elevate dnf install -y epel-release dnf-plugins-core
       # Several EPEL packages depend on CodeReady Builder. Enabling EPEL without
       # it gives you the package list and then unresolvable dependencies.
-      run sudo dnf config-manager --set-enabled crb
+      elevate dnf config-manager --set-enabled crb
       ;;
     rpmfusion)
       local release
       release="$(rpm -E %rhel 2>/dev/null || echo 9)"
-      run sudo dnf install -y \
+      elevate dnf install -y \
         "https://download1.rpmfusion.org/free/el/rpmfusion-free-release-${release}.noarch.rpm"
       ;;
     *) warn "unknown third-party repository: $1" ;;
@@ -204,14 +245,22 @@ fi
 
 if [ -n "$PACKAGES" ]; then
   say "Distribution packages ($PKG_MANAGER):"
+  if [ "$APPLY" -eq 1 ]; then
+    announce_elevation "they install packages into the system."
+    case "$PKG_MANAGER" in
+      apt)    say "  sudo apt-get update"; say "  sudo apt-get install -y $PACKAGES" ;;
+      dnf)    say "  sudo dnf install -y $PACKAGES" ;;
+      pacman) say "  sudo pacman -Sy --noconfirm --needed $PACKAGES" ;;
+    esac
+  fi
   case "$PKG_MANAGER" in
-    apt)    run sudo apt-get update
+    apt)    elevate apt-get update
             # shellcheck disable=SC2086
-            run sudo apt-get install -y $PACKAGES ;;
+            elevate apt-get install -y $PACKAGES ;;
     dnf)    # shellcheck disable=SC2086
-            run sudo dnf install -y $PACKAGES ;;
+            elevate dnf install -y $PACKAGES ;;
     pacman) # shellcheck disable=SC2086
-            run sudo pacman -Sy --noconfirm --needed $PACKAGES ;;
+            elevate pacman -Sy --noconfirm --needed $PACKAGES ;;
   esac
   say ""
 fi
@@ -343,7 +392,8 @@ if [ "$APPLY" -eq 1 ] && command -v python3 >/dev/null 2>&1; then
            "re-run, or install the named tools by hand and re-run --verify"
   say ""
   say "Step 1 complete. No configuration was written."
-  say "Next: ./install.py --profile $PROFILE --apply"
+  say "Next: ./install.py --apply"
+  say "      (TTY: offers to create a first profile. Or: ./install.py --profile $PROFILE --apply)"
 else
   say "Dry run complete. Re-run with --apply to install."
 fi

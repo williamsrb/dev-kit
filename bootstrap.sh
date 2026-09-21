@@ -387,7 +387,11 @@ fi
 
 if [ "$APPLY" -eq 1 ] && command -v python3 >/dev/null 2>&1; then
   say "Verifying what the profile declares:"
-  python3 "$KIT_DIR/devkit_cli/bootstrap_plan.py" --profile "$PROFILE" --manager "$PKG_KEY" --verify \
+  VERIFY_ARGS=(--profile "$PROFILE" --manager "$PKG_KEY" --family "$FAMILY" --verify)
+  if [ "${ALLOW_THIRD_PARTY:-}" = "no" ]; then
+    VERIFY_ARGS+=(--third-party-declined)
+  fi
+  python3 "$KIT_DIR/devkit_cli/bootstrap_plan.py" "${VERIFY_ARGS[@]}" \
     || die "some required dependencies are still missing" \
            "re-run, or install the named tools by hand and re-run --verify"
   say ""

@@ -16,6 +16,8 @@ Output, one record per line:
 
 With --verify it instead checks that every `provides` binary is on PATH and
 reports the rung each came from, exiting 1 if a required one is missing.
+A declined third-party repo is a skip for the binaries that only live there,
+never a hard failure (rocky CI job).
 """
 
 from __future__ import annotations
@@ -27,8 +29,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from devkit_cli import manifest  # noqa: E402
-from devkit_cli.errors import DevkitError  # noqa: E402
+from devkit_cli import manifest
+from devkit_cli.errors import DevkitError
 
 # Which repository a package needs is declared per dependency (`needs_repo`),
 # measured rather than guessed. Never enable a third-party repo silently:
@@ -71,16 +73,66 @@ def emit_plan(profile: dict, manager: str, family: str) -> None:
             print(f"thirdparty\t{package}\t{repo}")
 
 
-def verify(profile: dict) -> int:
+def detect_family() -> str | None:
+    """Map /etc/os-release to the needs_repo family key, or None."""
+    path = Path("/etc/os-release")
+    if not path.is_file():
+        return None
+    values: dict[str, str] = {}
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if "=" not in line or line.startswith("#"):
+            continue
+        key, raw = line.split("=", 1)
+        values[key] = raw.strip().strip('"')
+    distro_id = values.get("ID", "").lower()
+    identity = f"{distro_id} {values.get('ID_LIKE', '')}".lower()
+    if distro_id == "fedora":
+        return "fedora"
+    if "rhel" in identity or "centos" in identity or "rocky" in identity \
+            or "almalinux" in identity:
+        return "rhel"
+    if "debian" in identity or "ubuntu" in identity:
+        return "debian"
+    if "arch" in identity:
+        return "arch"
+    return None
+
+
+def third_party_binaries(profile: dict, manager: str, family: str) -> set[str]:
+    """Binaries whose only distro package on this family needs a third-party repo."""
+    claimed: set[str] = set()
+    for dep in manifest.dependencies(profile):
+        if dep.get("installer"):
+            continue
+        package = dep.get(manager)
+        if not package:
+            continue
+        if not (dep.get("needs_repo") or {}).get(family):
+            continue
+        claimed.update(dep.get("provides", []))
+    return claimed
+
+
+def verify(profile: dict, *, manager: str = "apt", family: str | None = None,
+           third_party_declined: bool = False) -> int:
     required = manifest.provided_binaries(profile, include_optional=False)
     optional = [b for b in manifest.provided_binaries(profile) if b not in required]
     rungs = _rung_by_binary(profile)
+    family = family or detect_family()
+    skippable = (
+        third_party_binaries(profile, manager, family)
+        if third_party_declined and family
+        else set()
+    )
 
     missing = []
     for binary in required:
         found = shutil.which(binary) or _alternate(binary)
         if found:
             print(f"  ok       {binary:22s} {rungs.get(binary, '?'):8s} {found}")
+        elif binary in skippable:
+            print(f"  skipped  {binary:22s} {rungs.get(binary, '?'):8s} "
+                  f"(third-party declined)")
         else:
             print(f"  MISSING  {binary:22s} {rungs.get(binary, '?'):8s}")
             missing.append(binary)
@@ -90,7 +142,8 @@ def verify(profile: dict) -> int:
               f"{rungs.get(binary, '?'):8s} {found or '(optional)'}")
 
     if missing:
-        print(f"\n{len(missing)} required tool(s) missing: {', '.join(missing)}", file=sys.stderr)
+        print(f"\n{len(missing)} required tool(s) missing: {', '.join(missing)}",
+              file=sys.stderr)
         return 1
     return 0
 
@@ -115,11 +168,17 @@ def main() -> int:
     parser = argparse.ArgumentParser(prog="bootstrap_plan.py", description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--profile", default="core")
-    parser.add_argument("--manager", default="apt", choices=["apt", "dnf", "pacman"])
+    parser.add_argument("--manager", default=None, choices=["apt", "dnf", "pacman"],
+                        help="Package manager. Default: apt for plan emit; "
+                             "with --verify, derived from --family / os-release.")
     parser.add_argument("--family", default=None,
                         help="Distribution family (debian, rhel, fedora, arch). "
-                             "needs_repo keys on this, not on the manager.")
+                             "needs_repo keys on this, not on the manager. "
+                             "With --verify, defaults to /etc/os-release.")
     parser.add_argument("--verify", action="store_true")
+    parser.add_argument("--third-party-declined", action="store_true",
+                        help="With --verify: binaries that only live in a "
+                             "needs_repo package are skipped, not missing.")
     args = parser.parse_args()
 
     try:
@@ -129,8 +188,20 @@ def main() -> int:
         return 1
 
     if args.verify:
-        return verify(profile)
-    emit_plan(profile, args.manager, args.family or args.manager)
+        family = args.family or detect_family()
+        manager = args.manager or {
+            "debian": "apt",
+            "rhel": "dnf",
+            "fedora": "dnf",
+            "arch": "pacman",
+        }.get(family or "", "apt")
+        return verify(
+            profile,
+            manager=manager,
+            family=family,
+            third_party_declined=args.third_party_declined,
+        )
+    emit_plan(profile, args.manager or "apt", args.family or args.manager or "apt")
     return 0
 
 

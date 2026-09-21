@@ -71,11 +71,12 @@ That prints the plan, then asks `sudo` for a password. The hooks
 future package updates. They do not replace the Claude Personal or Cursor
 recolor hooks. Config under `~/.agents-profiles` is not involved.
 
-## `could not recolour <vendor> icon`
+## `could not badge <vendor> icon`
 
-ImageMagick is missing, or only version 7 is present and something is looking
-for `convert`. The kit tries `magick` first. This is a warning: the launcher
-falls back to the stock icon and the install completes.
+ImageMagick is missing (the kit tries `magick`, else `convert`), or the shield
+emblem is missing (`templates/icons/profile-emblem.png`, or the installed copy
+at `/usr/lib/devkit/profile-emblem.png`). This is a warning: the launcher falls
+back to the stock icon and the install completes.
 
 ## `lint-paths: N violation(s)`
 

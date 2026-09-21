@@ -39,10 +39,12 @@ profiles yet offers to create a first one (type, then name) unless you passed
     prds/ plans/ .playwright-mcp/        # profile-local state
     .auth/                               # profile-local; token YAML may be shared
 ~/.agents-profiles/<profile>/<vendor>/   # the vendor's config dir
-    skills/  rules/  kb/                 # per-entry symlinks into core/
+    skills/  rules/  kb/                 # per-entry symlinks into kit core/
     hooks -> ../hooks
     .devkit-profile.json                 # provenance
-~/.config/<Vendor>-<profile>/            # GUI user-data dir
+~/.config/Claude-<profile>/              # Claude Desktop Chromium profile
+~/.config/Codex-<profile>/               # ChatGPT Desktop Chromium profile
+~/.agents-profiles/<profile>/cursor      # Cursor IDE --user-data-dir (not ~/.config)
 ~/.local/bin/<vendor>-<profile>          # public wrapper (not a stock name)
 ~/.agents-profiles/<profile>/bin/<cli>   # unprefixed vendor CLI + agentctl
 ~/.local/share/applications/...          # launcher (Exec is the fork)
@@ -172,7 +174,25 @@ place. Do not edit vendor `postinst` files; they are rewritten on every
 `configure`.
 
 Config, skills, wrappers, and session data live under `~/.agents-profiles` and
-`~/.config` — package upgrades never touch them.
+(for Claude/Codex desktops) `~/.config/Claude-<name>` / `~/.config/Codex-<name>`
+— package upgrades never touch them. Stock `~/.config/Claude`,
+`~/.config/ClaudePersonal`, and `~/.config/Cursor` stay the stock/Personal apps.
+
+## Desktop user-data (same idea as Claude Personal)
+
+Claude Personal is `CLAUDE_CONFIG_DIR=~/.claude_personal` plus
+`--user-data-dir=~/.config/ClaudePersonal`. A profile named `dummy` is the same
+split, not a fake `$HOME`:
+
+| | Claude Personal | Profile `dummy` |
+|---|---|---|
+| Harness / CLI | `~/.claude_personal` | `~/.agents-profiles/dummy/<vendor>` |
+| Claude Desktop | `~/.config/ClaudePersonal` | `~/.config/Claude-dummy` |
+| ChatGPT Desktop | n/a | `~/.config/Codex-dummy` (`CODEX_ELECTRON_USER_DATA_PATH`) |
+| Cursor IDE | n/a | `--user-data-dir=~/.agents-profiles/dummy/cursor` |
+
+`$HOME`, `~/.ssh`, `~/.gitconfig`, and `~/Workspace` stay the real ones.
+`cursor-agent` sets `XDG_CONFIG_HOME` on its exec line only and never exports it.
 
 From a terminal, call the public wrapper (`claude-dummy`). It execs the stock
 CLI by full path, exports `DEVKIT_PROFILE` and `AGENTS_HOME`, and prepends

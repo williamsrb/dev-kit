@@ -118,6 +118,14 @@ def build_parser() -> argparse.ArgumentParser:
     p_create = profile.add_parser(
         "create",
         help="Materialize a named instance from a profile type.",
+        description=(
+            "Write a named profile instance: vendor config dirs, projected "
+            "skills/rules/kb, AGENTS_HOME tree, CLI wrappers, and desktop "
+            "launchers. Wrappers pin DEVKIT_PROFILE and AGENTS_HOME so "
+            "agentctl sees only this profile. --apply writes user-owned "
+            "config, then prints the desktop-fork plan and asks sudo."
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     p_create.add_argument("name")
     p_create.add_argument("--type", metavar="TYPE",
@@ -131,7 +139,17 @@ def build_parser() -> argparse.ArgumentParser:
                           help="Proceed past a collision, after a timestamped backup. Does not bypass a duplicate name.")
     p_create.set_defaults(func=profiles.cmd_create)
 
-    p_sync = profile.add_parser("sync", help="Re-materialize after a manifest change.")
+    p_sync = profile.add_parser(
+        "sync",
+        help="Re-materialize after a manifest change.",
+        description=(
+            "Re-write the instance from the current manifest: prune a leftover "
+            "core/ symlink, refresh AGENTS_HOME projections, keep spawned "
+            "playwright-<id> MCP entries. --apply writes user-owned config, "
+            "then prints the desktop-fork plan and asks sudo."
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
     p_sync.add_argument("name")
     p_sync.add_argument("--apply", action="store_true",
                         help="Write user-owned config, then print the desktop-fork "

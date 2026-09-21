@@ -67,11 +67,12 @@ offer and uses the type as the name. Non-interactive runs do the same
 ```
 
 This creates the profile's config directories, projects its skills, rules and
-knowledge base as symlinks into `core/`, renders the vendor configs, writes the
-Tier 1 wrappers and desktop launchers, recolours the icons, and records a
-provenance file. Desktop identity forks (patched asar / `WM_CLASS`) rsync into
-`/usr/lib/devkit/`. `install.py --apply` prints that plan and then asks `sudo`
-for a password. Re-run later with:
+knowledge base as per-entry symlinks (the profile's subset, not the whole kit
+`core/` tree), renders the vendor configs, writes the Tier 1 wrappers (with
+`DEVKIT_PROFILE` / `AGENTS_HOME`) and desktop launchers, recolours the icons,
+and records a provenance file. Desktop identity forks (patched asar / `WM_CLASS`)
+rsync into `/usr/lib/devkit/`. `install.py --apply` prints that plan and then
+asks `sudo` for a password. Re-run later with:
 
 ```bash
 ./devkit profile apps-sync --user "$USER" --install-hook --apply

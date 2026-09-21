@@ -399,12 +399,13 @@ def _write_desktop(plan: Plan, vendor: str, profile: dict, layout: dict,
 
     light, _dark = instances.profile_colors(profile)
     source_icon = _find_vendor_icon(vendor)
-    if source_icon and not layout["icon"].is_file():
-        plan.record(f"icon   {relative_to_home(layout['icon'])} ({light})")
+    if source_icon:
+        plan.record(f"icon   {relative_to_home(layout['icon'])} (badge {light})")
         if plan.apply:
             if not instances.recolor_icon(source_icon, layout["icon"], light):
-                print(f"  note: could not recolour {vendor} icon "
-                      f"(ImageMagick missing?); the launcher falls back to the stock icon")
+                print(f"  note: could not badge {vendor} icon "
+                      f"(ImageMagick or emblem missing?); "
+                      f"the launcher falls back to the stock icon")
 
 
 def _find_vendor_icon(vendor: str) -> Path | None:
@@ -515,8 +516,10 @@ def load_for_instance(name: str, home: Path,
             f"no installed profile named {name!r}",
             f"run 'devkit profile create {name} --type TYPE --apply' first")
     type_name = instances.instance_type(matches[0][3], name)
-    return instances.bind_instance(manifest.load(type_name, kit_root=kit_root),
-                                   name, type_name)
+    profile = instances.bind_instance(manifest.load(type_name, kit_root=kit_root),
+                                      name, type_name)
+    instances.apply_provenance_color(profile, matches[0][3])
+    return profile
 
 
 def _refuse_duplicate(home: Path, name: str) -> None:
@@ -533,7 +536,10 @@ def cmd_create(args) -> int:
     home = Path(user.pw_dir)
     profile = load_for_create(args.name, getattr(args, "type", None))
     _refuse_duplicate(home, profile["name"])
+    pair = instances.assign_profile_color(
+        profile, home, explicit=getattr(args, "color", None))
     plan = Plan(args.apply)
+    plan.record(f"color  {pair['light']}")
     materialize(profile, args.vendor, home, plan, args.force)
     result = plan.report(f"profile {args.name}")
     if plan.apply and plan.actions:
@@ -711,11 +717,13 @@ def _report_home_root_rules(home: Path) -> None:
 def _appfork_steps() -> list[str]:
     return [
         "copy worker to /usr/local/bin/sync-devkit-profile-apps.py",
+        "install profile emblem under /usr/lib/devkit/",
         "write /etc/apt/apt.conf.d/99-devkit-profile-apps",
         "write /etc/dpkg/dpkg.cfg.d/60devkit-profile-apps",
         "rsync stock Claude/ChatGPT/Cursor into /usr/lib/devkit/<vendor>-<profile>/",
         "patch desktopName / WM_CLASS in the copy only (never stock, never Personal)",
-        "recolor in-tree icons from stock; keep chrome-sandbox mode 4755",
+        "badge in-tree icons from stock with a coloured shield emblem; "
+        "keep chrome-sandbox mode 4755",
     ]
 
 

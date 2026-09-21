@@ -141,7 +141,7 @@ options:
 #### `devkit profile create`
 
 ```
-usage: devkit profile create [-h] [--type TYPE] [--vendor VENDOR] [--apply] [--force] name
+usage: devkit profile create [-h] [--type TYPE] [--vendor VENDOR] [--color HEX] [--apply] [--force] name
 
 Write a named profile instance: vendor config dirs, projected skills/rules/kb, AGENTS_HOME tree, CLI wrappers, and desktop launchers. Wrappers pin DEVKIT_PROFILE and AGENTS_HOME so agentctl sees only this profile. --apply writes user-owned config, then prints the desktop-fork plan and asks sudo.
 
@@ -153,6 +153,9 @@ options:
   --type TYPE      Profile type (profiles/<TYPE>.json). Default: NAME when that
                    type exists.
   --vendor VENDOR  Limit to these vendors (repeatable).
+  --color HEX      Badge colour (#RRGGBB). Must be unique across profiles.
+                   Default: type colour if free, else a random free palette
+                   colour.
   --apply          Write user-owned config, then print the desktop-fork plan and
                    ask sudo. Default: dry run.
   --force          Proceed past a collision, after a timestamped backup. Does
@@ -225,7 +228,7 @@ commands:
 ```
 usage: devkit profile apps-sync [-h] [--user NAME] [--profile NAME] [--vendor VENDOR] [--install-hook] [--icons-only] [--apply]
 
-Rebuild per-profile desktop app forks from the stock packages. Same recipe as Claude Personal: rsync into /usr/lib/devkit/, patch desktopName / WM_CLASS, recolor in-tree icons. Never writes stock trees or Claude Personal. --apply prints the plan, then asks sudo.
+Rebuild per-profile desktop app forks from the stock packages. Same recipe as Claude Personal: rsync into /usr/lib/devkit/, patch desktopName / WM_CLASS, badge in-tree icons with a coloured shield emblem. Never writes stock trees or Claude Personal. --apply prints the plan, then asks sudo.
 
 options:
   -h, --help       show this help message and exit
@@ -235,7 +238,7 @@ options:
   --vendor VENDOR  Only this vendor.
   --install-hook   Install apt + dpkg post-invoke hooks and copy the worker to
                    /usr/local/bin.
-  --icons-only     Recolor fork icons from stock; skip rsync/asar.
+  --icons-only     Badge fork icons from stock; skip rsync/asar.
   --apply          Write. Prints the plan, then asks sudo. Default: dry run.
 ```
 

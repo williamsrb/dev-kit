@@ -21,7 +21,7 @@ write home as root) and only then asks `sudo` for the desktop identity forks.
 ## What a profile is
 
 Not a skill set — an instantiated vendor instance. Each profile gets its own
-config directory, skills, rules, knowledge base, MCP set, launcher, icon colour,
+config directory, skills, rules, knowledge base, MCP set, launcher, icon badge,
 and a visible name in the status line and the dock.
 
 <!-- devkit:generated:profile-table -->
@@ -43,7 +43,7 @@ inheriting 3.4M of Enonic XP reference.
 Every row was measured on the reference machine, not inferred from
 documentation. "Tier 1" is a CLI wrapper; "Tier 2" adds a desktop launcher with
 an isolated config directory. "Tier 3" is a Personal-style fork of the GUI so
-each profile has its own `desktopName`, `WM_CLASS`, and in-app icons. Apt/dpkg
+each profile has its own `desktopName`, `WM_CLASS`, and badged in-app icons. Apt/dpkg
 hooks rebuild those forks after the original package updates.
 
 | Vendor | Tier 1 mechanism | Tier 2 | Tier 3 fork | Status |

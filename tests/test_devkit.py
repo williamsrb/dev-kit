@@ -10,6 +10,7 @@ import argparse
 import io
 import json
 import os
+import random
 import re
 import shutil
 import subprocess
@@ -179,15 +180,69 @@ class ProfileCompositionTests(unittest.TestCase):
             self.assertIn("loops", str(caught.exception))
             self.assertIn("a -> b", str(caught.exception))
 
-    def test_hue_is_stable_and_distinct_per_profile(self):
+    def test_palette_fallback_is_stable_and_distinct(self):
         a = instances.profile_colors({"name": "alpha"})
         b = instances.profile_colors({"name": "beta"})
         self.assertEqual(a, instances.profile_colors({"name": "alpha"}))
-        self.assertNotEqual(a, b)
+        self.assertIn(a[0], instances.PROFILE_PALETTE)
+        self.assertIn(b[0], instances.PROFILE_PALETTE)
+        # Distinct names usually land on distinct slots; if they collide the
+        # create-time assigner still enforces uniqueness against provenance.
+        self.assertEqual(len(instances.PROFILE_PALETTE), 16)
 
     def test_declared_color_wins_over_the_derived_hue(self):
         declared = {"name": "x", "color": {"light": "#ffcc00", "dark": "#6a0dad"}}
         self.assertEqual(instances.profile_colors(declared), ("#ffcc00", "#6a0dad"))
+
+    def test_assign_color_refuses_duplicates_and_accepts_custom(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            root = home / ".agents-profiles" / "taken" / "claude"
+            root.mkdir(parents=True)
+            write_json = __import__("devkit_cli.common", fromlist=["write_json"]).write_json
+            write_json(root / instances.PROVENANCE_NAME, {
+                "profile": "taken", "vendor": "claude", "color": "#FF453A",
+            })
+            with self.assertRaises(DevkitError) as caught:
+                instances.assign_profile_color(
+                    {"name": "other"}, home, explicit="#ff453a")
+            self.assertIn("already used", str(caught.exception))
+            pair = instances.assign_profile_color(
+                {"name": "other"}, home, explicit="#ABCDEF")
+            self.assertEqual(pair["light"], "#abcdef")
+            self.assertNotEqual(pair["dark"], pair["light"])
+
+    def test_assign_color_picks_free_palette_when_unset(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            random.seed(0)
+            first = instances.assign_profile_color({"name": "a"}, home)
+            self.assertIn(first["light"], instances.PROFILE_PALETTE)
+            # Claim the rest of the palette via fake provenance so the next
+            # create must avoid first["light"].
+            used = {first["light"]}
+            for i, color in enumerate(instances.PROFILE_PALETTE):
+                if color in used:
+                    continue
+                root = home / ".agents-profiles" / f"p{i}" / "claude"
+                root.mkdir(parents=True)
+                (root / instances.PROVENANCE_NAME).write_text(
+                    json.dumps({"profile": f"p{i}", "vendor": "claude",
+                                "color": color}),
+                    encoding="utf-8")
+                used.add(color)
+            # Only first["light"] remains free among the palette... actually we
+            # claimed all except we started with first which isn't in provenance.
+            # Put first into provenance too, forcing an off-palette draw.
+            root = home / ".agents-profiles" / "claimed" / "claude"
+            root.mkdir(parents=True)
+            (root / instances.PROVENANCE_NAME).write_text(
+                json.dumps({"profile": "claimed", "vendor": "claude",
+                            "color": first["light"]}),
+                encoding="utf-8")
+            random.seed(1)
+            overflow = instances.assign_profile_color({"name": "overflow"}, home)
+            self.assertNotIn(overflow["light"], used)
 
     def test_graft_mcp_is_parked_and_not_a_profile_default(self):
         catalog = json.loads((REPO / "core" / "mcp" / "catalog.json").read_text())
@@ -504,7 +559,7 @@ class RenderingTests(unittest.TestCase):
         profile = manifest.load("enonic")
         tokens = instances.render_tokens(profile, "codex", Path("/home/example"))
         for template in (REPO / "templates").rglob("*"):
-            if not template.is_file():
+            if not template.is_file() or template.suffix.lower() in {".png", ".jpg", ".jpeg", ".webp", ".ico"}:
                 continue
             rendered = instances.render(template.read_text(encoding="utf-8"), tokens)
             # Only real tokens count. A comment saying "${PROFILE_*} is rendered
@@ -1052,6 +1107,7 @@ class AppForkTests(unittest.TestCase):
             self.assertIn("post-invoke", dpkg)
             self.assertIn("does not run for bare dpkg", dpkg)
             self.assertTrue(env.worker.is_file())
+            self.assertTrue((env.fork_root / appfork.EMBLEM_NAME).is_file())
             self.assertNotIn("99-cursor-recolor", apt)
             self.assertNotIn("99-claude-personal-sync", apt)
 

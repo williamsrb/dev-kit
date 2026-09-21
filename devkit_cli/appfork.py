@@ -417,21 +417,86 @@ def _imagemagick() -> list[str] | None:
     return None
 
 
+EMBLEM_NAME = "profile-emblem.png"
+
+
+def _emblem_path(fork_root: Path | None = None) -> Path | None:
+    """Shield badge: $DEVKIT_EMBLEM, fork root, or kit checkout."""
+    raw = os.environ.get("DEVKIT_EMBLEM")
+    if raw:
+        override = Path(raw).expanduser()
+        if override.is_file():
+            return override
+    here = Path(__file__).resolve()
+    kit = here.parent.parent / "templates" / "icons" / EMBLEM_NAME
+    installed = (fork_root or FORK_ROOT) / EMBLEM_NAME
+    for candidate in (installed, kit):
+        if candidate.is_file():
+            return candidate
+    return None
+
+
 def profile_color(profile: str, provenance: dict | None = None) -> str:
     declared = (provenance or {}).get("color")
     if isinstance(declared, str) and declared.startswith("#"):
         return declared
+    # Standalone worker fallback: stable palette slot from the name.
     digest = hashlib.sha256(profile.encode("utf-8")).digest()
-    hue = (digest[0] << 8 | digest[1]) / 65535.0
-    import colorsys
-    rgb = colorsys.hsv_to_rgb(hue, 0.75, 0.95)
-    return "#" + "".join(f"{int(c * 255):02x}" for c in rgb)
+    palette = (
+        "#ff453a",  # tomato
+        "#ff9f0a",  # orange
+        "#ffd60a",  # gold
+        "#ffb340",  # sandybrown
+        "#30d158",  # limegreen
+        "#7dffb3",  # aquamarine
+        "#40c8e0",  # mediumturquoise
+        "#64d2ff",  # lightskyblue
+        "#0a84ff",  # dodgerblue
+        "#94acff",  # skyblue
+        "#5e5ce6",  # slateblue
+        "#bf5af2",  # mediumorchid
+        "#ff375f",  # crimson
+        "#ff6482",  # lightcoral
+        "#ff6f61",  # coral
+        "#c6ff00",  # greenyellow
+    )
+    return palette[(digest[0] << 8 | digest[1]) % len(palette)]
 
 
-def recolor_tree_icons(spec: Vendor, dest: Path, color: str, *, dry_run: bool) -> list[str]:
+def _badge_icon(binary: list[str], source: Path, dest: Path, color: str,
+                emblem: Path) -> str | None:
+    """Overlay a colourised shield on a stock icon. None on success."""
+    probe = subprocess.run(
+        [*binary, str(source), "-format", "%wx%h", "info:"],
+        capture_output=True, text=True, check=False,
+    )
+    size = (probe.stdout or "").strip()
+    if probe.returncode != 0 or not size:
+        return probe.stderr.strip() or f"size probe failed ({probe.returncode})"
+    result = subprocess.run(
+        [
+            *binary, str(source),
+            "(", str(emblem), "-resize", f"{size}!",
+            "-fuzz", "15%", "-fill", color, "-opaque", "black", ")",
+            "-compose", "Over", "-composite", str(dest),
+        ],
+        capture_output=True, text=True, check=False,
+    )
+    if result.returncode != 0 or not dest.is_file():
+        return result.stderr.strip() or str(result.returncode)
+    return None
+
+
+def recolor_tree_icons(spec: Vendor, dest: Path, color: str, *, dry_run: bool,
+                       fork_root: Path | None = None) -> list[str]:
     binary = _imagemagick()
     if binary is None:
         return ["skip icons: ImageMagick missing"]
+    root = fork_root or FORK_ROOT
+    emblem = _emblem_path(root)
+    if emblem is None:
+        return ["skip icons: profile emblem missing "
+                f"(expected {root / EMBLEM_NAME} or kit templates/icons/{EMBLEM_NAME})"]
     actions: list[str] = []
     seen: set[Path] = set()
     for pattern in spec.icon_globs:
@@ -441,17 +506,14 @@ def recolor_tree_icons(spec: Vendor, dest: Path, color: str, *, dry_run: bool) -
             seen.add(src)
             rel = src.relative_to(spec.stock_lib)
             target = dest / rel
-            action = f"recolor {src} -> {target} ({color})"
+            action = f"badge {src} -> {target} ({color})"
             actions.append(action)
             if dry_run:
                 continue
             target.parent.mkdir(parents=True, exist_ok=True)
-            result = subprocess.run(
-                [*binary, str(src), "-fill", color, "-colorize", "60%", str(target)],
-                capture_output=True, text=True, check=False,
-            )
-            if result.returncode != 0 or not target.is_file():
-                actions[-1] = f"skip {rel}: {result.stderr.strip() or result.returncode}"
+            err = _badge_icon(binary, src, target, color, emblem)
+            if err is not None:
+                actions[-1] = f"skip {rel}: {err}"
     return actions
 
 
@@ -599,8 +661,9 @@ def sync_one(vendor: str, profile: str, home: Path, env: Env, *,
         if not spec.stock_lib.is_dir():
             log(f"skip: stock tree missing: {spec.stock_lib}")
             return
-        log(f"icons-only: recolor {vendor}-{profile} from stock")
-        for line in recolor_tree_icons(spec, dest, color, dry_run=dry_run):
+        log(f"icons-only: badge {vendor}-{profile} from stock")
+        for line in recolor_tree_icons(
+                spec, dest, color, dry_run=dry_run, fork_root=env.fork_root):
             log(line)
         return
 
@@ -632,7 +695,8 @@ def sync_one(vendor: str, profile: str, home: Path, env: Env, *,
     else:
         for line in patch_identity(spec, dest, profile, dry_run=False):
             log(line)
-    for line in recolor_tree_icons(spec, dest, color, dry_run=dry_run):
+    for line in recolor_tree_icons(
+            spec, dest, color, dry_run=dry_run, fork_root=env.fork_root):
         log(line)
     log(write_apparmor(spec, dest, profile, env, dry_run=dry_run))
 
@@ -726,7 +790,11 @@ post-invoke "/usr/local/bin/sync-devkit-profile-apps.py >>/var/log/devkit-profil
 def install_hook(env: Env, *, dry_run: bool) -> list[str]:
     actions: list[str] = []
     src = Path(__file__).resolve()
+    emblem_src = src.parent.parent / "templates" / "icons" / EMBLEM_NAME
+    emblem_dst = env.fork_root / EMBLEM_NAME
     actions.append(f"copy {src} -> {env.worker}")
+    if emblem_src.is_file():
+        actions.append(f"copy {emblem_src} -> {emblem_dst}")
     actions.append(f"write {env.apt_conf}")
     actions.append(f"write {env.dpkg_conf}")
     if dry_run:
@@ -735,6 +803,10 @@ def install_hook(env: Env, *, dry_run: bool) -> list[str]:
     if src != env.worker.resolve():
         shutil.copy2(src, env.worker)
     os.chmod(env.worker, 0o755)
+    if emblem_src.is_file():
+        emblem_dst.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(emblem_src, emblem_dst)
+        os.chmod(emblem_dst, 0o644)
     env.apt_conf.parent.mkdir(parents=True, exist_ok=True)
     env.apt_conf.write_text(APT_BODY, encoding="utf-8")
     os.chmod(env.apt_conf, 0o644)
@@ -771,7 +843,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     p.add_argument("--dry-run", action="store_true", help="print actions; change nothing")
     p.add_argument("--icons-only", action="store_true",
-                   help="recolor fork icons from stock; skip rsync/asar")
+                   help="badge fork icons from stock; skip rsync/asar")
     p.add_argument("--install-hook", action="store_true",
                    help="install apt + dpkg post-invoke hooks and copy this worker")
     p.add_argument("--user", metavar="NAME", help="only this account's ~/.agents-profiles")

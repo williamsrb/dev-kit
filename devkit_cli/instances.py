@@ -8,6 +8,9 @@ from __future__ import annotations
 import colorsys
 import hashlib
 import json
+import os
+import random
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -15,6 +18,34 @@ from pathlib import Path
 from . import appfork
 from .common import FILE_MODE, REPO_ROOT, ensure_dir, timestamp
 from .errors import DevkitError
+
+# Top-left shield badge. Profile colour tints the black fill; white rim stays.
+PROFILE_EMBLEM = REPO_ROOT / "templates" / "icons" / "profile-emblem.png"
+# Installed copy for the root appfork worker (see appfork.install_hook).
+PROFILE_EMBLEM_INSTALLED = Path("/usr/lib/devkit/profile-emblem.png")
+
+# Default badge colours: vivid on black. Create may pick any unique colour;
+# this list is only the random pool when --color / type colour is absent.
+PROFILE_PALETTE: tuple[str, ...] = (
+    "#ff453a",  # tomato
+    "#ff9f0a",  # orange
+    "#ffd60a",  # gold
+    "#ffb340",  # sandybrown
+    "#30d158",  # limegreen
+    "#7dffb3",  # aquamarine
+    "#40c8e0",  # mediumturquoise
+    "#64d2ff",  # lightskyblue
+    "#0a84ff",  # dodgerblue
+    "#94acff",  # skyblue
+    "#5e5ce6",  # slateblue
+    "#bf5af2",  # mediumorchid
+    "#ff375f",  # crimson
+    "#ff6482",  # lightcoral
+    "#ff6f61",  # coral
+    "#c6ff00",  # greenyellow
+)
+
+_HEX_COLOR = re.compile(r"^#?[0-9A-Fa-f]{6}$")
 
 # Unprefixed names the GUIs look up on PATH. Public wrappers stay
 # ~/.local/bin/<vendor>-<profile> so they never collide with stock.
@@ -136,22 +167,144 @@ def _vendor_app_name(vendor: str) -> str:
     return {"claude": "Claude", "codex": "Codex", "cursor": "Cursor"}.get(vendor, vendor)
 
 
+def normalize_color(value: str) -> str:
+    """Canonical #rrggbb (lowercase). Raises DevkitError when invalid."""
+    raw = (value or "").strip()
+    if not _HEX_COLOR.match(raw):
+        raise DevkitError(
+            f"colour {value!r} is not a hex RGB value",
+            "pass #RRGGBB, for example --color '#FF453A'")
+    body = raw[1:] if raw.startswith("#") else raw
+    return f"#{body.lower()}"
+
+
+def companion_dark(light: str) -> str:
+    """A darker sibling for templates that still want a dark token."""
+    light = normalize_color(light)
+    r = int(light[1:3], 16) / 255.0
+    g = int(light[3:5], 16) / 255.0
+    b = int(light[5:7], 16) / 255.0
+    h, s, v = colorsys.rgb_to_hsv(r, g, b)
+    rd, gd, bd = colorsys.hsv_to_rgb(h, min(1.0, s * 1.05), max(0.18, v * 0.42))
+    return "#" + "".join(f"{int(c * 255):02x}" for c in (rd, gd, bd))
+
+
+def color_pair(light: str, dark: str | None = None) -> dict[str, str]:
+    light_n = normalize_color(light)
+    dark_n = normalize_color(dark) if dark else companion_dark(light_n)
+    return {"light": light_n, "dark": dark_n}
+
+
+def used_profile_colors(home: Path, *, except_name: str | None = None) -> set[str]:
+    """Light colours already claimed by installed instances (one per profile)."""
+    claimed: set[str] = set()
+    for name, _vendor, _config_dir, prov in discover_instances(home):
+        if except_name and name == except_name:
+            continue
+        raw = prov.get("color")
+        if isinstance(raw, str) and raw.strip():
+            try:
+                claimed.add(normalize_color(raw))
+            except DevkitError:
+                continue
+    return claimed
+
+
+def refuse_duplicate_color(home: Path, name: str, light: str) -> None:
+    """Colours are unique across profiles, same rule as names."""
+    light_n = normalize_color(light)
+    for other, _vendor, _config_dir, prov in discover_instances(home):
+        if other == name:
+            continue
+        raw = prov.get("color")
+        if not isinstance(raw, str) or not raw.strip():
+            continue
+        try:
+            other_color = normalize_color(raw)
+        except DevkitError:
+            continue
+        if other_color == light_n:
+            raise DevkitError(
+                f"colour {light_n} is already used by profile {other!r}",
+                "pick a unique --color, or omit it to draw from the free palette")
+
+
+def assign_profile_color(profile: dict, home: Path,
+                         explicit: str | None = None) -> dict[str, str]:
+    """Pin a unique light/dark pair on the profile at create time.
+
+    Preference: --color, else a free type-declared colour, else a random free
+    palette entry. Custom colours outside the palette are allowed when unique.
+    """
+    name = profile["name"]
+    used = used_profile_colors(home, except_name=name)
+
+    if explicit is not None:
+        pair = color_pair(explicit)
+        refuse_duplicate_color(home, name, pair["light"])
+        profile["color"] = pair
+        return pair
+
+    declared = profile.get("color") or {}
+    declared_light = declared.get("light")
+    if declared_light:
+        try:
+            light_n = normalize_color(declared_light)
+        except DevkitError:
+            light_n = None
+        if light_n and light_n not in used:
+            pair = color_pair(light_n, declared.get("dark"))
+            profile["color"] = pair
+            return pair
+
+    free = [c for c in PROFILE_PALETTE if c not in used]
+    if free:
+        light = random.choice(free)
+    else:
+        # Palette exhausted: keep drawing vivid colours until unique.
+        for _ in range(64):
+            hue = random.random()
+            rgb = colorsys.hsv_to_rgb(hue, 0.85, 0.95)
+            light = "#" + "".join(f"{int(c * 255):02x}" for c in rgb)
+            if light not in used:
+                break
+        else:
+            raise DevkitError(
+                "could not find a free profile colour",
+                "pass an unused --color '#RRGGBB'")
+    pair = color_pair(light)
+    profile["color"] = pair
+    return pair
+
+
+def apply_provenance_color(profile: dict, provenance: dict | None) -> None:
+    """Keep sync/show on the colour written at create, not a re-roll."""
+    if not provenance:
+        return
+    raw = provenance.get("color")
+    if not isinstance(raw, str) or not raw.strip():
+        return
+    try:
+        profile["color"] = color_pair(raw)
+    except DevkitError:
+        return
+
+
 def profile_hue(profile_name: str) -> float:
-    """A stable hue per profile name, so two profiles never collide by accident."""
+    """Legacy helper: stable hue from the name (palette index fallback)."""
     digest = hashlib.sha256(profile_name.encode("utf-8")).digest()
     return (digest[0] << 8 | digest[1]) / 65535.0
 
 
 def profile_colors(profile: dict) -> tuple[str, str]:
     declared = profile.get("color") or {}
-    if declared.get("light") and declared.get("dark"):
-        return declared["light"], declared["dark"]
-    hue = profile_hue(profile["name"])
-    light = colorsys.hsv_to_rgb(hue, 0.75, 0.95)
-    dark = colorsys.hsv_to_rgb(hue, 0.85, 0.45)
-    def to_hex(rgb) -> str:
-        return "#" + "".join(f"{int(c * 255):02x}" for c in rgb)
-    return to_hex(light), to_hex(dark)
+    if declared.get("light"):
+        pair = color_pair(declared["light"], declared.get("dark"))
+        return pair["light"], pair["dark"]
+    # No assignment yet (dry helpers / tests): deterministic palette slot.
+    idx = int(profile_hue(profile["name"]) * len(PROFILE_PALETTE)) % len(PROFILE_PALETTE)
+    light = PROFILE_PALETTE[idx]
+    return light, companion_dark(light)
 
 
 def imagemagick() -> list[str] | None:
@@ -163,12 +316,44 @@ def imagemagick() -> list[str] | None:
     return None
 
 
+def profile_emblem() -> Path | None:
+    """Overlay badge: kit checkout, installed fork root, or $DEVKIT_EMBLEM."""
+    raw = os.environ.get("DEVKIT_EMBLEM")
+    if raw:
+        override = Path(raw).expanduser()
+        if override.is_file():
+            return override
+    for candidate in (PROFILE_EMBLEM, PROFILE_EMBLEM_INSTALLED):
+        if candidate.is_file():
+            return candidate
+    return None
+
+
 def recolor_icon(source: Path, dest: Path, color: str) -> bool:
+    """Copy the stock icon and overlay a profile-coloured shield badge.
+
+    The emblem canvas matches the icon size; the shield sits in the top-left
+    quarter with a transparent rest, so a plain Over composite is enough.
+    Black fill becomes `color`; the white rim is kept for contrast.
+    """
     binary = imagemagick()
-    if binary is None or not source.is_file():
+    emblem = profile_emblem()
+    if binary is None or emblem is None or not source.is_file():
         return False
     ensure_dir(dest.parent)
-    command = [*binary, str(source), "-fill", color, "-colorize", "60%", str(dest)]
+    probe = subprocess.run(
+        [*binary, str(source), "-format", "%wx%h", "info:"],
+        capture_output=True, text=True, check=False,
+    )
+    size = (probe.stdout or "").strip()
+    if probe.returncode != 0 or not size:
+        return False
+    command = [
+        *binary, str(source),
+        "(", str(emblem), "-resize", f"{size}!",
+        "-fuzz", "15%", "-fill", color, "-opaque", "black", ")",
+        "-compose", "Over", "-composite", str(dest),
+    ]
     result = subprocess.run(command, capture_output=True, text=True, check=False)
     if result.returncode != 0 or not dest.is_file():
         return False

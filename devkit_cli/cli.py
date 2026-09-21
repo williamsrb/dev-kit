@@ -132,6 +132,10 @@ def build_parser() -> argparse.ArgumentParser:
                           help="Profile type (profiles/<TYPE>.json). Default: NAME when that type exists.")
     p_create.add_argument("--vendor", action="append", metavar="VENDOR",
                           help="Limit to these vendors (repeatable).")
+    p_create.add_argument("--color", metavar="HEX",
+                          help="Badge colour (#RRGGBB). Must be unique across "
+                               "profiles. Default: type colour if free, else a "
+                               "random free palette colour.")
     p_create.add_argument("--apply", action="store_true",
                           help="Write user-owned config, then print the desktop-fork "
                                "plan and ask sudo. Default: dry run.")
@@ -196,7 +200,8 @@ def build_parser() -> argparse.ArgumentParser:
         description=(
             "Rebuild per-profile desktop app forks from the stock packages. "
             "Same recipe as Claude Personal: rsync into /usr/lib/devkit/, patch "
-            "desktopName / WM_CLASS, recolor in-tree icons. Never writes stock "
+            "desktopName / WM_CLASS, badge in-tree icons with a coloured "
+            "shield emblem. Never writes stock "
             "trees or Claude Personal. --apply prints the plan, then asks sudo."
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -208,7 +213,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_apps.add_argument("--install-hook", action="store_true",
                         help="Install apt + dpkg post-invoke hooks and copy the worker to /usr/local/bin.")
     p_apps.add_argument("--icons-only", action="store_true",
-                        help="Recolor fork icons from stock; skip rsync/asar.")
+                        help="Badge fork icons from stock; skip rsync/asar.")
     p_apps.add_argument("--apply", action="store_true",
                         help="Write. Prints the plan, then asks sudo. Default: dry run.")
     p_apps.set_defaults(func=profiles.cmd_apps_sync)

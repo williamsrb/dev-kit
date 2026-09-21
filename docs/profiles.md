@@ -14,7 +14,7 @@ Creating one gives you a config directory, a projected skill set, a uniquely
 named CLI wrapper, a launcher, an icon colour, and a name that shows up in the
 status line. Several profiles can run at once. Each desktop is a Personal-style
 fork of the stock app (its own copy under `/usr/lib/devkit/`, patched
-`desktopName` / `WM_CLASS`, recoloured in-app icons). Stock Claude, ChatGPT,
+`desktopName` / `WM_CLASS`, stock icons badged with a coloured shield). Stock Claude, ChatGPT,
 Cursor, and Claude Personal stay as they are. The fork is rebuilt after apt/dpkg
 updates of the original package.
 
@@ -48,7 +48,7 @@ profiles yet offers to create a first one (type, then name) unless you passed
 ~/.local/bin/<vendor>-<profile>          # public wrapper (not a stock name)
 ~/.agents-profiles/<profile>/bin/<cli>   # unprefixed vendor CLI + agentctl
 ~/.local/share/applications/...          # launcher (Exec is the fork)
-~/.local/share/icons/.../...png          # recoloured launcher icon
+~/.local/share/icons/.../...png          # stock icon + coloured shield badge
 /usr/lib/devkit/<vendor>-<profile>/      # identity fork (root, apt-rebuilt)
 ```
 
@@ -109,13 +109,27 @@ on-demand for worklogs.
 
 ## Colour
 
-A profile may declare `color`. If it does not, a hue is derived
-deterministically from the profile name, so two profiles never collide by
-accident and a given name always gets the same colour on every machine.
+A profile type may declare `color` (`light` / `dark`). On
+`devkit profile create`, the instance gets a unique badge colour:
 
-Icon recolouring needs ImageMagick. Version 7 ships `magick` and may not ship
-`convert`, so the kit tries `magick` first. If neither is present the launcher
-falls back to the stock icon and says so — it does not fail the install.
+1. `--color '#RRGGBB'` if passed (any hex; not limited to the palette)
+2. else the type's `color.light` when no other installed profile uses it
+3. else a random free entry from the 16-colour palette (vivid on black)
+
+Colours are unique across profiles, the same way names are: a collision
+refuses create. Sync keeps the colour written into provenance at create time;
+it does not re-roll.
+
+Icons keep the stock artwork. A shield emblem from
+`templates/icons/profile-emblem.png` is resized to the icon canvas (shield in
+the top-left quarter, rest transparent), its black fill is tinted to the
+profile colour (white rim kept), and it is composited over the original. The
+same badge is applied to launcher icons under `~/.local/share/icons` and to
+in-tree icons inside `/usr/lib/devkit/<vendor>-<profile>/`. Badging needs
+ImageMagick (`magick`, else `convert`). If Magick or the emblem is missing the
+launcher falls back to the stock icon and says so — it does not fail the
+install. The apt/dpkg hook installs a copy of the emblem at
+`/usr/lib/devkit/profile-emblem.png` for the root worker.
 
 ## Adopting an existing setup
 
@@ -159,9 +173,9 @@ their own `.desktop` files. The kit never writes those trees.
 
 Each profile desktop is a dpkg-unowned rsync copy of the stock app, the same
 recipe as Claude Personal: patch `desktopName` in `app.asar` (Cursor also
-patches `nameShort` in `product.json`), recolor in-tree icons from **stock**
-assets, keep `chrome-sandbox` mode `4755`. Apt only updates stock, so a pair of
-hooks rebuild every fork afterwards:
+patches `nameShort` in `product.json`), badge in-tree icons from **stock**
+assets with a coloured shield emblem, keep `chrome-sandbox` mode `4755`. Apt
+only updates stock, so a pair of hooks rebuild every fork afterwards:
 
 - `/etc/apt/apt.conf.d/99-devkit-profile-apps` (`DPkg::Post-Invoke`)
 - `/etc/dpkg/dpkg.cfg.d/60devkit-profile-apps` (`post-invoke` — apt's hook does

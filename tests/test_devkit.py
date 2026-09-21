@@ -10,7 +10,6 @@ import argparse
 import io
 import json
 import os
-import random
 import re
 import shutil
 import subprocess
@@ -215,8 +214,9 @@ class ProfileCompositionTests(unittest.TestCase):
     def test_assign_color_picks_free_palette_when_unset(self):
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp)
-            random.seed(0)
             first = instances.assign_profile_color({"name": "a"}, home)
+            again = instances.assign_profile_color({"name": "a"}, home)
+            self.assertEqual(first, again)
             self.assertIn(first["light"], instances.PROFILE_PALETTE)
             # Claim the rest of the palette via fake provenance so the next
             # create must avoid first["light"].
@@ -240,9 +240,16 @@ class ProfileCompositionTests(unittest.TestCase):
                 json.dumps({"profile": "claimed", "vendor": "claude",
                             "color": first["light"]}),
                 encoding="utf-8")
-            random.seed(1)
             overflow = instances.assign_profile_color({"name": "overflow"}, home)
             self.assertNotIn(overflow["light"], used)
+
+    def test_provenance_color_keeps_type_dark_when_light_matches(self):
+        profile = {"name": "enonic", "color": {"light": "#ffcc00", "dark": "#6a0dad"}}
+        instances.apply_provenance_color(profile, {"color": "#FFCC00"})
+        self.assertEqual(profile["color"], {"light": "#ffcc00", "dark": "#6a0dad"})
+        instances.apply_provenance_color(profile, {"color": "#ff453a"})
+        self.assertEqual(profile["color"]["light"], "#ff453a")
+        self.assertNotEqual(profile["color"]["dark"], "#6a0dad")
 
     def test_graft_mcp_is_parked_and_not_a_profile_default(self):
         catalog = json.loads((REPO / "core" / "mcp" / "catalog.json").read_text())

@@ -8,6 +8,7 @@ a CLI change nobody documented.
 
 from __future__ import annotations
 
+import argparse
 import difflib
 import re
 
@@ -18,10 +19,39 @@ from .errors import DevkitError
 MARKER_START = "<!-- devkit:generated:{name} -->"
 MARKER_END = "<!-- /devkit:generated:{name} -->"
 
+# Option help wraps at 80. Usage is rendered unwrapped: argparse 3.12 (CI) and
+# 3.14 (a local install) split the same usage line at different columns.
+_HELP_WIDTH = 80
+_USAGE_WIDTH = 10_000
+
+
+class _StableHelpFormatter(argparse.RawDescriptionHelpFormatter):
+    def __init__(self, prog: str, **kwargs) -> None:
+        kwargs["width"] = _HELP_WIDTH
+        super().__init__(prog, **kwargs)
+
+    def _format_usage(self, usage, actions, groups, prefix):
+        saved = self._width
+        self._width = _USAGE_WIDTH
+        try:
+            return super()._format_usage(usage, actions, groups, prefix)
+        finally:
+            self._width = saved
+
+
+def _pin_help_formatter(parser: argparse.ArgumentParser) -> None:
+    parser.formatter_class = _StableHelpFormatter
+    for action in parser._actions:
+        choices = getattr(action, "choices", None)
+        if isinstance(choices, dict):
+            for sub in choices.values():
+                _pin_help_formatter(sub)
+
 
 def _cli_reference() -> str:
     from .cli import build_parser
     parser = build_parser()
+    _pin_help_formatter(parser)
     lines = ["```", parser.format_help().rstrip(), "```", ""]
 
     actions = [a for a in parser._actions if hasattr(a, "choices") and a.choices]

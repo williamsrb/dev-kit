@@ -661,6 +661,53 @@ class BootstrapPlanTests(unittest.TestCase):
     def test_apt_does_not_flag_third_party(self):
         self.assertNotIn("thirdparty", self._plan("apt", "debian"))
 
+    def test_declined_third_party_is_a_skip_not_a_missing(self):
+        """Rocky CI runs --third-party no; verify must not fail on EPEL packages."""
+        from unittest import mock
+
+        from devkit_cli import bootstrap_plan, manifest
+        profile = manifest.load("core")
+        with mock.patch("devkit_cli.bootstrap_plan.shutil.which", return_value=None), \
+             mock.patch("devkit_cli.bootstrap_plan._alternate", return_value=None):
+            # Without the flag, EPEL/rpmfusion binaries are hard failures.
+            self.assertEqual(
+                bootstrap_plan.verify(profile, manager="dnf", family="rhel"), 1)
+            # With the flag they are skips; remaining failures would be
+            # non-third-party binaries that are also absent in this mock.
+            self.assertEqual(
+                bootstrap_plan.verify(
+                    profile, manager="dnf", family="rhel",
+                    third_party_declined=True),
+                1)
+            # Third-party set itself must not be the only cause of failure.
+            skippable = bootstrap_plan.third_party_binaries(profile, "dnf", "rhel")
+            self.assertTrue({"rg", "shellcheck", "ffmpeg", "convert"} <= skippable)
+            self.assertNotIn("jq", skippable)
+            # Declined mode with everything present succeeds.
+        with mock.patch("devkit_cli.bootstrap_plan.shutil.which",
+                        side_effect=lambda b: f"/usr/bin/{b}"), \
+             mock.patch("devkit_cli.bootstrap_plan._alternate", return_value=None):
+            self.assertEqual(
+                bootstrap_plan.verify(
+                    profile, manager="dnf", family="rhel",
+                    third_party_declined=True),
+                0)
+            # Absent third-party binaries are still ok when declined.
+        def which_no_epel(binary: str):
+            if binary in skippable:
+                return None
+            return f"/usr/bin/{binary}"
+        with mock.patch("devkit_cli.bootstrap_plan.shutil.which",
+                        side_effect=which_no_epel), \
+             mock.patch("devkit_cli.bootstrap_plan._alternate", return_value=None):
+            self.assertEqual(
+                bootstrap_plan.verify(
+                    profile, manager="dnf", family="rhel",
+                    third_party_declined=True),
+                0)
+            self.assertEqual(
+                bootstrap_plan.verify(profile, manager="dnf", family="rhel"), 1)
+
     def test_a_manager_without_a_package_uses_the_declared_fallback(self):
         """ocrmypdf is absent from EPEL and AUR-only on Arch, and nothing here
         may require the AUR."""

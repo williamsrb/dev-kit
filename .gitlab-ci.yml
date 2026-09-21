@@ -96,7 +96,9 @@ shellcheck:
       if [ -s "${NVM_DIR:-$HOME/.nvm}/nvm.sh" ]; then
         . "${NVM_DIR:-$HOME/.nvm}/nvm.sh"
       fi
-    - python3 devkit_cli/bootstrap_plan.py --profile "${PROFILE:-core}" --verify
+    # Same contract as bootstrap: --third-party no means needs_repo binaries
+    # are skipped, not missing (rocky proves that).
+    - python3 devkit_cli/bootstrap_plan.py --profile "${PROFILE:-core}" --verify --third-party-declined
 
 debian:
   extends: .matrix

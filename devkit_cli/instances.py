@@ -257,13 +257,16 @@ def assign_profile_color(profile: dict, home: Path,
             profile["color"] = pair
             return pair
 
+    # Seeded by the instance name so a dry-run and the later --apply agree,
+    # while still varying among colours nobody else has claimed.
+    rng = random.Random(name)
     free = [c for c in PROFILE_PALETTE if c not in used]
     if free:
-        light = random.choice(free)
+        light = rng.choice(free)
     else:
-        # Palette exhausted: keep drawing vivid colours until unique.
+        light = ""
         for _ in range(64):
-            hue = random.random()
+            hue = rng.random()
             rgb = colorsys.hsv_to_rgb(hue, 0.85, 0.95)
             light = "#" + "".join(f"{int(c * 255):02x}" for c in rgb)
             if light not in used:
@@ -278,16 +281,30 @@ def assign_profile_color(profile: dict, home: Path,
 
 
 def apply_provenance_color(profile: dict, provenance: dict | None) -> None:
-    """Keep sync/show on the colour written at create, not a re-roll."""
+    """Keep sync/show on the colour written at create, not a re-roll.
+
+    Provenance stores the light hex only. When that still matches the type's
+    light, keep the type's dark; otherwise derive a dark companion.
+    """
     if not provenance:
         return
     raw = provenance.get("color")
     if not isinstance(raw, str) or not raw.strip():
         return
     try:
-        profile["color"] = color_pair(raw)
+        light = normalize_color(raw)
     except DevkitError:
         return
+    declared = profile.get("color") or {}
+    dark = None
+    declared_light = declared.get("light")
+    if declared_light and declared.get("dark"):
+        try:
+            if normalize_color(declared_light) == light:
+                dark = declared["dark"]
+        except DevkitError:
+            dark = None
+    profile["color"] = color_pair(light, dark)
 
 
 def profile_hue(profile_name: str) -> float:

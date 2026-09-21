@@ -9,7 +9,7 @@
   "attribution": { "coAuthoredBy": false, "generatedWith": false },
   "permissions": {
     "additionalDirectories": [
-      "${PROFILE_HARNESS_DIR}",
+      "${PROFILE_AGENTS_HOME}",
       "${PROFILE_CONFIG_DIR}"
     ]
   },

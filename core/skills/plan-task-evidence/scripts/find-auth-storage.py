@@ -11,18 +11,28 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from pathlib import Path
 
 
-SEARCH_SPECS = (
-    ("~/.agents/.auth/*.json", Path.home() / ".agents" / ".auth"),
-    ("~/.agents/.playwright-mcp/*.json", Path.home() / ".agents" / ".playwright-mcp"),
-    ("~/.agents/.playwright-mcp/auth/*.json", Path.home() / ".agents" / ".playwright-mcp" / "auth"),
-    ("./playwright/.auth/*.json", Path("playwright") / ".auth"),
-    ("./.auth/*.json", Path(".auth")),
-    ("./*.json", Path(".")),
-)
+def agents_home() -> Path:
+    raw = os.environ.get("AGENTS_HOME")
+    if raw:
+        return Path(raw).expanduser()
+    return Path.home() / ".agents"
+
+
+def search_specs() -> tuple[tuple[str, Path], ...]:
+    home = agents_home()
+    return (
+        (str(home / ".auth" / "*.json"), home / ".auth"),
+        (str(home / ".playwright-mcp" / "*.json"), home / ".playwright-mcp"),
+        (str(home / ".playwright-mcp" / "auth" / "*.json"), home / ".playwright-mcp" / "auth"),
+        ("./playwright/.auth/*.json", Path("playwright") / ".auth"),
+        ("./.auth/*.json", Path(".auth")),
+        ("./*.json", Path(".")),
+    )
 
 
 def read_storage_state(path: Path) -> dict | None:
@@ -71,7 +81,7 @@ def collect(cwd: Path) -> list[dict]:
     """Every storage state in the search paths, newest first, contents read."""
     found: list[dict] = []
     seen: set[Path] = set()
-    for label, rel in SEARCH_SPECS:
+    for label, rel in search_specs():
         directory = rel.expanduser() if str(rel).startswith("~") or rel.is_absolute() else cwd / rel
         if not directory.is_dir():
             continue

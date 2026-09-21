@@ -31,6 +31,19 @@ Config isolation is environment variables, a uniquely named CLI wrapper, and a
 `/usr/lib/devkit/`, with a patched identity. Stock Claude, ChatGPT, Cursor, and
 Claude Personal stay untouched.
 
+PATH prepend is required so `agentctl` resolves to the profile's `bin/`, but it
+is not sufficient: `agentctl` and other harness tools used to hardcode
+`$HOME/.agents` and would see every profile's skills, plans, and Playwright
+instances. Wrappers therefore also export `DEVKIT_PROFILE` and `AGENTS_HOME`
+pointing at `~/.agents-profiles/<name>/agents`. That tree is shaped like
+`~/.agents` but holds only this profile's projected skills/kb/rules, plus
+profile-local plans and Playwright state. Sibling profiles are not on that
+path. The profile root does not contain a `core/` symlink: that tree holds
+every exported skill and would leak Enonic into PHP. Tools are reached through
+`agents/bin` (kit `core/bin` only). True filesystem hiding of
+`~/.agents-profiles` would need a container; the isolation unit is the env +
+PATH, which child processes inherit.
+
 Linux also allows one default URL handler per scheme. Profile launchers do not
 claim `claude://` / `codex://` / `cursor://`; a `NoDisplay` dispatcher routes
 the callback.

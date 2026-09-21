@@ -19,7 +19,7 @@
   "rules": "@allowlist:rules.client",
   "kb": "@allowlist:kb.client",
 
-  "mcp": ["context7", "graft", "gitlab", "atlassian-rovo-preview"],
+  "mcp": ["context7", "gitlab", "atlassian-rovo-preview"],
 
   "client_overlay": {
     "env_root_host_patterns": ["*k8s.example.com", "web02-stg*.example.com"],

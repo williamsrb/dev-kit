@@ -42,8 +42,10 @@ Nothing on Arch requires the AUR.
 `~/.local/bin` must be on your `PATH` for the profile wrappers to work.
 Public wrappers are named `<vendor>-<profile>` (`claude-dummy`), never a stock
 CLI name, and they exec the stock binary by full path. Each profile also has
-`~/.agents-profiles/<name>/bin/` with the unprefixed names so the GUI can find
-that profile's CLI.
+`~/.agents-profiles/<name>/bin/` with the unprefixed vendor names so the GUI
+can find that profile's CLI, plus harness tools such as `agentctl`. Wrappers
+export `DEVKIT_PROFILE` and `AGENTS_HOME`; a PATH override by itself would
+still leave `agentctl` reading `$HOME/.agents` and seeing every profile.
 
 `bootstrap.sh` detects your shell startup files and reports them; it does not
 edit them unless you pass `--wire-path`. On a box with both `.bash_profile` and

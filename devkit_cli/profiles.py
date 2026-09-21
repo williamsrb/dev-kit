@@ -12,7 +12,7 @@ import os
 import sys
 from pathlib import Path
 
-from . import appfork, auth, instances, manifest, privilege
+from . import appfork, auth, instances, manifest, mcp, privilege
 from .common import (EXEC_MODE, FILE_MODE, Plan, REPO_ROOT, back_up,
                      ensure_dir, relative_to_home, write_json)
 from .errors import DevkitError
@@ -117,6 +117,8 @@ def materialize(profile: dict, vendors: list[str] | None, home: Path,
         raise DevkitError(f"{core_root} has not been exported yet",
                           "run 'devkit export --apply' first")
 
+    _bind_profile_runtime(plan, profile, home, core_root, force, root)
+
     for instance in _instance_vendors(profile, vendors):
         vendor = instance["vendor"]
         layout = instances.paths_for(profile["name"], vendor, home)
@@ -129,20 +131,15 @@ def materialize(profile: dict, vendors: list[str] | None, home: Path,
                 if plan.apply:
                     ensure_dir(directory)
 
-        # The harness itself is shared, projected once per profile.
-        harness_link = layout["harness_dir"] / "core"
-        if not (harness_link.is_symlink() and harness_link.readlink() == core_root):
-            plan.record(f"link   {relative_to_home(harness_link)} -> core/")
-            if plan.apply:
-                if harness_link.is_symlink() or harness_link.exists():
-                    harness_link.unlink()
-                harness_link.symlink_to(core_root)
-
         for layer in ("skills", "rules", "kb"):
             _link_layer(plan, layout["config_dir"], layer,
                         profile.get(layer, []), core_root)
+        hooks_dir = layout["harness_dir"] / "hooks"
+        if hooks_dir.is_dir():
+            _symlink(plan, layout["config_dir"] / "hooks", hooks_dir,
+                     f"{vendor}/hooks")
 
-        _write_vendor_config(plan, vendor, layout, tokens, force, root)
+        _write_vendor_config(plan, vendor, profile, layout, tokens, force, root)
         _write_wrapper(plan, vendor, layout, tokens, force, root)
         if "desktop" in instance.get("kind", ""):
             _write_desktop(plan, vendor, profile, layout, tokens, force, root)
@@ -162,7 +159,7 @@ def materialize(profile: dict, vendors: list[str] | None, home: Path,
     auth.install_dispatchers(plan, home, kit_root=root)
 
 
-def _write_vendor_config(plan: Plan, vendor: str, layout: dict,
+def _write_vendor_config(plan: Plan, vendor: str, profile: dict, layout: dict,
                          tokens: dict, force: bool, root: Path) -> None:
     template_dir = root / "templates" / vendor
     if not template_dir.is_dir():
@@ -171,8 +168,60 @@ def _write_vendor_config(plan: Plan, vendor: str, layout: dict,
         if not template.is_file():
             continue
         rendered = instances.render(template.read_text(encoding="utf-8"), tokens)
-        _write(plan, layout["config_dir"] / template.name, rendered, force,
-               label=f"{vendor}/{template.name}")
+        target = layout["config_dir"] / template.name
+        if template.name == "mcp.json" and vendor == "cursor":
+            rendered = _fill_cursor_mcp(
+                rendered, profile, root, Path(tokens["HOME"]), target)
+        elif template.name == "config.toml" and vendor == "codex":
+            rendered = _fill_codex_mcp(
+                rendered, profile, root, Path(tokens["HOME"]), target)
+        _write(plan, target, rendered, force, label=f"{vendor}/{template.name}")
+    if vendor == "claude":
+        _write_claude_mcp(plan, profile, layout, force, root, Path(tokens["HOME"]))
+
+
+def _fill_cursor_mcp(rendered: str, profile: dict, root: Path, home: Path,
+                     target: Path) -> str:
+    catalog = mcp.load_catalog(root)
+    data = json.loads(rendered)
+    comment = data.get("_comment") or []
+    existing = {}
+    if target.is_file():
+        try:
+            existing = json.loads(target.read_text()).get("mcpServers") or {}
+        except json.JSONDecodeError:
+            existing = {}
+    payload = mcp.cursor_payload(profile, catalog, home, comment, existing)
+    return json.dumps(payload, indent=2) + "\n"
+
+
+def _fill_codex_mcp(rendered: str, profile: dict, root: Path, home: Path,
+                    target: Path) -> str:
+    catalog = mcp.load_catalog(root)
+    existing = target.read_text(encoding="utf-8") if target.is_file() else ""
+    extra = mcp.codex_toml_sections(profile, catalog, home, existing)
+    if not extra:
+        return rendered
+    body = rendered.rstrip() + "\n\n" + extra
+    if not body.endswith("\n"):
+        body += "\n"
+    return body
+
+
+def _write_claude_mcp(plan: Plan, profile: dict, layout: dict, force: bool,
+                      root: Path, home: Path) -> None:
+    catalog = mcp.load_catalog(root)
+    target = layout["config_dir"] / ".claude.json"
+    existing = {}
+    if target.is_file():
+        try:
+            existing = json.loads(target.read_text()).get("mcpServers") or {}
+        except json.JSONDecodeError:
+            existing = {}
+    payload = json.dumps(
+        mcp.claude_payload(profile, catalog, home, existing=existing),
+        indent=2) + "\n"
+    _write(plan, target, payload, force, label="claude/.claude.json")
 
 
 def _write_wrapper(plan: Plan, vendor: str, layout: dict,
@@ -188,6 +237,134 @@ def _write_wrapper(plan: Plan, vendor: str, layout: dict,
 
 def _wrapper_template(vendor: str) -> str:
     return {"cursor": "cursor-agent"}.get(vendor, vendor)
+
+
+def _bind_profile_runtime(plan: Plan, profile: dict, home: Path,
+                          core_root: Path, force: bool, root: Path) -> None:
+    """Give this profile a ~/.agents-shaped tree and PATH wrappers for harness tools.
+
+    PATH prepend is not enough: agentctl hardcodes its data root. Wrappers
+    export AGENTS_HOME / DEVKIT_PROFILE so a tool sees this profile only.
+    Do not symlink the kit's full core/ here: that tree contains every
+    exported skill/kb and would leak Enonic into a PHP profile.
+    """
+    vendor = ((profile.get("instances") or [{}])[0].get("vendor") or "claude")
+    tokens = instances.render_tokens(profile, vendor, home)
+    layout = instances.paths_for(profile["name"], vendor, home)
+    harness = layout["harness_dir"]
+    if not harness.is_dir():
+        plan.record(f"mkdir  {relative_to_home(harness)}")
+        if plan.apply:
+            ensure_dir(harness)
+    _prune_core_symlink(plan, harness)
+    agents_dir = layout["agents_dir"]
+    if not agents_dir.is_dir():
+        plan.record(f"mkdir  {relative_to_home(agents_dir)}")
+        if plan.apply:
+            ensure_dir(agents_dir)
+    for layer in ("skills", "rules", "kb"):
+        _link_layer(plan, agents_dir, layer, profile.get(layer, []), core_root)
+    for name in ("bin", "mcp", "share", "config"):
+        source = core_root / name
+        if source.exists():
+            _symlink(plan, agents_dir / name, source, f"agents/{name}")
+    _project_hooks(plan, harness / "hooks", core_root, tokens, force, root)
+    _symlink(plan, agents_dir / "hooks", harness / "hooks", "agents/hooks")
+    for name in ("prds", "plans", "history", ".cache", ".playwright-mcp"):
+        dest = agents_dir / name
+        if dest.is_dir() or dest.is_symlink():
+            continue
+        plan.record(f"mkdir  {relative_to_home(dest)}")
+        if plan.apply:
+            ensure_dir(dest)
+    _isolate_auth(plan, agents_dir, home)
+    _write_profile_tools(plan, layout, tokens, force, root, core_root)
+
+
+def _prune_core_symlink(plan: Plan, harness: Path) -> None:
+    """A full core/ link exposes every exported skill to every profile."""
+    core_link = harness / "core"
+    if not core_link.is_symlink():
+        return
+    plan.record(f"prune  {relative_to_home(core_link)} (leaked the full core tree)")
+    if plan.apply:
+        core_link.unlink()
+
+
+def _project_hooks(plan: Plan, dest: Path, core_root: Path, tokens: dict,
+                   force: bool, root: Path) -> None:
+    source = core_root / "hooks"
+    if not dest.is_dir():
+        plan.record(f"mkdir  {relative_to_home(dest)}")
+        if plan.apply:
+            ensure_dir(dest)
+    if source.is_dir():
+        wanted = {item.name for item in source.iterdir()
+                  if item.name != "__pycache__" and not item.name.startswith(".")}
+        for item in sorted(source.iterdir()):
+            if item.name not in wanted:
+                continue
+            _symlink(plan, dest / item.name, item, f"hooks/{item.name}")
+        if dest.is_dir():
+            for link in sorted(dest.iterdir()):
+                if link.is_symlink() and link.name not in wanted \
+                        and link.name != "profile-statusline.sh":
+                    plan.record(f"prune  hooks/{link.name}")
+                    if plan.apply:
+                        link.unlink()
+    template = root / "templates" / "shell" / "profile-statusline.sh"
+    if template.is_file():
+        rendered = instances.render(template.read_text(encoding="utf-8"), tokens)
+        _write(plan, dest / "profile-statusline.sh", rendered, force,
+               executable=True, label=relative_to_home(dest / "profile-statusline.sh"))
+
+
+def _isolate_auth(plan: Plan, agents_dir: Path, home: Path) -> None:
+    """Profile-local .auth; share only named token files, never storage-state JSON."""
+    dest = agents_dir / ".auth"
+    if dest.is_symlink():
+        plan.record(f"prune  {relative_to_home(dest)} (shared .auth leaked sessions)")
+        if plan.apply:
+            dest.unlink()
+    if not dest.is_dir():
+        plan.record(f"mkdir  {relative_to_home(dest)}")
+        if plan.apply:
+            ensure_dir(dest)
+    host = home / ".agents" / ".auth"
+    if not host.is_dir():
+        return
+    for name in instances.SHARED_AUTH_FILES:
+        source = host / name
+        if source.is_file():
+            _symlink(plan, dest / name, source, f"agents/.auth/{name}")
+
+
+def _symlink(plan: Plan, dest: Path, target: Path, label: str) -> None:
+    if dest.is_symlink() and dest.readlink() == target:
+        return
+    plan.record(f"link   {label} -> {relative_to_home(target)}")
+    if not plan.apply:
+        return
+    ensure_dir(dest.parent)
+    if dest.is_symlink() or dest.exists():
+        if dest.is_dir() and not dest.is_symlink():
+            raise DevkitError(f"{dest} is a real directory, not a projection",
+                              "move it aside by hand, then re-run")
+        dest.unlink()
+    dest.symlink_to(target)
+
+
+def _write_profile_tools(plan: Plan, layout: dict, tokens: dict,
+                         force: bool, root: Path, core_root: Path) -> None:
+    template = root / "templates" / "shell" / "profile-tool.sh"
+    if not template.is_file():
+        return
+    rendered = instances.render(template.read_text(encoding="utf-8"), tokens)
+    for name in instances.PROFILE_PATH_TOOLS:
+        if not (core_root / "bin" / name).is_file():
+            continue
+        _write(plan, layout["bin_dir"] / name, rendered, force, executable=True,
+               label=relative_to_home(layout["bin_dir"] / name))
 
 
 def _link_profile_cli(plan: Plan, vendor: str, layout: dict) -> None:

@@ -21,8 +21,16 @@ from typing import Any
 
 sys.dont_write_bytecode = True
 
-NVIDIA_TOKEN_PATH = Path.home() / ".agents" / ".auth" / "nvidia-api-key.yaml"
-CACHE_DIR = Path.home() / ".agents" / ".cache" / "skillspector"
+
+def agents_home() -> Path:
+    raw = os.environ.get("AGENTS_HOME")
+    if raw:
+        return Path(raw).expanduser()
+    return Path.home() / ".agents"
+
+
+NVIDIA_TOKEN_PATH = agents_home() / ".auth" / "nvidia-api-key.yaml"
+CACHE_DIR = agents_home() / ".cache" / "skillspector"
 SECRET_RE = re.compile(r"nvapi-[A-Za-z0-9_-]+")
 ISSUE_KEYS = (
     "id",

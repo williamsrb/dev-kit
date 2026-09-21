@@ -17,6 +17,9 @@ Install and manage isolated agent-harness profiles.
 devkit keeps several agent harnesses on one machine without collision: each
 profile has its own config dir, skills, rules, kb, MCP set, CLI wrapper,
 desktop launcher, and a Personal-style GUI fork (unique desktopName / WM_CLASS).
+Wrappers export DEVKIT_PROFILE and AGENTS_HOME and prepend the profile bin to
+PATH, so agentctl and other harness tools see only that profile. PATH alone is
+not enough: those tools read AGENTS_HOME, not $HOME/.agents.
 
 Common examples:
   devkit export --check              # is core/ behind the export source?

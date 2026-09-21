@@ -16,13 +16,23 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
 SAFE_RE = re.compile(r"[^A-Za-z0-9._-]+")
-BACKUP_ROOT = Path.home() / ".agents" / "prds"
+
+
+def agents_home() -> Path:
+    raw = os.environ.get("AGENTS_HOME")
+    if raw:
+        return Path(raw).expanduser()
+    return Path.home() / ".agents"
+
+
+BACKUP_ROOT = agents_home() / "prds"
 
 
 def safe_segment(value: str) -> str:

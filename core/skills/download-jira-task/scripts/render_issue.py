@@ -17,6 +17,7 @@ import argparse
 import datetime as dt
 import html
 import json
+import os
 import re
 import sys
 from html.parser import HTMLParser
@@ -24,7 +25,16 @@ from pathlib import Path
 from typing import Any
 
 JIRA_BASE = "https://example.atlassian.net/browse"
-PRD_ROOT = Path.home() / ".agents/prds"
+
+
+def agents_home() -> Path:
+    raw = os.environ.get("AGENTS_HOME")
+    if raw:
+        return Path(raw).expanduser()
+    return Path.home() / ".agents"
+
+
+PRD_ROOT = agents_home() / "prds"
 
 # SKILL.md mandates skipping this exact author (GitLab commit/MR mention spam).
 SKIP_AUTHORS = {"Solutions Jira x GitLab"}

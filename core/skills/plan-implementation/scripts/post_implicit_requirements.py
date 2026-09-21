@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import subprocess
 import sys
@@ -24,10 +25,18 @@ NONE_RE = re.compile(r"^-\s+Implicit:\s+none\s*$", re.IGNORECASE)
 COMMENT_ID_RE = re.compile(r"^_Comment-id:\s*(\S+)\s*$", re.IGNORECASE | re.MULTILINE)
 IMPLICIT_HEADING_RE = re.compile(r"^##\s+Implicit requirements\b", re.IGNORECASE)
 ANY_HEADING_RE = re.compile(r"^##\s+")
-AGENTCTL = Path.home() / ".agents" / "bin" / "agentctl"
+
+
+def agents_home() -> Path:
+    raw = os.environ.get("AGENTS_HOME")
+    if raw:
+        return Path(raw).expanduser()
+    return Path.home() / ".agents"
+
+
+AGENTCTL = agents_home() / "bin" / "agentctl"
 BACKUP = (
-    Path.home()
-    / ".agents"
+    agents_home()
     / "skills"
     / "plan-task-evidence"
     / "scripts"

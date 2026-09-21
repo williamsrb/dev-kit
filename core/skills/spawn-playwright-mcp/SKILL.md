@@ -40,7 +40,7 @@ Details: `~/.agents/kb/implementation/How-to-enable-playwright-mcp.md`.
    # or: agentctl playwright list
    ```
 
-2. Start what is needed (always `--enable` so vendor MCP files get the URL):
+2. Start what is needed (always `--enable` so stock **and** devkit profile MCP files get the URL):
 
    | Situation | Command |
    |-----------|---------|

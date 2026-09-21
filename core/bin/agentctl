@@ -24,6 +24,11 @@ if str(_BIN_DIR) not in sys.path:
     sys.path.insert(0, str(_BIN_DIR))
 import agentctl_jira
 
+
+def agents_home() -> Path:
+    """Harness root: $AGENTS_HOME when a profile wrapper set it, else ~/.agents."""
+    return agentctl_jira.agents_home()
+
 ISSUE_RE = re.compile(r"(?<![A-Z0-9])([A-Z][A-Z0-9]+-\d+)(?![A-Z0-9])", re.IGNORECASE)
 SLUG_RE = re.compile(r"(?<![A-Za-z0-9-])([a-z][a-z0-9]*(?:-[a-z0-9]+)+)(?![A-Za-z0-9-])")
 HEADING_RE = re.compile(r"^(#{1,6})\s+(.+?)\s*$")
@@ -97,7 +102,7 @@ def _is_jira_token(token: str) -> bool:
 
 
 def _local_artifact_exists(key: str) -> bool:
-    home = Path.home() / ".agents"
+    home = agents_home()
     return (
         (home / "prds" / f"{key}.md").is_file()
         or (home / "plans" / key).is_dir()
@@ -143,7 +148,7 @@ def cmd_task_resolve(args: argparse.Namespace) -> int:
     branch = git(root, "branch", "--show-current").stdout.strip() if root else ""
     file_issues: list[dict[str, str]] = []
     for folder_name in ("plans", "prds"):
-        for base in (cwd, Path.home() / ".agents"):
+        for base in (cwd, agents_home()):
             folder = base / folder_name
             if folder.is_dir():
                 for item in sorted(folder.glob("*.md"), key=lambda p: p.stat().st_mtime, reverse=True)[:20]:
@@ -322,7 +327,7 @@ PLAN_HEADINGS = {
                  "posting-gate"),
 }
 
-PLANS_ROOT = Path.home() / ".agents" / "plans"
+PLANS_ROOT = agents_home() / "plans"
 INDEX_FILE_RE = re.compile(r"([a-z0-9][a-z0-9._-]+\.md)", re.IGNORECASE)
 FOLDER_COMPANIONS = (
     "plan.md", "requirements.md", "implementation.md", "validation.md",
@@ -742,7 +747,7 @@ def cmd_evidence_inspect(args: argparse.Namespace) -> int:
         if not tesseract:
             checks["ocr"] = "tesseract-missing"
         else:
-            shared_tessdata = Path.home() / ".agents" / "share" / "tessdata"
+            shared_tessdata = agents_home() / "share" / "tessdata"
             tessdata_args = []
             if shared_tessdata.is_dir() and all(
                 (shared_tessdata / f"{language}.traineddata").is_file()
@@ -839,7 +844,7 @@ def cmd_image_stamp(args: argparse.Namespace) -> int:
 
 
 def cmd_image_whitespace(args: argparse.Namespace) -> int:
-    script = Path.home() / ".agents" / "skills" / "blank-space" / "scripts" / "blank_space.py"
+    script = agents_home() / "skills" / "blank-space" / "scripts" / "blank_space.py"
     script_args = [str(args.image.expanduser().resolve()), "--background", args.background,
                    "--tolerance", str(args.tolerance)]
     if args.grid:
@@ -848,7 +853,7 @@ def cmd_image_whitespace(args: argparse.Namespace) -> int:
 
 
 def cmd_image_describe(args: argparse.Namespace) -> int:
-    script = Path.home() / ".agents" / "skills" / "describe-image" / "scripts" / "describe.py"
+    script = agents_home() / "skills" / "describe-image" / "scripts" / "describe.py"
     script_args = [str(args.image.expanduser().resolve()), "--model", args.model,
                    "--timeout", str(args.timeout), "--max-chars", str(args.max_chars)]
     if args.prompt:
@@ -857,7 +862,7 @@ def cmd_image_describe(args: argparse.Namespace) -> int:
 
 
 def cmd_image_diff(args: argparse.Namespace) -> int:
-    script = Path.home() / ".agents" / "skills" / "diff-image" / "scripts" / "compare.py"
+    script = agents_home() / "skills" / "diff-image" / "scripts" / "compare.py"
     first = args.first.expanduser().resolve()
     second = args.second.expanduser().resolve()
     output = (args.output or second.with_name(f"{second.stem}.diff.png")).expanduser().resolve()
@@ -872,7 +877,7 @@ def cmd_image_diff(args: argparse.Namespace) -> int:
 
 
 def cmd_image_palette_create(args: argparse.Namespace) -> int:
-    script = Path.home() / ".agents" / "skills" / "color-palette" / "scripts" / "palette_create.py"
+    script = agents_home() / "skills" / "color-palette" / "scripts" / "palette_create.py"
     script_args = [str(args.image.expanduser().resolve()), "--colors", str(args.colors),
                    "--method", args.method]
     if args.out:
@@ -885,7 +890,7 @@ def cmd_image_palette_create(args: argparse.Namespace) -> int:
 
 
 def cmd_image_palette_distance(args: argparse.Namespace) -> int:
-    script = Path.home() / ".agents" / "skills" / "color-palette" / "scripts" / "palette_distance.py"
+    script = agents_home() / "skills" / "color-palette" / "scripts" / "palette_distance.py"
     palette = Path(args.palette).expanduser()
     script_args = [
         str(args.image.expanduser().resolve()),
@@ -900,7 +905,7 @@ def cmd_image_palette_distance(args: argparse.Namespace) -> int:
 
 
 def cmd_playwright(args: argparse.Namespace) -> int:
-    script = Path.home() / ".agents" / "mcp" / "playwright.py"
+    script = agents_home() / "mcp" / "playwright.py"
     extra = list(args.playwright_args or [])
     proc = subprocess.run([sys.executable, str(script), args.action, *extra], check=False)
     return proc.returncode
@@ -912,14 +917,14 @@ def cmd_worklog_collect(args: argparse.Namespace) -> int:
         if args.date
         else dt.datetime.now().astimezone().date()
     )
-    history = Path.home() / ".agents" / "history" / day.isoformat()
+    history = agents_home() / "history" / day.isoformat()
     prompts = sorted(str(path) for path in history.glob("*_prompt.md")) if history.is_dir() else []
     result: dict[str, Any] = {"date": day.isoformat(), "history": {"count": len(prompts), "files": prompts},
                               "git": [], "collector": None}
-    collector = Path.home() / ".agents" / "skills" / "generate-worklogs" / "scripts" / "collect-daily-evidence.py"
+    collector = agents_home() / "skills" / "generate-worklogs" / "scripts" / "collect-daily-evidence.py"
     if collector.is_file():
         collected = run([sys.executable, str(collector), day.isoformat()])
-        cache_dir = Path.home() / ".agents" / ".cache" / "worklogs"
+        cache_dir = agents_home() / ".cache" / "worklogs"
         cache_dir.mkdir(parents=True, exist_ok=True)
         cache_file = cache_dir / f"{day.isoformat()}.txt"
         cache_file.write_text(collected.stdout, encoding="utf-8")
@@ -929,7 +934,7 @@ def cmd_worklog_collect(args: argparse.Namespace) -> int:
             if line.startswith("REPO|"):
                 parts = line.split("|", 2)
                 result["git"].append({"repo": parts[1], "details": parts[2] if len(parts) > 2 else ""})
-    database = Path.home() / ".agents" / ".cache" / "worklogs" / "evidence.sqlite"
+    database = agents_home() / ".cache" / "worklogs" / "evidence.sqlite"
     database.parent.mkdir(parents=True, exist_ok=True)
     connection = sqlite3.connect(database)
     try:
@@ -980,7 +985,7 @@ def cmd_tools_audit(args: argparse.Namespace) -> int:
             jira_token.update(agentctl_jira.public_auth(agentctl_jira.load_credentials(token_path)))
         except (OSError, ValueError) as exc:
             jira_token["error"] = str(exc)
-    nvidia_path = Path.home() / ".agents" / ".auth" / "nvidia-api-key.yaml"
+    nvidia_path = agents_home() / ".auth" / "nvidia-api-key.yaml"
     nvidia_token: dict[str, Any] = {"path": str(nvidia_path), "present": nvidia_path.is_file()}
     if nvidia_path.is_file():
         try:
@@ -1565,7 +1570,7 @@ def public_nvidia_auth(path: Path) -> dict[str, Any]:
 
 
 def cmd_skills_scan(args: argparse.Namespace) -> int:
-    script = Path.home() / ".agents" / "skills" / "skillspector" / "scripts" / "scan.py"
+    script = agents_home() / "skills" / "skillspector" / "scripts" / "scan.py"
     timeout = args.timeout or (600 if args.llm else 180)
     script_args = [args.target, "--max-issues", str(args.max_issues), "--timeout", str(timeout)]
     if args.llm:

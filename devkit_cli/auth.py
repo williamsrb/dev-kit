@@ -17,7 +17,7 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 from . import appfork, instances
-from .common import EXEC_MODE, FILE_MODE, Plan, REPO_ROOT, ensure_dir, write_json
+from .common import EXEC_MODE, FILE_MODE, REPO_ROOT, Plan, ensure_dir, write_json
 from .errors import DevkitError
 
 # scheme -> vendor

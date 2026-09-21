@@ -174,7 +174,7 @@ def normalize_color(value: str) -> str:
         raise DevkitError(
             f"colour {value!r} is not a hex RGB value",
             "pass #RRGGBB, for example --color '#FF453A'")
-    body = raw[1:] if raw.startswith("#") else raw
+    body = raw.removeprefix("#")
     return f"#{body.lower()}"
 
 

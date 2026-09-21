@@ -128,7 +128,7 @@ def node_major(node_bin: Path) -> tuple[str, int]:
     try:
         major = int(version.split(".", 1)[0])
     except ValueError as exc:
-        raise ExportError(f"Unparseable node version: {version!r}") from exc
+        raise ExportError(f"Unparsable node version: {version!r}") from exc
     return version, major
 
 

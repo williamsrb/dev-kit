@@ -33,12 +33,18 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from devkit_cli import instances, manifest, privilege  # noqa: E402
-from devkit_cli.common import Plan, repo_file  # noqa: E402
-from devkit_cli.errors import DevkitError  # noqa: E402
-from devkit_cli.profiles import (_home_root_problems, choose_first_profile,  # noqa: E402
-                                 cmd_fix_home_rules, finish_appforks,
-                                 flag_given, load_for_create, materialize)
+from devkit_cli import instances, manifest, privilege
+from devkit_cli.common import Plan, repo_file
+from devkit_cli.errors import DevkitError
+from devkit_cli.profiles import (
+    _home_root_problems,
+    choose_first_profile,
+    cmd_fix_home_rules,
+    finish_appforks,
+    flag_given,
+    load_for_create,
+    materialize,
+)
 
 
 def verify(profile: dict, home: Path) -> int:

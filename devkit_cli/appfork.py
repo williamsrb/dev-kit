@@ -27,7 +27,6 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 
-
 FORK_ROOT = Path("/usr/lib/devkit")
 WORKER = Path("/usr/local/bin/sync-devkit-profile-apps.py")
 APT_CONF = Path("/etc/apt/apt.conf.d/99-devkit-profile-apps")
@@ -321,7 +320,7 @@ def fork_desktop_name(spec: Vendor, dest: Path) -> str:
 
 
 def dpkg_installed(name: str) -> bool:
-    r = subprocess.run(["dpkg", "-s", name], capture_output=True, text=True)
+    r = subprocess.run(["dpkg", "-s", name], capture_output=True, text=True, check=False)
     if r.returncode != 0:
         return False
     return "Status: install ok installed" in r.stdout
@@ -356,7 +355,7 @@ def rsync_stock(spec: Vendor, dest: Path, *, dry_run: bool) -> str:
         return action
     dest.parent.mkdir(parents=True, exist_ok=True)
     t0 = time.monotonic()
-    r = subprocess.run(cmd, capture_output=True, text=True)
+    r = subprocess.run(cmd, capture_output=True, text=True, check=False)
     dt = time.monotonic() - t0
     if r.returncode != 0:
         raise RuntimeError(
@@ -495,7 +494,7 @@ def recolor_tree_icons(spec: Vendor, dest: Path, color: str, *, dry_run: bool,
     root = fork_root or FORK_ROOT
     emblem = _emblem_path(root)
     if emblem is None:
-        return ["skip icons: profile emblem missing "
+        return ["skip icons: profile emblem missing " +
                 f"(expected {root / EMBLEM_NAME} or kit templates/icons/{EMBLEM_NAME})"]
     actions: list[str] = []
     seen: set[Path] = set()
@@ -542,11 +541,12 @@ def write_apparmor(spec: Vendor, dest: Path, profile: str, env: Env,
     path.write_text(body, encoding="utf-8")
     os.chmod(path, 0o644)
     if shutil.which("apparmor_parser") and shutil.which("aa-enabled"):
-        enabled = subprocess.run(["aa-enabled", "--quiet"], capture_output=True)
+        enabled = subprocess.run(
+            ["aa-enabled", "--quiet"], capture_output=True, check=False)
         if enabled.returncode == 0:
             r = subprocess.run(
                 ["apparmor_parser", "-r", "-W", "-T", str(path)],
-                capture_output=True, text=True,
+                capture_output=True, text=True, check=False,
             )
             if r.returncode != 0:
                 log(f"apparmor_parser failed (ignored): {r.stderr.strip() or r.returncode}")
@@ -726,7 +726,7 @@ def sync_homes(homes: list[Path], env: Env, *, dry_run: bool,
             try:
                 sync_one(inst_vendor, name, home, env, dry_run=dry_run,
                          icons_only=icons_only)
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001 — one fork must not abort the rest
                 log(f"error: {name}/{inst_vendor}: {e}")
                 errors += 1
     if not seen:
@@ -755,7 +755,7 @@ def doctor_lines(home: Path, env: Env | None = None) -> list[str]:
             cheap_gates(spec, dest, name)
         except Skip:
             continue
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 — doctor reports, it does not crash
             lines.append(f"{label}: app fork unreadable ({e})")
             continue
         have = fork_desktop_name(spec, dest)
@@ -878,7 +878,7 @@ def main(argv: list[str] | None = None) -> int:
             homes, env, dry_run=args.dry_run, profile=args.profile,
             vendor=args.vendor, icons_only=args.icons_only,
         )
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 — apt hook must not fail the transaction
         log(f"error: {e}")
         return 1
     finally:

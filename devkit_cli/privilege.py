@@ -88,7 +88,7 @@ def run_privileged(argv: list[str], reason: str, steps: list[str]) -> int:
     printed = " ".join(argv)
     print(f"  + sudo -- {printed}")
     sys.stdout.flush()
-    return subprocess.run([sudo, "--", *argv]).returncode
+    return subprocess.run([sudo, "--", *argv], check=False).returncode
 
 
 def owned_by(path: Path, uid: int) -> bool:

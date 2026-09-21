@@ -13,8 +13,16 @@ import sys
 from pathlib import Path
 
 from . import appfork, auth, instances, manifest, mcp, privilege
-from .common import (EXEC_MODE, FILE_MODE, Plan, REPO_ROOT, back_up,
-                     ensure_dir, relative_to_home, write_json)
+from .common import (
+    EXEC_MODE,
+    FILE_MODE,
+    REPO_ROOT,
+    Plan,
+    back_up,
+    ensure_dir,
+    relative_to_home,
+    write_json,
+)
 from .errors import DevkitError
 
 # Claude Code and Codex walk up to $HOME collecting instruction
@@ -722,7 +730,7 @@ def _appfork_steps() -> list[str]:
         "write /etc/dpkg/dpkg.cfg.d/60devkit-profile-apps",
         "rsync stock Claude/ChatGPT/Cursor into /usr/lib/devkit/<vendor>-<profile>/",
         "patch desktopName / WM_CLASS in the copy only (never stock, never Personal)",
-        "badge in-tree icons from stock with a coloured shield emblem; "
+        "badge in-tree icons from stock with a coloured shield emblem; " +
         "keep chrome-sandbox mode 4755",
     ]
 

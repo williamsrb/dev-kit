@@ -139,7 +139,7 @@ def extra_mcp_toml_blocks(text: str, drop: set[str]) -> str:
     """Keep operator MCP blocks (playwright-<id>, …) that are not defaults or parked."""
     pattern = re.compile(
         r"\[mcp_servers\.([^.\]]+)(?:\.[^\]]+)?\][^\[]*",
-        re.M,
+        re.MULTILINE,
     )
     kept: list[str] = []
     seen: set[str] = set()

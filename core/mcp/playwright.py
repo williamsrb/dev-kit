@@ -533,13 +533,13 @@ def upsert_toml_url(path: Path, name: str, url: str, dry_run: bool) -> None:
     url_line = f"url = {json.dumps(url)}"
     pattern = re.compile(
         rf"(\[mcp_servers\.{re.escape(name)}\]\n)(.*?)(?=\n\[|\Z)",
-        re.S,
+        re.DOTALL,
     )
     if pattern.search(text):
         def repl(match: re.Match[str]) -> str:
             body = match.group(2)
-            if re.search(r"^url\s*=", body, re.M):
-                body = re.sub(r"^url\s*=.*$", url_line, body, count=1, flags=re.M)
+            if re.search(r"^url\s*=", body, re.MULTILINE):
+                body = re.sub(r"^url\s*=.*$", url_line, body, count=1, flags=re.MULTILINE)
             else:
                 body = url_line + "\n" + body
             return match.group(1) + body
@@ -559,7 +559,7 @@ def remove_toml_section(path: Path, name: str, dry_run: bool) -> None:
     text = path.read_text()
     pattern = re.compile(
         rf"\n*\[mcp_servers\.{re.escape(name)}(?:\.[^\]]+)?\][^\[]*",
-        re.S,
+        re.DOTALL,
     )
     if not pattern.search(text):
         return

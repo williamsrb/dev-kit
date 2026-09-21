@@ -22,10 +22,24 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO))
 
-from devkit_cli import appfork, auth, export, instances, manifest, paths, privilege, update  # noqa: E402
-from devkit_cli.common import Plan  # noqa: E402
-from devkit_cli.errors import DevkitError  # noqa: E402
-from devkit_cli.profiles import choose_first_profile, flag_given, load_for_create, materialize  # noqa: E402
+from devkit_cli import (
+    appfork,
+    auth,
+    export,
+    instances,
+    manifest,
+    paths,
+    privilege,
+    update,
+)
+from devkit_cli.common import Plan
+from devkit_cli.errors import DevkitError
+from devkit_cli.profiles import (
+    choose_first_profile,
+    flag_given,
+    load_for_create,
+    materialize,
+)
 
 
 def _kit_lineage() -> str:

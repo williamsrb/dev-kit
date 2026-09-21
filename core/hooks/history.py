@@ -154,7 +154,7 @@ def save_state(state: dict[str, Any]) -> None:
 def prune_state(state: dict[str, Any], now: datetime) -> int:
     """Drop entries too old to ever be resolved, so the state file stays flat.
 
-    An entry with an unparseable timestamp is already invisible to resolve_entry's
+    An entry with an unparsable timestamp is already invisible to resolve_entry's
     ordering, so it counts as infinitely old.
     """
     by_generation = state['by_generation']

@@ -56,8 +56,13 @@ hooks rebuild those forks after the original package updates.
 Two details worth knowing before you debug something:
 
 - **Codex** relocates config via `CODEX_HOME` and the ChatGPT Desktop Chromium
-  profile via `CODEX_ELECTRON_USER_DATA_PATH`. The stock ChatGPT package stays
-  shared as the rsync source; each profile launches its fork.
+  profile via `CODEX_ELECTRON_USER_DATA_PATH=~/.config/Codex-<profile>`. The
+  stock ChatGPT package stays shared as the rsync source; each profile launches
+  its fork.
+- **Claude Desktop** uses `--user-data-dir=~/.config/Claude-<profile>`, the same
+  shape as Claude Personal's `~/.config/ClaudePersonal`. Stock `~/.config/Claude`
+  is untouched. Cursor's GUI user-data is the profile dir
+  (`~/.agents-profiles/<name>/cursor`), not `~/.config/Cursor-<name>`.
 - **`cursor-agent`** reads `XDG_CONFIG_HOME`, which is a *generic* variable.
   Its wrapper sets it on the `exec` line only, never exports it, because
   exporting it would relocate the config directory of every XDG-aware program in

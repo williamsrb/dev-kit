@@ -93,6 +93,23 @@ else. If they are genuinely false positives, allowlist them in `.gitleaks.toml`
 scoped as tightly as the finding allows — by path *and* by pattern — so the rule
 keeps working everywhere else.
 
+## `agentctl` sees every profile's skills
+
+The host shim at `~/.local/bin/agentctl` reads `$HOME/.agents` unless
+`AGENTS_HOME` is set. Start the session through the profile wrapper
+(`claude-dummy`) or the desktop launcher so `DEVKIT_PROFILE` / `AGENTS_HOME` and
+the profile `bin/` are on `PATH`. After a kit update that added those wrappers:
+
+```bash
+./devkit profile sync dummy --apply
+```
+
+## Graft MCP is missing from a new profile
+
+That is the default. Graft is **parked** (CLI + `graft.mdc` stay). The live MCP
+set is `context7`, plus `gitlab` on Enonic and `atlassian-rovo-preview` on
+`client`. See [profiles.md](profiles.md#mcp).
+
 ## Login opened the wrong app (or nowhere)
 
 Browser OAuth returns through `claude://`, `codex://` or `cursor://`. Linux has

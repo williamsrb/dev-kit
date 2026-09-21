@@ -143,6 +143,8 @@ options:
 ```
 usage: devkit profile create [-h] [--type TYPE] [--vendor VENDOR] [--apply] [--force] name
 
+Write a named profile instance: vendor config dirs, projected skills/rules/kb, AGENTS_HOME tree, CLI wrappers, and desktop launchers. Wrappers pin DEVKIT_PROFILE and AGENTS_HOME so agentctl sees only this profile. --apply writes user-owned config, then prints the desktop-fork plan and asks sudo.
+
 positional arguments:
   name
 
@@ -161,6 +163,8 @@ options:
 
 ```
 usage: devkit profile sync [-h] [--apply] name
+
+Re-write the instance from the current manifest: prune a leftover core/ symlink, refresh AGENTS_HOME projections, keep spawned playwright-<id> MCP entries. --apply writes user-owned config, then prints the desktop-fork plan and asks sudo.
 
 positional arguments:
   name

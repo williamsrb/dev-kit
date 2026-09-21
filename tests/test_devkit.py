@@ -189,6 +189,225 @@ class ProfileCompositionTests(unittest.TestCase):
         declared = {"name": "x", "color": {"light": "#ffcc00", "dark": "#6a0dad"}}
         self.assertEqual(instances.profile_colors(declared), ("#ffcc00", "#6a0dad"))
 
+    def test_graft_mcp_is_parked_and_not_a_profile_default(self):
+        catalog = json.loads((REPO / "core" / "mcp" / "catalog.json").read_text())
+        for name in ("graft", "slack-workspace-leanon", "playwright", "browser-control"):
+            self.assertIn(name, catalog["parked"], name)
+        expected = {
+            "core": ["context7"],
+            "php": ["context7"],
+            "enonic": ["context7", "gitlab"],
+            "client": ["context7", "gitlab", "atlassian-rovo-preview"],
+        }
+        for name, names in expected.items():
+            profile = manifest.load(name)
+            self.assertEqual(profile.get("mcp", []), names, name)
+            for parked in catalog["parked"]:
+                self.assertNotIn(parked, profile.get("mcp", []),
+                                 f"{name} must not enable parked {parked} MCP by default")
+
+    def test_materialize_writes_live_mcp_and_skips_parked(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            materialize(load_for_create("dummy", "enonic"),
+                        ["cursor", "claude", "codex"],
+                        home, Plan(apply=True), force=True)
+            live = ["context7", "gitlab"]
+            cursor = json.loads(
+                (home / ".agents-profiles/dummy/cursor/mcp.json").read_text())
+            self.assertEqual(sorted(cursor["mcpServers"]), live)
+            claude = json.loads(
+                (home / ".agents-profiles/dummy/claude/.claude.json").read_text())
+            self.assertEqual(sorted(claude["mcpServers"]), live)
+            toml = (home / ".agents-profiles/dummy/codex/config.toml").read_text()
+            for name in live:
+                self.assertIn(f"[mcp_servers.{name}]", toml)
+            for parked in ("graft", "playwright", "slack-workspace-leanon",
+                           "browser-control"):
+                self.assertNotIn(parked, cursor["mcpServers"])
+                self.assertNotIn(parked, claude["mcpServers"])
+                self.assertNotIn(f"[mcp_servers.{parked}]", toml)
+
+    def test_sync_keeps_spawned_playwright_mcp(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            materialize(load_for_create("dummy", "enonic"), ["cursor", "claude", "codex"],
+                        home, Plan(apply=True), force=True)
+            spec = {"url": "http://localhost:8939/mcp"}
+            cursor_path = home / ".agents-profiles/dummy/cursor/mcp.json"
+            data = json.loads(cursor_path.read_text())
+            data["mcpServers"]["playwright-JOT-101"] = spec
+            cursor_path.write_text(json.dumps(data, indent=2) + "\n")
+            claude_path = home / ".agents-profiles/dummy/claude/.claude.json"
+            cdata = json.loads(claude_path.read_text())
+            cdata["mcpServers"]["playwright-JOT-101"] = {"type": "http", **spec}
+            claude_path.write_text(json.dumps(cdata, indent=2) + "\n")
+            toml_path = home / ".agents-profiles/dummy/codex/config.toml"
+            toml_path.write_text(
+                toml_path.read_text()
+                + '\n[mcp_servers.playwright-JOT-101]\nurl = "http://localhost:8939/mcp"\n')
+            materialize(load_for_create("dummy", "enonic"), ["cursor", "claude", "codex"],
+                        home, Plan(apply=True), force=True)
+            self.assertEqual(
+                json.loads(cursor_path.read_text())["mcpServers"]["playwright-JOT-101"],
+                spec)
+            self.assertIn("playwright-JOT-101",
+                          json.loads(claude_path.read_text())["mcpServers"])
+            self.assertIn("[mcp_servers.playwright-JOT-101]", toml_path.read_text())
+
+
+def _load_playwright():
+    import importlib.util
+    path = REPO / "core" / "mcp" / "playwright.py"
+    spec = importlib.util.spec_from_file_location("devkit_playwright", path)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+class PlaywrightProfileEnableTests(unittest.TestCase):
+    """spawn --enable must write playwright-<id> into profile MCP files,
+    not only the stock ~/.cursor ~/.claude ~/.codex configs."""
+
+    def _instance(self, home: Path, name: str, vendor: str) -> Path:
+        config = home / ".agents-profiles" / name / vendor
+        config.mkdir(parents=True)
+        (config / ".devkit-profile.json").write_text(
+            json.dumps({"profile": name, "vendor": vendor}), encoding="utf-8")
+        return config
+
+    def test_enable_on_profiles_writes_all_three_vendors(self):
+        pw = _load_playwright()
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            cursor = self._instance(home, "dummy", "cursor")
+            (cursor / "mcp.json").write_text(
+                json.dumps({"mcpServers": {"context7": {"url": "https://x"}}}) + "\n")
+            claude = self._instance(home, "dummy", "claude")
+            (claude / ".claude.json").write_text(
+                json.dumps({"mcpServers": {}}) + "\n")
+            codex = self._instance(home, "dummy", "codex")
+            (codex / "config.toml").write_text("model = \"x\"\n")
+            url = "http://localhost:8942/mcp"
+            saved = os.environ.pop("DEVKIT_PROFILE", None)
+            try:
+                pw.enable_on_profiles(home, "playwright-JOT-101", url,
+                                      ["cursor", "claude", "codex"], dry_run=False)
+            finally:
+                if saved is None:
+                    os.environ.pop("DEVKIT_PROFILE", None)
+                else:
+                    os.environ["DEVKIT_PROFILE"] = saved
+            cursor_mcp = json.loads((cursor / "mcp.json").read_text())["mcpServers"]
+            self.assertEqual(cursor_mcp["playwright-JOT-101"], {"url": url})
+            self.assertEqual(cursor_mcp["context7"]["url"], "https://x")
+            claude_mcp = json.loads((claude / ".claude.json").read_text())["mcpServers"]
+            self.assertEqual(claude_mcp["playwright-JOT-101"]["url"], url)
+            toml = (codex / "config.toml").read_text()
+            self.assertIn("[mcp_servers.playwright-JOT-101]", toml)
+            self.assertIn(url, toml)
+            pw.disable_on_profiles(home, "playwright-JOT-101",
+                                   ["cursor", "claude", "codex"], dry_run=False)
+            self.assertNotIn("playwright-JOT-101",
+                             json.loads((cursor / "mcp.json").read_text())["mcpServers"])
+            self.assertNotIn("playwright-JOT-101",
+                             json.loads((claude / ".claude.json").read_text())["mcpServers"])
+            self.assertNotIn("[mcp_servers.playwright-JOT-101]",
+                             (codex / "config.toml").read_text())
+
+    def test_devkit_profile_hides_sibling_mcp(self):
+        pw = _load_playwright()
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            dummy = self._instance(home, "dummy", "cursor")
+            (dummy / "mcp.json").write_text(json.dumps({"mcpServers": {}}) + "\n")
+            other = self._instance(home, "php", "cursor")
+            (other / "mcp.json").write_text(json.dumps({"mcpServers": {}}) + "\n")
+            saved = os.environ.get("DEVKIT_PROFILE")
+            os.environ["DEVKIT_PROFILE"] = "dummy"
+            try:
+                pw.enable_on_profiles(
+                    home, "playwright-JOT-101", "http://localhost:8943/mcp",
+                    ["cursor"], dry_run=False)
+            finally:
+                if saved is None:
+                    os.environ.pop("DEVKIT_PROFILE", None)
+                else:
+                    os.environ["DEVKIT_PROFILE"] = saved
+            self.assertIn(
+                "playwright-JOT-101",
+                json.loads((dummy / "mcp.json").read_text())["mcpServers"])
+            self.assertNotIn(
+                "playwright-JOT-101",
+                json.loads((other / "mcp.json").read_text())["mcpServers"])
+
+
+class AgentsHomeTests(unittest.TestCase):
+    """agentctl must honor AGENTS_HOME; Path.home()/.agents is the fallback."""
+
+    def test_agents_home_env_overrides_dot_agents(self):
+        sys.path.insert(0, str(REPO / "core" / "bin"))
+        import agentctl_jira
+        saved = os.environ.get("AGENTS_HOME")
+        os.environ["AGENTS_HOME"] = "/tmp/profile-agents"
+        try:
+            self.assertEqual(agentctl_jira.agents_home(), Path("/tmp/profile-agents"))
+        finally:
+            if saved is None:
+                os.environ.pop("AGENTS_HOME", None)
+            else:
+                os.environ["AGENTS_HOME"] = saved
+
+
+class ProfileIsolationTests(unittest.TestCase):
+    """A profile must not load sibling skills, a full core/ tree, or shared
+    Playwright storage state."""
+
+    ENONIC_ONLY = "apply-react4xp-practices"
+
+    def test_php_profile_does_not_see_enonic_skills_or_full_core(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            materialize(load_for_create("phpbox", "php"), ["claude"], home,
+                        Plan(apply=True), force=True)
+            materialize(load_for_create("xpbox", "enonic"), ["claude"], home,
+                        Plan(apply=True), force=True)
+            php_skills = home / ".agents-profiles" / "phpbox" / "agents" / "skills"
+            xp_skills = home / ".agents-profiles" / "xpbox" / "agents" / "skills"
+            self.assertTrue((xp_skills / self.ENONIC_ONLY).exists(),
+                            "enonic profile should project XP skills")
+            self.assertFalse((php_skills / self.ENONIC_ONLY).exists(),
+                             "php profile must not project enonic skills")
+            php_vendor = home / ".agents-profiles" / "phpbox" / "claude" / "skills"
+            self.assertFalse((php_vendor / self.ENONIC_ONLY).exists())
+            php_root = home / ".agents-profiles" / "phpbox"
+            self.assertFalse((php_root / "core").exists(),
+                             "full core/ symlink leaks every exported skill")
+            self.assertTrue((php_root / "hooks").is_dir())
+            settings = json.loads(
+                (home / ".agents-profiles" / "phpbox" / "claude" / "settings.json")
+                .read_text())
+            extra = settings["permissions"]["additionalDirectories"]
+            self.assertNotIn(str(php_root), extra)
+            self.assertIn(str(php_root / "agents"), extra)
+
+    def test_auth_does_not_share_storage_state_json(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            host_auth = home / ".agents" / ".auth"
+            host_auth.mkdir(parents=True)
+            (host_auth / "user.json").write_text('{"cookies":[]}\n')
+            (host_auth / "jira-api-token.yaml").write_text("token: x\n")
+            materialize(load_for_create("dummy", "core"), ["claude"], home,
+                        Plan(apply=True), force=True)
+            dest = home / ".agents-profiles" / "dummy" / "agents" / ".auth"
+            self.assertTrue(dest.is_dir())
+            self.assertFalse(dest.is_symlink())
+            self.assertFalse((dest / "user.json").exists())
+            token = dest / "jira-api-token.yaml"
+            self.assertTrue(token.is_symlink())
+            self.assertEqual(token.resolve(), (host_auth / "jira-api-token.yaml").resolve())
+
 
 class PrivilegeTests(unittest.TestCase):
     """'install.py run as root without --user must exit 2 and name the target
@@ -416,6 +635,11 @@ class UpdateApplyTests(unittest.TestCase):
             else:
                 shutil.copy2(source, payload / item)
         (payload / "core" / "skills").mkdir(parents=True)
+        catalog = REPO / "core" / "mcp" / "catalog.json"
+        if catalog.is_file():
+            mcp_dir = payload / "core" / "mcp"
+            mcp_dir.mkdir(parents=True)
+            shutil.copy2(catalog, mcp_dir / "catalog.json")
         wrapper = payload / "templates" / "shell" / "claude.sh"
         wrapper.write_text(wrapper.read_text() + self.MARKER, encoding="utf-8")
         (payload / ".devkit-staged.json").write_text(json.dumps({
@@ -580,10 +804,18 @@ class ProfileCliPathTests(unittest.TestCase):
         claude = (REPO / "templates" / "shell" / "claude.sh").read_text()
         self.assertIn('exec "${PROFILE_CLAUDE_CLI}" "$@"', claude)
         self.assertNotIn("exec claude ", claude)
+        self.assertIn('AGENTS_HOME="${PROFILE_AGENTS_HOME}"', claude)
+        self.assertIn('PATH="${PROFILE_BIN_DIR}:${PATH}"', claude)
+        self.assertIn('DEVKIT_PROFILE="${PROFILE_NAME}"', claude)
         codex = (REPO / "templates" / "shell" / "codex.sh").read_text()
         self.assertIn('exec "${PROFILE_CODEX_CLI}" "$@"', codex)
+        self.assertIn('AGENTS_HOME="${PROFILE_AGENTS_HOME}"', codex)
         agent = (REPO / "templates" / "shell" / "cursor-agent.sh").read_text()
         self.assertIn('"${PROFILE_CURSOR_AGENT}" "$@"', agent)
+        self.assertIn('AGENTS_HOME="${PROFILE_AGENTS_HOME}"', agent)
+        # XDG stays unexported; profile identity is exported.
+        self.assertIn('XDG_CONFIG_HOME="${PROFILE_XDG_CONFIG_DIR}"', agent)
+        self.assertNotIn("export XDG_CONFIG_HOME", agent)
 
     def test_public_wrapper_is_not_a_stock_name(self):
         layout = instances.paths_for("dummy", "claude", Path("/home/example"))
@@ -604,6 +836,18 @@ class ProfileCliPathTests(unittest.TestCase):
             text = wrapper.read_text()
             self.assertIn("exec ", text)
             self.assertNotIn("exec claude ", text)
+            self.assertIn("AGENTS_HOME=", text)
+            agentctl = home / ".agents-profiles" / "dummy" / "bin" / "agentctl"
+            self.assertTrue(agentctl.is_file())
+            tool = agentctl.read_text()
+            self.assertIn('AGENTS_HOME=', tool)
+            self.assertIn("/agents/bin/", tool)
+            self.assertNotIn("/core/bin/", tool)
+            agents = home / ".agents-profiles" / "dummy" / "agents"
+            self.assertTrue(agents.is_dir())
+            self.assertTrue((agents / "bin").is_symlink())
+            self.assertTrue((agents / "plans").is_dir())
+            self.assertFalse((home / ".agents-profiles" / "dummy" / "core").exists())
 
     def test_resolve_stock_cli_skips_devkit_wrappers_and_keeps_the_shim(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -624,19 +868,31 @@ class ProfileCliPathTests(unittest.TestCase):
                 else:
                     os.environ["PATH"] = saved
 
-    def test_desktop_launch_prepends_profile_bin(self):
+    def test_desktop_launch_binds_profile_env_and_path(self):
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp)
             bin_dir = home / ".agents-profiles" / "dummy" / "bin"
             bin_dir.mkdir(parents=True)
-            saved = os.environ.get("PATH", "")
+            saved = {key: os.environ.get(key) for key in
+                     ("PATH", "DEVKIT_PROFILE", "DEVKIT_PROFILE_HOME", "AGENTS_HOME")}
             os.environ["PATH"] = "/usr/bin"
+            for key in ("DEVKIT_PROFILE", "DEVKIT_PROFILE_HOME", "AGENTS_HOME"):
+                os.environ.pop(key, None)
             try:
-                auth.prepend_profile_bin(home, "dummy")
+                auth.bind_profile_env(home, "dummy")
                 self.assertEqual(os.environ["PATH"].split(os.pathsep)[0], str(bin_dir))
                 self.assertIn("/usr/bin", os.environ["PATH"])
+                self.assertEqual(os.environ["DEVKIT_PROFILE"], "dummy")
+                self.assertEqual(os.environ["DEVKIT_PROFILE_HOME"],
+                                 str(home / ".agents-profiles" / "dummy"))
+                self.assertEqual(os.environ["AGENTS_HOME"],
+                                 str(home / ".agents-profiles" / "dummy" / "agents"))
             finally:
-                os.environ["PATH"] = saved
+                for key, value in saved.items():
+                    if value is None:
+                        os.environ.pop(key, None)
+                    else:
+                        os.environ[key] = value
 
 
 class AuthDispatcherTests(unittest.TestCase):

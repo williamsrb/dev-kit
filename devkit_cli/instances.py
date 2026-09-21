@@ -18,6 +18,14 @@ from .errors import DevkitError
 
 # Unprefixed names the GUIs look up on PATH. Public wrappers stay
 # ~/.local/bin/<vendor>-<profile> so they never collide with stock.
+# Harness tools in profile bin/ wrap core/bin/<name> and pin AGENTS_HOME;
+# PATH alone is not enough, because those tools read AGENTS_HOME.
+
+PROFILE_SKIP_DIRS = ("core", "bin", "agents", "hooks")
+PROFILE_PATH_TOOLS = ("agentctl",)
+# Credential files that may be shared across profiles. Browser storage-state
+# JSON in .auth stays profile-local so sessions do not leak.
+SHARED_AUTH_FILES = ("jira-api-token.yaml", "nvidia-api-key.yaml")
 
 # Instance names are one filesystem path segment. Nested names would break
 # uniqueness and the ~/.agents-profiles/<name>/ layout.
@@ -84,7 +92,7 @@ def discover_instances(home: Path) -> list[tuple[str, str, Path, dict]]:
         if not profile_dir.is_dir() or profile_dir.name.startswith("."):
             continue
         for child in sorted(profile_dir.iterdir()):
-            if not child.is_dir() or child.name in ("core", "bin"):
+            if not child.is_dir() or child.name in PROFILE_SKIP_DIRS:
                 continue
             prov = read_provenance(child)
             if not prov:
@@ -115,6 +123,7 @@ def paths_for(profile_name: str, vendor: str, home: Path) -> dict[str, Path]:
         "xdg_config_dir": harness / f"{vendor}-xdg",
         "user_data_dir": home / ".config" / f"{_vendor_app_name(vendor)}-{profile_name}",
         "bin_dir": harness / "bin",
+        "agents_dir": harness / "agents",
         "wrapper": home / ".local" / "bin" / f"{vendor}-{profile_name}",
         "desktop": (home / ".local" / "share" / "applications"
                     / f"{_vendor_app_name(vendor)}-{profile_name}.desktop"),
@@ -215,6 +224,7 @@ def render_tokens(profile: dict, vendor: str, home: Path) -> dict[str, str]:
         "PROFILE_TYPE": profile.get("type") or profile["name"],
         "PROFILE_HARNESS_DIR": str(layout["harness_dir"]),
         "PROFILE_BIN_DIR": str(layout["bin_dir"]),
+        "PROFILE_AGENTS_HOME": str(layout["agents_dir"]),
         "PROFILE_CONFIG_DIR": str(layout["config_dir"]),
         "PROFILE_DATA_DIR": str(layout["data_dir"]),
         "PROFILE_XDG_CONFIG_DIR": str(layout["xdg_config_dir"]),

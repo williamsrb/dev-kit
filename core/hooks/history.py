@@ -14,7 +14,15 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-HISTORY_ROOT = Path.home() / '.agents' / 'history'
+
+def agents_home() -> Path:
+    raw = os.environ.get("AGENTS_HOME")
+    if raw:
+        return Path(raw).expanduser()
+    return Path.home() / ".agents"
+
+
+HISTORY_ROOT = agents_home() / "history"
 STATE_DIR = HISTORY_ROOT / '.state'
 STATE_FILE = STATE_DIR / 'pending.json'
 STATE_LOCK_FILE = STATE_DIR / 'pending.lock'

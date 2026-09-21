@@ -22,7 +22,7 @@
   "rules": "@allowlist:rules.enonic",
   "kb": "@allowlist:kb.enonic",
 
-  "mcp": ["context7", "graft", "gitlab"],
+  "mcp": ["context7", "gitlab"],
 
   "instances": [
     { "vendor": "claude", "kind": "cli+desktop" },

@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -13,12 +14,19 @@ import tempfile
 from pathlib import Path
 
 
+def agents_home() -> Path:
+    raw = os.environ.get("AGENTS_HOME")
+    if raw:
+        return Path(raw).expanduser()
+    return Path.home() / ".agents"
+
+
 def run(command: list[str]) -> subprocess.CompletedProcess[str]:
     return subprocess.run(command, text=True, capture_output=True, check=False)
 
 
 def tessdata_options(language: str) -> list[str]:
-    shared = Path.home() / ".agents" / "share" / "tessdata"
+    shared = agents_home() / "share" / "tessdata"
     requested = language.split("+")
     if shared.is_dir() and all((shared / f"{item}.traineddata").is_file() for item in requested):
         return ["--tessdata-dir", str(shared)]

@@ -24,7 +24,7 @@
   "rules": [],
   "kb": [],
 
-  "mcp": ["context7", "graft"],
+  "mcp": ["context7"],
 
   "instances": [
     { "vendor": "claude", "kind": "cli+desktop" },

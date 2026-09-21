@@ -31,13 +31,20 @@ profiles yet offers to create a first one (type, then name) unless you passed
 
 ```
 ~/.agents-profiles/<profile>/            # the profile root
-~/.agents-profiles/<profile>/core        # symlink to the kit's core/
+~/.agents-profiles/<profile>/hooks       # per-file links into kit hooks/ + statusline
+~/.agents-profiles/<profile>/agents      # AGENTS_HOME: ~/.agents-shaped tree
+    skills/  rules/  kb/                 # this profile's subset, not siblings'
+    bin/ mcp/ share/ config              # symlinks into kit core/ (tools only)
+    hooks -> ../hooks
+    prds/ plans/ .playwright-mcp/        # profile-local state
+    .auth/                               # profile-local; token YAML may be shared
 ~/.agents-profiles/<profile>/<vendor>/   # the vendor's config dir
     skills/  rules/  kb/                 # per-entry symlinks into core/
+    hooks -> ../hooks
     .devkit-profile.json                 # provenance
 ~/.config/<Vendor>-<profile>/            # GUI user-data dir
 ~/.local/bin/<vendor>-<profile>          # public wrapper (not a stock name)
-~/.agents-profiles/<profile>/bin/<cli>   # unprefixed name for the GUI PATH
+~/.agents-profiles/<profile>/bin/<cli>   # unprefixed vendor CLI + agentctl
 ~/.local/share/applications/...          # launcher (Exec is the fork)
 ~/.local/share/icons/.../...png          # recoloured launcher icon
 /usr/lib/devkit/<vendor>-<profile>/      # identity fork (root, apt-rebuilt)
@@ -82,6 +89,21 @@ Layer lists can be literal, or an `@allowlist:` reference:
 The reference points into `export-allowlist.json`, so the export boundary and
 the profile manifest cannot disagree about what a layer contains. There is one
 list, and the profile names it.
+
+## MCP
+
+The profile `mcp` list is the default-alive set, matching the reference
+Cursor / Claude / Codex configs. **Always on:** `context7` (every profile);
+`gitlab` on Enonic and above; `atlassian-rovo-preview` on `client`.
+**Parked** (catalog `parked`, snippets under `$HOME/.agents/.auth/mcp-on-demand/`):
+graft, Slack, the Playwright stub, and browser-control. Graft stays the CLI
+plus `graft.mdc`. Playwright is spawned per task id (`playwright.py spawn
+<id> --enable`), not registered as a stub. From a profile, `--enable` writes
+`playwright-<id>` only onto that profile's Cursor/Claude/Codex MCP files
+(and does not touch stock `~/.cursor` / `~/.claude` / `~/.codex` or sibling
+profiles). From the host harness, it still fans out to stock configs and every
+provenance-marked instance. Sync keeps those spawned entries. Slack is
+on-demand for worklogs.
 
 ## Colour
 
@@ -153,10 +175,13 @@ Config, skills, wrappers, and session data live under `~/.agents-profiles` and
 `~/.config` — package upgrades never touch them.
 
 From a terminal, call the public wrapper (`claude-dummy`). It execs the stock
-CLI by full path. Each profile also has `~/.agents-profiles/<name>/bin/` with
-the unprefixed names (`claude`, `codex`, `cursor-agent`) pointing at those
-wrappers. The desktop launcher prepends that directory to `PATH` so the GUI
-finds the profile CLI without replacing the rest of `PATH`.
+CLI by full path, exports `DEVKIT_PROFILE` and `AGENTS_HOME`, and prepends
+`~/.agents-profiles/<name>/bin/` to `PATH`. That directory has the unprefixed
+vendor names (`claude`, `codex`, `cursor-agent`) and harness tools (`agentctl`)
+that pin the same env. PATH alone is not enough: `agentctl` reads `AGENTS_HOME`
+(this profile's `agents/` tree), not `$HOME/.agents`, so it cannot see sibling
+profiles' skills, plans, or Playwright instances. The desktop launcher binds
+the same env before exec so the GUI and its integrated terminals inherit it.
 
 ## URL-redirect auth
 

@@ -348,7 +348,20 @@ def cmd_restore(args) -> int:
 
 def prepend_profile_bin(home: Path, profile: str) -> None:
     """Put this profile's unprefixed CLIs first on PATH for the GUI process."""
-    bin_dir = home / ".agents-profiles" / profile / "bin"
+    bind_profile_env(home, profile)
+
+
+def bind_profile_env(home: Path, profile: str) -> None:
+    """Pin this process and its children to one profile's CLI and harness.
+
+    PATH prepend is required so `agentctl` resolves to the profile bin/.
+    It is not sufficient: harness tools read $AGENTS_HOME, not $HOME/.agents.
+    """
+    harness = home / ".agents-profiles" / profile
+    os.environ["DEVKIT_PROFILE"] = profile
+    os.environ["DEVKIT_PROFILE_HOME"] = str(harness)
+    os.environ["AGENTS_HOME"] = str(harness / "agents")
+    bin_dir = harness / "bin"
     if not bin_dir.is_dir():
         return
     current = os.environ.get("PATH", "")
@@ -372,7 +385,7 @@ def _launch(argv: list[str]) -> int:
         return 2
     home = Path.home()
     write_pending(home, args.profile, args.vendor)
-    prepend_profile_bin(home, args.profile)
+    bind_profile_env(home, args.profile)
     os.execvp(command[0], command)
     return 1
 
@@ -387,7 +400,7 @@ def _dispatch(argv: list[str]) -> int:
         name, vendor = resolve_target(url, home)
         command = launch_argv(name, vendor, home, url)
         clear_pending(home)
-        prepend_profile_bin(home, name)
+        bind_profile_env(home, name)
         os.execvp(command[0], command)
     except DevkitError as exc:
         print(f"error: {exc}", file=sys.stderr)

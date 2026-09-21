@@ -23,7 +23,7 @@ python3 ~/.agents/mcp/playwright.py stop <TASK-ID>
 
 Each agent uses only `playwright-<id>` (`user-playwright-JOT-101` / `mcp__playwright-JOT-101__*`). A chat that started before spawn cannot see the new name.
 
-`mcp/install.py register` skips `playwright` unless `--force`. Never `--force` that stub: it has no real port.
+`mcp/install.py register` skips `playwright` unless `--force`. Never `--force` that stub: it has no real port. `spawn --enable` also writes `playwright-<id>` into every devkit profile MCP file (`~/.agents-profiles/<name>/{cursor/mcp.json,claude/.claude.json,codex/config.toml}`) so an isolated profile session sees the instance.
 
 ## Playwright instances
 

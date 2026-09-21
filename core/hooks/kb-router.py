@@ -13,11 +13,20 @@ from __future__ import annotations
 
 import json
 import math
+import os
 import re
 import sys
 from pathlib import Path
 
-AGENTS = Path.home() / ".agents"
+
+def agents_home() -> Path:
+    raw = os.environ.get("AGENTS_HOME")
+    if raw:
+        return Path(raw).expanduser()
+    return Path.home() / ".agents"
+
+
+AGENTS = agents_home()
 KB = AGENTS / "kb"
 SKILLS = AGENTS / "skills"
 

@@ -24,6 +24,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import shutil
 import signal
 import socket
@@ -35,7 +36,17 @@ from typing import Any
 
 HERE = Path(__file__).resolve().parent
 HOME = Path.home()
-ROOT = HOME / ".agents" / ".playwright-mcp"
+
+
+def agents_home() -> Path:
+    """Harness root: $AGENTS_HOME when a profile wrapper set it, else ~/.agents."""
+    raw = os.environ.get("AGENTS_HOME")
+    if raw:
+        return Path(raw).expanduser()
+    return Path.home() / ".agents"
+
+
+ROOT = agents_home() / ".playwright-mcp"
 INSTANCES = ROOT / "instances"
 DEFAULT_PACKAGE = "@playwright/mcp@latest"
 # Playwright MCP's HTTP Host allowlist treats `127.0.0.1` and `localhost` as
@@ -410,11 +421,14 @@ def disable_vendors(name: str, vendors: list[str], dry_run: bool) -> list[str]:
     install = load_install()
     catalog = install.load_catalog()
     touched = []
-    for vendor in vendors:
-        print(f"[{vendor}] disable {name}", file=sys.stderr)
-        rc = install.unregister_one(catalog, name, [vendor], dry_run)
-        if rc == 0:
-            touched.append(vendor)
+    # Inside a profile, do not touch stock ~/.cursor ~/.claude ~/.codex.
+    if not os.environ.get("DEVKIT_PROFILE", "").strip():
+        for vendor in vendors:
+            print(f"[{vendor}] disable {name}", file=sys.stderr)
+            rc = install.unregister_one(catalog, name, [vendor], dry_run)
+            if rc == 0:
+                touched.append(vendor)
+    touched.extend(disable_on_profiles(Path.home(), name, vendors, dry_run))
     return touched
 
 
@@ -422,25 +436,162 @@ def enable_vendors(name: str, url: str, vendors: list[str], dry_run: bool) -> li
     install = load_install()
     catalog = install.load_catalog()
     touched = []
-    for vendor in vendors:
+    if not os.environ.get("DEVKIT_PROFILE", "").strip():
+        for vendor in vendors:
+            spec = http_spec(url, vendor)
+            print(f"[{vendor}] enable {name} -> {url}", file=sys.stderr)
+            if vendor == "cursor":
+                rc = install.register_cursor(name, spec, dry_run, force=True)
+            elif vendor in ("claude", "claude_personal"):
+                rc = install.register_claude(
+                    name,
+                    spec,
+                    install.expand_path(catalog["vendors"][vendor]["claude_config_dir"]),
+                    dry_run,
+                    force=True,
+                )
+            elif vendor == "codex":
+                rc = install.register_codex(name, spec, catalog, dry_run, force=True)
+            else:
+                rc = 1
+            if rc == 0:
+                touched.append(vendor)
+    touched.extend(enable_on_profiles(Path.home(), name, url, vendors, dry_run))
+    return touched
+
+
+def profile_mcp_targets(home: Path, vendors: list[str],
+                        profile: str | None = None) -> list[tuple[str, Path, str]]:
+    """(vendor, path, kind) for each provenance-marked profile instance.
+
+    When DEVKIT_PROFILE is set (or `profile` is passed), only that instance is
+    returned: a tool running inside dummy must not write php's MCP files.
+    """
+    root = home / ".agents-profiles"
+    if not root.is_dir():
+        return []
+    wanted = {v for v in vendors if v != "claude_personal"}
+    current = profile if profile is not None else os.environ.get("DEVKIT_PROFILE", "").strip()
+    found: list[tuple[str, Path, str]] = []
+    for profile_dir in sorted(root.iterdir()):
+        if not profile_dir.is_dir() or profile_dir.name.startswith("."):
+            continue
+        if current and profile_dir.name != current:
+            continue
+        for vendor in ("cursor", "claude", "codex"):
+            if vendor not in wanted:
+                continue
+            config = profile_dir / vendor
+            if not (config / ".devkit-profile.json").is_file():
+                continue
+            if vendor == "cursor":
+                found.append((vendor, config / "mcp.json", "json"))
+            elif vendor == "claude":
+                found.append((vendor, config / ".claude.json", "json"))
+            else:
+                found.append((vendor, config / "config.toml", "toml"))
+    return found
+
+
+def upsert_json_mcp(path: Path, name: str, spec: dict[str, Any], dry_run: bool) -> None:
+    data: dict[str, Any] = {"mcpServers": {}}
+    if path.is_file():
+        try:
+            data = json.loads(path.read_text())
+            data.setdefault("mcpServers", {})
+        except json.JSONDecodeError:
+            data = {"mcpServers": {}}
+    data["mcpServers"][name] = spec
+    print(f"  profile: upsert {name} in {path}", file=sys.stderr)
+    if dry_run:
+        return
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n")
+
+
+def remove_json_mcp(path: Path, name: str, dry_run: bool) -> None:
+    if not path.is_file():
+        return
+    try:
+        data = json.loads(path.read_text())
+    except json.JSONDecodeError:
+        return
+    servers = data.get("mcpServers") or {}
+    if name not in servers:
+        return
+    print(f"  profile: remove {name} from {path}", file=sys.stderr)
+    if dry_run:
+        return
+    del servers[name]
+    data["mcpServers"] = servers
+    path.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n")
+
+
+def upsert_toml_url(path: Path, name: str, url: str, dry_run: bool) -> None:
+    text = path.read_text() if path.is_file() else ""
+    header = f"[mcp_servers.{name}]"
+    url_line = f"url = {json.dumps(url)}"
+    pattern = re.compile(
+        rf"(\[mcp_servers\.{re.escape(name)}\]\n)(.*?)(?=\n\[|\Z)",
+        re.S,
+    )
+    if pattern.search(text):
+        def repl(match: re.Match[str]) -> str:
+            body = match.group(2)
+            if re.search(r"^url\s*=", body, re.M):
+                body = re.sub(r"^url\s*=.*$", url_line, body, count=1, flags=re.M)
+            else:
+                body = url_line + "\n" + body
+            return match.group(1) + body
+        text = pattern.sub(repl, text, count=1)
+    else:
+        text = text.rstrip() + f"\n\n{header}\n{url_line}\n"
+    print(f"  profile: upsert {name} in {path}", file=sys.stderr)
+    if dry_run:
+        return
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text if text.endswith("\n") else text + "\n")
+
+
+def remove_toml_section(path: Path, name: str, dry_run: bool) -> None:
+    if not path.is_file():
+        return
+    text = path.read_text()
+    pattern = re.compile(
+        rf"\n*\[mcp_servers\.{re.escape(name)}(?:\.[^\]]+)?\][^\[]*",
+        re.S,
+    )
+    if not pattern.search(text):
+        return
+    print(f"  profile: remove {name} from {path}", file=sys.stderr)
+    if dry_run:
+        return
+    updated = pattern.sub("\n", text).rstrip() + "\n"
+    path.write_text(updated)
+
+
+def enable_on_profiles(home: Path, name: str, url: str, vendors: list[str],
+                       dry_run: bool) -> list[str]:
+    touched = []
+    for vendor, path, kind in profile_mcp_targets(home, vendors):
         spec = http_spec(url, vendor)
-        print(f"[{vendor}] enable {name} -> {url}", file=sys.stderr)
-        if vendor == "cursor":
-            rc = install.register_cursor(name, spec, dry_run, force=True)
-        elif vendor in ("claude", "claude_personal"):
-            rc = install.register_claude(
-                name,
-                spec,
-                install.expand_path(catalog["vendors"][vendor]["claude_config_dir"]),
-                dry_run,
-                force=True,
-            )
-        elif vendor == "codex":
-            rc = install.register_codex(name, spec, catalog, dry_run, force=True)
+        if kind == "toml":
+            upsert_toml_url(path, name, url, dry_run)
         else:
-            rc = 1
-        if rc == 0:
-            touched.append(vendor)
+            upsert_json_mcp(path, name, spec, dry_run)
+        touched.append(f"profile:{vendor}")
+    return touched
+
+
+def disable_on_profiles(home: Path, name: str, vendors: list[str],
+                        dry_run: bool) -> list[str]:
+    touched = []
+    for vendor, path, kind in profile_mcp_targets(home, vendors):
+        if kind == "toml":
+            remove_toml_section(path, name, dry_run)
+        else:
+            remove_json_mcp(path, name, dry_run)
+        touched.append(f"profile:{vendor}")
     return touched
 
 

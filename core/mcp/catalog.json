@@ -101,7 +101,8 @@
   "parked": {
     "slack-workspace-leanon": "generate-worklogs only; snippets in ${HOME}/.agents/.auth/mcp-on-demand/",
     "graft": "CLI + graft.mdc are the default; MCP is optional",
-    "playwright": "on-demand HTTP via mcp/playwright.py; one process and output-dir per id. Do not register this stub."
+    "playwright": "on-demand HTTP via mcp/playwright.py; one process and output-dir per id. Do not register this stub.",
+    "browser-control": "on-demand; snippets in ${HOME}/.agents/.auth/mcp-on-demand/"
   },
   "plugins_not_user_mcp": {
     "comment": "Marketplace plugins that also expose MCP tools. Installed via each vendor's plugin UI/CLI, not mcp add.",

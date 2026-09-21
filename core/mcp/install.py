@@ -48,6 +48,16 @@ def expand_path(value: str) -> Path:
     return Path(expand(value))
 
 
+def profile_home() -> Path | None:
+    raw = os.environ.get("DEVKIT_PROFILE_HOME")
+    if raw:
+        return Path(raw).expanduser()
+    name = os.environ.get("DEVKIT_PROFILE", "").strip()
+    if name:
+        return Path.home() / ".agents-profiles" / name
+    return None
+
+
 def load_catalog() -> dict:
     return json.loads(CATALOG_PATH.read_text())
 
@@ -80,10 +90,6 @@ def redact(key: str, value: str) -> str:
     if is_secret_key(key) or key.upper() in {"AUTHORIZATION", "CLIENT_SECRET"}:
         return "<set>"
     return value
-
-
-def vendor_home(catalog: dict, vendor: str) -> Path:
-    return expand_path(catalog["vendors"][vendor]["home"])
 
 
 def env_file_path(catalog: dict, key: str | None) -> Path | None:
@@ -152,6 +158,9 @@ def build_spec(catalog: dict, name: str, vendor: str, existing: dict | None) -> 
 
 
 def cursor_mcp_path() -> Path:
+    profile = profile_home()
+    if profile is not None:
+        return profile / "cursor" / "mcp.json"
     return HOME / ".cursor" / "mcp.json"
 
 
@@ -162,8 +171,23 @@ def claude_mcp_map(home: Path) -> dict:
     return json.loads(path.read_text()).get("mcpServers") or {}
 
 
+def vendor_home(catalog: dict, vendor: str) -> Path:
+    profile = profile_home()
+    if profile is not None and vendor in ("claude", "cursor", "codex"):
+        return profile / vendor
+    return expand_path(catalog["vendors"][vendor]["home"])
+
+
+def claude_config_dir(catalog: dict, vendor: str) -> Path:
+    profile = profile_home()
+    if profile is not None and vendor == "claude":
+        return profile / "claude"
+    return expand_path(catalog["vendors"][vendor]["claude_config_dir"])
+
+
 def codex_mcp_map() -> dict:
-    path = HOME / ".codex" / "config.toml"
+    profile = profile_home()
+    path = (profile / "codex" / "config.toml") if profile is not None else HOME / ".codex" / "config.toml"
     if not path.is_file():
         return {}
     return tomllib.loads(path.read_text()).get("mcp_servers") or {}
@@ -321,7 +345,7 @@ def register_codex(name: str, spec: dict, catalog: dict, dry_run: bool, force: b
         print(f"  codex: {name} exists (use --force to replace)")
         return 0
     if present:
-        run(["codex", "mcp", "remove", name], dry_run=dry_run)
+        run(["codex", "mcp", "remove", name], env=_codex_env(), dry_run=dry_run)
     if spec.get("url") or spec.get("type") == "http":
         url = spec.get("url")
         cmd = ["codex", "mcp", "add", name, "--url", url]
@@ -333,13 +357,13 @@ def register_codex(name: str, spec: dict, catalog: dict, dry_run: bool, force: b
         client_id = os.environ.get(client_env or "")
         if client_id:
             cmd += ["--oauth-client-id", client_id]
-        return run(cmd, dry_run=dry_run)
+        return run(cmd, env=_codex_env(), dry_run=dry_run)
     cmd = ["codex", "mcp", "add", name]
     for key, val in (spec.get("env") or {}).items():
         cmd += ["--env", f"{key}={val}"]
     argv = [spec["command"], *(spec.get("args") or [])]
     cmd += ["--", *argv]
-    return run(cmd, dry_run=dry_run)
+    return run(cmd, env=_codex_env(), dry_run=dry_run)
 
 
 def unregister_cursor(name: str, dry_run: bool) -> int:
@@ -374,7 +398,15 @@ def unregister_codex(name: str, dry_run: bool) -> int:
     if name not in codex_mcp_map():
         print(f"  codex: {name} absent")
         return 0
-    return run(["codex", "mcp", "remove", name], dry_run=dry_run)
+    return run(["codex", "mcp", "remove", name], env=_codex_env(), dry_run=dry_run)
+
+
+def _codex_env() -> dict[str, str]:
+    env = os.environ.copy()
+    profile = profile_home()
+    if profile is not None:
+        env["CODEX_HOME"] = str(profile / "codex")
+    return env
 
 
 def unregister_one(catalog: dict, name: str, vendors: list[str], dry_run: bool) -> int:
@@ -386,7 +418,7 @@ def unregister_one(catalog: dict, name: str, vendors: list[str], dry_run: bool) 
         elif vendor in ("claude", "claude_personal"):
             rc |= unregister_claude(
                 name,
-                expand_path(catalog["vendors"][vendor]["claude_config_dir"]),
+                claude_config_dir(catalog, vendor),
                 dry_run,
             )
         elif vendor == "codex":
@@ -408,7 +440,7 @@ def register_one(catalog: dict, name: str, vendors: list[str], dry_run: bool, fo
         elif vendor in ("claude", "claude_personal"):
             rc |= register_claude(
                 name, built,
-                expand_path(catalog["vendors"][vendor]["claude_config_dir"]),
+                claude_config_dir(catalog, vendor),
                 dry_run, force,
             )
         elif vendor == "codex":

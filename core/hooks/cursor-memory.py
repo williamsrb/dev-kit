@@ -30,8 +30,28 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 HOME = Path.home()
-MEMORY_ROOT = HOME / ".cursor" / "memory"
-STATE_DB = HOME / ".config" / "Cursor" / "User" / "globalStorage" / "state.vscdb"
+
+
+def _profile_home() -> Path | None:
+    raw = os.environ.get("DEVKIT_PROFILE_HOME")
+    if raw:
+        return Path(raw).expanduser()
+    name = os.environ.get("DEVKIT_PROFILE", "").strip()
+    if name:
+        return Path.home() / ".agents-profiles" / name
+    return None
+
+
+_profile = _profile_home()
+MEMORY_ROOT = (
+    (_profile / "cursor" / "memory") if _profile is not None
+    else HOME / ".cursor" / "memory"
+)
+STATE_DB = (
+    (_profile / "cursor" / "User" / "globalStorage" / "state.vscdb")
+    if _profile is not None
+    else HOME / ".config" / "Cursor" / "User" / "globalStorage" / "state.vscdb"
+)
 ERROR_LOG = MEMORY_ROOT / ".state" / "hook-errors.log"
 PAYLOAD_LOG = MEMORY_ROOT / ".state" / "last-payload.json"
 

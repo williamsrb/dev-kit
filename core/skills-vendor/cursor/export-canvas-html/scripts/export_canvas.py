@@ -11,6 +11,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -20,7 +21,16 @@ from pathlib import Path
 
 SKILL_DIR = Path(__file__).resolve().parent.parent
 RUNTIME_DIR = SKILL_DIR / "runtime"
-CACHE_DIR = Path.home() / ".agents" / ".cache" / "export-canvas-html"
+
+
+def agents_home() -> Path:
+    raw = os.environ.get("AGENTS_HOME")
+    if raw:
+        return Path(raw).expanduser()
+    return Path.home() / ".agents"
+
+
+CACHE_DIR = agents_home() / ".cache" / "export-canvas-html"
 PROJECTS_DIR = Path.home() / ".cursor" / "projects"
 IMPORT_LINE_RE = re.compile(r"^\s*import\b[\s\S]*?;\s*$", re.MULTILINE)
 CANVAS_IMPORT_RE = re.compile(r"""from\s+['"]cursor/canvas['"]""")

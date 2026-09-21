@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import base64
 import json
+import os
 import re
 import secrets
 import urllib.error
@@ -20,11 +21,21 @@ from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any
 
-TOKEN_PATH = Path.home() / ".agents" / ".auth" / "jira-api-token.yaml"
-PRD_ROOT = Path.home() / ".agents" / "prds"
 DEFAULT_SITE = ""
+
+
+def agents_home() -> Path:
+    """Harness root: $AGENTS_HOME when a profile wrapper set it, else ~/.agents."""
+    raw = os.environ.get("AGENTS_HOME")
+    if raw:
+        return Path(raw).expanduser()
+    return Path.home() / ".agents"
+
+
+TOKEN_PATH = agents_home() / ".auth" / "jira-api-token.yaml"
+PRD_ROOT = agents_home() / "prds"
 RENDER_SCRIPT = (
-    Path.home() / ".agents" / "skills" / "download-jira-task" / "scripts" / "render_issue.py"
+    agents_home() / "skills" / "download-jira-task" / "scripts" / "render_issue.py"
 )
 DEFAULT_ISSUE_FIELDS = [
     "summary",

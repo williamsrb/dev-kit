@@ -1,6 +1,23 @@
 # Installing
 
-Two steps, in order. They are separate because they need different privileges
+`install.py` writes `~/.local/bin/devkit-uninstall.sh`. That shell file is not
+in this checkout. It does not import the kit and does not call `devkit`. After
+a successful `--apply` it deletes itself. The next `install.py --apply` writes
+it again. On a machine where nothing was installed it exits 0.
+
+```bash
+devkit-uninstall.sh            # dry run; the PATH copy stays
+devkit-uninstall.sh --apply    # remove, ask sudo, then the PATH copy deletes itself
+```
+
+It removes `~/.agents-profiles`, the `<vendor>-<name>` wrappers, desktop
+launchers, badge icons, auth dispatchers, the PATH block
+`bootstrap.sh --wire-path` added, and — with sudo — `/usr/lib/devkit`, the
+apt/dpkg hooks, and `/usr/local/bin/sync-devkit-profile-apps.py`. A missing
+path is skipped. It does not delete this checkout, `~/.agents`, or packages
+`bootstrap.sh` installed. A dry run does not delete the script.
+
+Two steps follow. They are separate because they need different privileges
 and different network access, and pretending otherwise is how installers end up
 writing root-owned files into a user's home.
 

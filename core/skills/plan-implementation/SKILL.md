@@ -43,9 +43,15 @@ Example: the issue references a `.fig` / Figma file and no Figma reader is insta
 Generates (or updates) a structured Markdown folder at `<plans-dir>/<TASK-ID>/` from the offline PRD (legacy single file `<TASK-ID>.md` still resolves).
 This file serves as the **canonical input** for `run-plan` (aliases: `run-implementation-plan`, `execute-plan`, …). There is no separate implementer skill — plan, then run the plan.
 
-**TBD is first-class.** Collect unknowns into `## TBD (ask analyst before implement)` so the user can copy them to the analyst **before implementation**. Phrase TBD with `write-analyst-message`. Do not invent product decisions to fill gaps. A non-empty TBD is a **hard-stop before coding** unless the user explicitly says to implement with the listed assumptions. Empty TBD is allowed (`TBD: none`). Decided exclusions belong in Constraints + Non-Goals, not TBD.
+**TBD is first-class.** Collect unknowns into `## TBD (ask analyst before implement)`. Empty TBD is allowed (`TBD: none`). Decided exclusions belong in Constraints + Non-Goals, not TBD.
 
-**Implicit requirements are first-class and not TBD.** Harvest extras the ticket did not state. Classify with `~/.agents/kb/implementation/How-to-handle-implicit-requirements.md`. After the plan is written, post a techlead checkbox comment when `mode` is `jira` and the list is non-empty. Unticked extras stay out of scope. Implicit is not a coding hard-stop.
+- **`mode` is `jira`:** Phrase TBD with `write-analyst-message`. Do not invent product decisions to fill gaps. A non-empty TBD is a **hard-stop before coding** unless the user explicitly says to implement with the listed assumptions.
+- **`mode` is `local`:** There is no analyst. The planner is the product owner and owns the choice. Harvest the same gaps, reason 2–3 options with the recommendation first, then **auto-select the recommended path** when PRD, codebase, sister parts, recorded How-tos, or surrounding style is enough. Encode the choice as AC/FR/Constraint (`_(local PO: …)_`). Record it under **Local PO decisions** in `tbd.md`, then `- TBD: none`. Do not ask. Do not hard-stop. If reasoning is thin, still pick the least-wrong recommended default that unblocks execution. Operator Gate still applies (auth, schema, irreversible writes).
+
+**Implicit requirements are first-class and not TBD.** Harvest extras the ticket did not state. Classify with `~/.agents/kb/implementation/How-to-handle-implicit-requirements.md`. Implicit is not a coding hard-stop.
+
+- **`mode` is `jira`:** After the plan is written, post a techlead checkbox comment when the list is non-empty. Unticked extras stay out of scope.
+- **`mode` is `local`:** There is no techlead. The planner is the techlead. Reason which extras belong in this delivery. Auto-tick (`[x]`) those; leave `[ ]` for follow-up. Do not paste a waiting tick list. Do not block execution.
 
 ---
 
@@ -58,6 +64,10 @@ This file serves as the **canonical input** for `run-plan` (aliases: `run-implem
 ## Step 1 — Extract the work id
 
 Resolve `<TASK-ID>` per `~/.agents/kb/implementation/How-to-resolve-task-context.md` (Jira key/URL or kebab slug → branch → worktree folder → ask once). Note `mode` (`jira` or `local`). Do not ask for full paths to PRD or plans when convention files exist. Do not invent a Jira key.
+
+### Worktree (when the user asks to create one)
+
+Follow `../set-up-worktree/SKILL.md`. Run it from the **primary** checkout on the development branch tip (e.g. `PROJ-295`). **Never** pass `--base origin/review` or start while that checkout is on `review`. Do not set the new branch's upstream to `origin/review`.
 
 ---
 
@@ -80,7 +90,7 @@ Resolve `<TASK-ID>` per `~/.agents/kb/implementation/How-to-resolve-task-context
    - Always: title/summary metadata, `## Description`, and any acceptance-criteria headings (`--sections description` plus `acceptance-criteria` when that H2 exists)
    - Read `## Comments` **only if** AC is missing/thin, TBD gaps remain, or nested `validate-plan` needs comments the draft cites (`--sections comments`)
    - Prefer Grep for criteria keywords, conflicts, missing URLs/locales/envs, and Figma/node mentions over dumping the whole comments thread
-   - When comments are read: keep comment **ids**; ignore bot/CI noise (see 3a). Harvest conflicts into TBD (see 3f)
+   - When comments are read: keep comment **ids**; ignore bot/CI noise (see 3a). Harvest conflicts into TBD (see 3f; **local:** auto-select after harvest)
 
 Do **not** call Atlassian MCP for issue/comment fetch in this skill when the offline file is available (or was just created by a nested download). Live Jira fetch belongs in `download-jira-task` only. Do **not** read `*-evidence-plan.md` or sibling-task PRDs while drafting.
 
@@ -91,7 +101,7 @@ Do **not** call Atlassian MCP for issue/comment fetch in this skill when the off
 Load only the phase being executed:
 
 1. Read [classify-and-scope.md](references/classify-and-scope.md) after the PRD exists. It covers comment filtering, task classification, docs/prototype checks, TBD harvesting, implicit-requirement harvesting, and existing-plan handling.
-2. Read [write-and-validate.md](references/write-and-validate.md) only when generating or revising the plan. It contains the complete template, quality gates, handoff rules, and the techlead implicit-requirements post.
+2. Read [write-and-validate.md](references/write-and-validate.md) only when generating or revising the plan. It contains the complete template, quality gates, handoff rules, the techlead implicit-requirements post (`jira`), and local PO auto-select.
 3. **Validate/fix an existing plan** — follow `../validate-plan/SKILL.md` (`called_from: plan-implementation`). Do not duplicate that workflow here.
 
 Do not load both write references in advance. Use the local commands above for issue resolution, section selection, plan scaffolding, and final structure validation.

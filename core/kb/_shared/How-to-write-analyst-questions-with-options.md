@@ -3,7 +3,7 @@ id: how-to-write-analyst-questions-with-options
 when_skills: [write-analyst-message, jira-task-spec, plan-implementation]
 inputs: [open questions or TBD items for an analyst/reporter]
 outputs: [Jira/Slack comment a person can answer by picking an option]
-stop_if: [audience is the implementer or the user, not the analyst; the body is an evidence comment / E2 post; the body is an implicit-requirements techlead tick list]
+stop_if: [audience is the implementer or the user, not the analyst; mode is local / non-jira; the body is an evidence comment / E2 post; the body is an implicit-requirements techlead tick list]
 read: whole
 prose: caveman-lite
 ---
@@ -11,6 +11,8 @@ prose: caveman-lite
 # Write analyst questions with options
 
 The analyst decides. Give them choices, not a form.
+
+**Not for local / non-jira.** There is no analyst. `plan-implementation` auto-selects the recommended path. Do not follow this How-To in `mode: local`.
 
 **Not for evidence posts.** An evidence comment is the wrong time to ask anything — the analyst is checking the delivery. Do not follow this How-To when drafting E2. State shipped limitations as facts, or post a **separate** question comment after evidence.
 
@@ -42,6 +44,7 @@ The analyst decides. Give them choices, not a form.
 
 - A bare `Assumption (not decided): …` is not an answer path. Options replace it; older plans still carry it, do not copy that shape forward.
 - Do not paste this shape into an evidence comment. Evidence + TBD in one post is always wrong timing.
+- Do not use this shape when `mode` is `local`. There is no analyst.
 - Do not use this shape for implicit-requirements posts. Those are techlead ADF checkboxes, not analyst a/b/c.
 - No filler options. Two real choices beat three with a decoy.
 - Never bury or unmark the recommendation.

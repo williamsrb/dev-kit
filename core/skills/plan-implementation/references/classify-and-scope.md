@@ -9,7 +9,9 @@ Comments refine acceptance criteria — they are **not** dumped raw into the pro
 - Ignore automated CI/CD, deploy bot, and status-change comments (author name contains "Bot", "GitLab", "GitHub", "Jenkins", "Bamboo", or similar)
 - Look for requirement changes, clarifications, or new conditions
 - If a comment **clearly extends or supersedes** the description (later, explicit), treat it as authoritative and update acceptance criteria
-- If comments **conflict with each other**, or with the description with **no clear later winner**, record a **TBD** item — do not pick a silent winner
+- If comments **conflict with each other**, or with the description with **no clear later winner**:
+  - **jira:** record a **TBD** item — do not pick a silent winner
+  - **local:** pick the recommended winner (later comment if timestamps exist; else the option that matches surrounding code / sister / How-to). Record it as a Local PO decision. Do not leave it as blocking TBD
 - Mark criteria inferred or updated from comments with `_(from comments)_`
 
 ### 3b. Classify the task type
@@ -79,7 +81,7 @@ Do **not** block the spec on Impeccable, invent DESIGN.md/PRODUCT.md requirement
 
 ### 3f. Harvest TBD (mandatory)
 
-While reading the PRD, comments, Figma, and codebase, **collect gaps** — do not silently decide them. The implementer must not have to guess.
+While reading the PRD, comments, Figma, and codebase, **collect gaps**. The implementer must not have to guess — **jira:** leave them as TBD for the analyst; **local:** auto-select the recommended path and encode it.
 
 Record as TBD when any of these are true:
 
@@ -93,7 +95,14 @@ Record as TBD when any of these are true:
 - Related-ticket dependency mentioned but not specified in this PRD (do **not** fetch sibling PRDs unless the user asked; list the gap)
 - Anything else that would be a silent product decision
 
-**Do not invent product decisions** to fill gaps. Each TBD item carries **2-3 options with the recommendation first** (see `~/.agents/kb/_shared/How-to-write-analyst-questions-with-options.md`) — none of them written as an AC/FR until the analyst confirms one.
+Each harvested gap carries **2-3 options with the recommendation first**.
+
+- **jira:** Do **not** invent product decisions to fill gaps. None of the options is an AC/FR until the analyst confirms one. Phrase TBD with `write-analyst-message`.
+- **local:** There is no analyst. After harvesting, **resolve**:
+  1. If PRD, codebase, sister parts, recorded How-tos, or surrounding style is enough to pick a best path — **auto-select the recommended option**. Encode it as AC/FR/Constraint with `_(local PO: <choice>)_`. Put a one-line decision under **Local PO decisions** in `tbd.md`. Then `- TBD: none`.
+  2. If reasoning is thin — still pick the recommended (least-wrong, smallest reversible) default that unblocks execution. Record the assumption. Do not ask. Do not hard-stop.
+  3. Operator Gate still applies (auth, schema, irreversible writes). That is not analyst TBD.
+  4. Do not use `write-analyst-message`.
 
 **Not TBD:** decided user/chat exclusions. Those go in Constraints + Non-Goals only (`~/.agents/kb/validation/How-to-respect-user-scope-exclusions.md`).
 
@@ -105,8 +114,10 @@ Read `~/.agents/kb/implementation/How-to-handle-implicit-requirements.md` (Class
 
 - **DO** (stack wiring, recorded project How-tos, user exclusions, surrounding style) — Implementation Steps / Definition of Done. Not an AC. Not the tick list.
 - **Tick** (Figma sibling states, extra CMS fields, sister-part optionals, extra chrome) — `## Implicit requirements (techlead tick)`. One checkbox line each. Not an AC/FR.
+  - **jira:** leave `[ ]` for the techlead. Unticked stay out of scope.
+  - **local:** planner is the techlead. Auto-tick `[x]` extras that belong in this delivery (same-component sibling states; completeness the AC cannot ship without looking broken). Leave `[ ]` for follow-up extras (new CMS editor contracts, cross-ticket helpers, optional chrome). Do not wait. Do not paste a "please tick" list.
 - **DON'T** (drive-by refactors, invented copy/locale, deslop, excluded Figma deltas) — Non-Goals if tempting. Never implement.
-- **TBD** — still 3f. Do not put product gaps on the techlead tick list.
+- **TBD** — still 3f (jira: ask; local: auto-select). Do not put product gaps on the tick list.
 
 Do not write `_(inferred)_` ACs for tick-list extras. Empty list is allowed (`- Implicit: none`).
 
@@ -121,7 +132,7 @@ ls <plans-dir>/<ISSUE-KEY>.md 2>/dev/null
 ```
 
 - **If it does not exist**: create the file from scratch using the template below
-- **If it already exists**: read the current file, preserve the `## Implementation Plan` section if it has been manually edited by the user (check for content beyond the default template), and update the Jira-derived sections from the offline copy. Add `## TBD (ask analyst before implement)` and `## Implicit requirements (techlead tick)` if missing. If the file has `## Questions`, `## Open issues`, or similar, **fold those items into TBD** and remove the old heading — do not keep both.
+- **If it already exists**: read the current file, preserve the `## Implementation Plan` section if it has been manually edited by the user (check for content beyond the default template), and update the Jira-derived sections from the offline copy. Add `## TBD (ask analyst before implement)` and `## Implicit requirements (techlead tick)` if missing. If the file has `## Questions`, `## Open issues`, or similar, **fold those items into TBD** and remove the old heading — do not keep both. **local:** then auto-select leftover TBD (3f) and auto-tick implicit extras (3g).
 
 Create the folder if needed:
 ```bash

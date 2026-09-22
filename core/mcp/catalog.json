@@ -1,10 +1,20 @@
 {
   "comment": "User-level MCP servers extracted from the Cursor, Claude, Claude Personal and Codex config dirs. No secrets. Paths use ${HOME}.",
   "vendors": {
-    "cursor": {"home": "${HOME}/.cursor"},
-    "claude": {"home": "${HOME}/.claude", "claude_config_dir": "${HOME}/.claude"},
-    "claude_personal": {"home": "${HOME}/.claude_personal", "claude_config_dir": "${HOME}/.claude_personal"},
-    "codex": {"home": "${HOME}/.codex"}
+    "cursor": {
+      "home": "${HOME}/.cursor"
+    },
+    "claude": {
+      "home": "${HOME}/.claude",
+      "claude_config_dir": "${HOME}/.claude"
+    },
+    "claude_personal": {
+      "home": "${HOME}/.claude_personal",
+      "claude_config_dir": "${HOME}/.claude_personal"
+    },
+    "codex": {
+      "home": "${HOME}/.codex"
+    }
   },
   "env_files": {
     "gitlab": "${HOME}/.gitlab-mcp-server.env",
@@ -15,14 +25,24 @@
       "transport": "http",
       "url": "https://mcp.context7.com/mcp",
       "auth": "oauth",
-      "vendors": ["cursor", "claude", "claude_personal", "codex"],
+      "vendors": [
+        "cursor",
+        "claude",
+        "claude_personal",
+        "codex"
+      ],
       "fetch": null
     },
     "atlassian-rovo-preview": {
       "transport": "http",
       "url": "https://mcp.atlassian.com/v1/mcp/preview",
       "auth": "oauth",
-      "vendors": ["cursor", "claude", "claude_personal", "codex"],
+      "vendors": [
+        "cursor",
+        "claude",
+        "claude_personal",
+        "codex"
+      ],
       "fetch": null
     },
     "gitlab": {
@@ -30,17 +50,35 @@
       "command": "${HOME}/.local/bin/gitlab-mcp-server",
       "args": [],
       "env_file": "gitlab",
-      "env_keys": ["GITLAB_URL", "GITLAB_TOKEN"],
-      "vendors": ["cursor", "claude", "claude_personal", "codex"],
+      "env_keys": [
+        "GITLAB_URL",
+        "GITLAB_TOKEN"
+      ],
+      "vendors": [
+        "cursor",
+        "claude",
+        "claude_personal",
+        "codex"
+      ],
       "fetch": "gitlab-mcp-server"
     },
     "browser-control": {
       "transport": "stdio",
       "command": "node",
-      "args": ["${HOME}/.local/src/browser-control-mcp/mcp-server/dist/server.js"],
+      "args": [
+        "${HOME}/.local/src/browser-control-mcp/mcp-server/dist/server.js"
+      ],
       "env_file": "browser_control",
-      "env_keys": ["EXTENSION_SECRET", "EXTENSION_PORT"],
-      "vendors": ["cursor", "claude", "claude_personal", "codex"],
+      "env_keys": [
+        "EXTENSION_SECRET",
+        "EXTENSION_PORT"
+      ],
+      "vendors": [
+        "cursor",
+        "claude",
+        "claude_personal",
+        "codex"
+      ],
       "fetch": "browser-control-mcp"
     },
     "slack-workspace-leanon": {
@@ -49,24 +87,41 @@
       "auth": "slack",
       "oauth_client_id_env": "SLACK_MCP_CLIENT_ID",
       "bearer_env": "SLACK_MCP_TOKEN",
-      "vendors": ["cursor", "claude", "claude_personal", "codex"],
+      "vendors": [
+        "cursor",
+        "claude",
+        "claude_personal",
+        "codex"
+      ],
       "vendor_overrides": {
-        "codex": {"url": "https://mcp.slack.com/mcp"}
+        "codex": {
+          "url": "https://mcp.slack.com/mcp"
+        }
       },
       "fetch": null
     },
     "playwright": {
       "transport": "http",
       "url": "http://localhost:8931/mcp",
-      "vendors": ["cursor", "claude", "claude_personal", "codex"],
+      "vendors": [
+        "cursor",
+        "claude",
+        "claude_personal",
+        "codex"
+      ],
       "fetch": "playwright-mcp",
       "comment": "Parked. Spawn isolated HTTP instances with mcp/playwright.py; do not register this stub."
     },
     "image-to-disk": {
       "transport": "stdio",
       "command": "python3",
-      "args": ["${HOME}/.agents/mcp/image-to-disk/server.py"],
-      "vendors": ["claude", "claude_personal"],
+      "args": [
+        "${HOME}/.agents/mcp/image-to-disk/server.py"
+      ],
+      "vendors": [
+        "claude",
+        "claude_personal"
+      ],
       "fetch": null
     },
     "filesystem": {
@@ -84,14 +139,24 @@
         "${HOME}/.config/Claude",
         "${HOME}/.config/ClaudePersonal"
       ],
-      "vendors": ["claude", "claude_personal"],
+      "vendors": [
+        "claude",
+        "claude_personal"
+      ],
       "fetch": "filesystem-mcp"
     },
     "graft": {
       "transport": "stdio",
       "command": "graft",
-      "args": ["mcp"],
-      "vendors": ["cursor", "claude", "claude_personal", "codex"],
+      "args": [
+        "mcp"
+      ],
+      "vendors": [
+        "cursor",
+        "claude",
+        "claude_personal",
+        "codex"
+      ],
       "fetch": null
     }
   },
@@ -106,8 +171,16 @@
   },
   "plugins_not_user_mcp": {
     "comment": "Marketplace plugins that also expose MCP tools. Installed via each vendor's plugin UI/CLI, not mcp add.",
-    "atlassian@claude-plugins-official": ["claude", "claude_personal", "codex"],
-    "slack@claude-plugins-official": ["claude", "claude_personal", "codex"]
+    "atlassian@claude-plugins-official": [
+      "claude",
+      "claude_personal",
+      "codex"
+    ],
+    "slack@claude-plugins-official": [
+      "claude",
+      "claude_personal",
+      "codex"
+    ]
   },
   "fetch": {
     "gitlab-mcp-server": {
@@ -118,7 +191,10 @@
     "browser-control-mcp": {
       "repo": "https://github.com/eyalzh/browser-control-mcp.git",
       "dest": "${HOME}/.local/src/browser-control-mcp",
-      "build": ["npm", "install"]
+      "build": [
+        "npm",
+        "install"
+      ]
     },
     "playwright-mcp": {
       "npx_package": "@playwright/mcp@latest"

@@ -11,6 +11,11 @@
     "additionalDirectories": [
       "${PROFILE_AGENTS_HOME}",
       "${PROFILE_CONFIG_DIR}"
+    ],
+    "allow": [
+      "mcp__playwright-*__browser_navigate",
+      "mcp__playwright-*__browser_take_screenshot",
+      "mcp__playwright-*__browser_set_storage_state"
     ]
   },
   "statusLine": {

@@ -16,12 +16,12 @@ Playwright CLI is the normal path for navigation, interaction, snapshots, assert
 There is no resident `mcp__playwright__*`. Parallel jobs sharing one stdio server collide on the browser and on `--output-dir`. Evidence: `plan-task-evidence` spawns `playwright-<TASK-ID>`, then `run-plan` in a **fresh** session captures on it and stops the instance. Reboot, crash, or ad-hoc MCP (not an evidence plan): skill `spawn-playwright-mcp` (`list` / `revive` / `spawn --enable`). Full procedure: `How-to-enable-playwright-mcp.md`.
 
 ```bash
-python3 ~/.agents/mcp/playwright.py spawn <TASK-ID> --enable --storage-state ~/.agents/.auth/<env>.json
+python3 ~/.agents/mcp/playwright.py spawn <TASK-ID> --enable --storage-state <path-from-find-auth-storage>
 ```
 
-`--headed` / `--extension` are spawn flags, not catalog servers. New logins: `npx playwright codegen --save-storage=…`. `browser-control` remains parked.
+`--headed` / `--extension` are spawn flags, not catalog servers. Pick `<path-from-find-auth-storage>` with `find-auth-storage.py --host …` (filename is never a lock). New logins: `npx playwright codegen --save-storage=…`. `browser-control` remains parked.
 
-Skip codegen when the storage-state file exists and still authenticates. Prefer `--storage-state` at spawn. If a saved state lands on a login page, treat capture as failed evidence and redo login. Keep live state files under ~/.agents/.auth with mode 700. Storage state does not include sessionStorage; an app that stores its token there needs init-script seeding or a headed spawn.
+Skip codegen when a host-matched state exists and still authenticates. Prefer `--storage-state` at spawn. If a saved state lands on a login page, treat capture as failed evidence and redo login. Keep live state files under ~/.agents/.auth with mode 700. Storage state does not include sessionStorage; an app that stores its token there needs init-script seeding or a headed spawn.
 
 - Prefer the highest-ranked usable tool (evidence: spawned Playwright MCP for that task id; ordinary work: Playwright CLI).
 - Do not open a vendor browser first when the user says they are already logged in through another named browser surface.

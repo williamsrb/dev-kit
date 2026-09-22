@@ -13,7 +13,7 @@ Keep skill wording (do not strip parentheticals to please agentctl):
 - `## Functional Requirements` (`FR-n`)
 - `## Non-Goals` (at least one bullet)
 - `## Constraints (user exclusions)` — required when the user excluded anything; keep the heading even if `- none`
-- `## TBD (ask analyst before implement)` — checklist **or** `- TBD: none`. Never omit.
+- `## TBD (ask analyst before implement)` — **jira:** checklist **or** `- TBD: none`. **local:** `- TBD: none` plus **Local PO decisions** after auto-select. Never omit.
 - `## Implicit requirements (techlead tick)` — checkboxes **or** `- Implicit: none`. Never omit. Classify with `~/.agents/kb/implementation/How-to-handle-implicit-requirements.md`. Not TBD. Not ACs.
 - `## Implementation Plan` (problem, approach, steps, Definition of Done)
 - `## Validation` — **add if missing**: build gates, manual render/test matrix, what evidence/posting is **not** this plan
@@ -33,9 +33,8 @@ Apply `~/.agents/kb/validation/How-to-respect-user-scope-exclusions.md`.
 
 - Fold Questions / Open issues into TBD.
 - Add gaps that would force a product guess (copy, locale, URL, env, which component, ownership, Figma node).
-- Do **not** invent answers. Do **not** promote TBD into ACs/FRs.
-- Phrase leftover TBD with `write-analyst-message` (decision + Blocks + 2–3 options, recommendation first). See `~/.agents/kb/_shared/How-to-write-analyst-questions-with-options.md`.
-- Non-empty TBD → hard-stop before coding; not a plan NO-GO by itself.
+- **jira:** do **not** invent answers. Do **not** promote TBD into ACs/FRs. Phrase leftover TBD with `write-analyst-message` (decision + Blocks + 2–3 options, recommendation first). Non-empty TBD → hard-stop before coding; not a plan NO-GO by itself.
+- **local:** auto-select the recommended path when reasoning is enough (PRD, codebase, sister, How-to, surrounding style). Encode as AC/FR/Constraint (`_(local PO: …)_`). Record under **Local PO decisions**. Then `- TBD: none`. Do not ask. Do not hard-stop. If reasoning is thin, pick the least-wrong recommended default that unblocks execution. Do not use `write-analyst-message`. See `~/.agents/kb/_shared/How-to-write-analyst-questions-with-options.md` only for the option-shape while reasoning.
 
 ## Implicit harvest
 
@@ -43,7 +42,8 @@ Apply `~/.agents/kb/validation/How-to-respect-user-scope-exclusions.md`.
 - Add gaps that would be silent engineering extras (Figma sibling states, extra CMS fields, sister-part optionals). Do **not** put product gaps here — those stay TBD.
 - DOs (stack wiring, recorded How-tos) stay in Implementation Steps, not on the tick list.
 - Phrase leftover items as one-line checkboxes. Empty list: `- Implicit: none`.
-- Implicit is not a coding hard-stop. This skill does not post the techlead comment. Nested `plan-implementation` posts after the rewrite; standalone validate reports the list in chat.
+- **jira:** Implicit is not a coding hard-stop. This skill does not post the techlead comment. Nested `plan-implementation` posts after the rewrite; standalone validate reports the list in chat.
+- **local:** auto-tick `[x]` extras that belong; leave `[ ]` for follow-up. Report in chat. Do not post. Do not wait.
 
 ## Consistency
 

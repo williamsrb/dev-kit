@@ -10,8 +10,8 @@ Direction is one-way by design. Editing core/ directly is drift, which is what
 
 from __future__ import annotations
 
-import fnmatch
 import filecmp
+import fnmatch
 import json
 import shutil
 import subprocess
@@ -172,7 +172,13 @@ def cmd_export(args) -> int:
         str(p.relative_to(target)) for p in target.rglob("*")
         if p.is_file() or p.is_symlink()
     } if target.is_dir() else set()
-    orphans = sorted(existing - set(chosen))
+    hard = allowlist.get("hard_excludes", [])
+    # Hard-excluded paths (e.g. __pycache__) must not ship, but they also must
+    # not fail --check when an import regenerates them under core/. --apply still
+    # sweeps them so the tree stays tidy.
+    extras = sorted(existing - set(chosen))
+    orphans = [rel for rel in extras if not _excluded(rel, hard)]
+    noise = [rel for rel in extras if _excluded(rel, hard)]
 
     if args.check:
         if not stale and not orphans:
@@ -198,11 +204,13 @@ def cmd_export(args) -> int:
         plan.record(f"export {rel}")
     for rel in orphans:
         plan.record(f"remove {rel} (no longer allowlisted)")
+    for rel in noise:
+        plan.record(f"remove {rel} (hard-excluded)")
 
     if args.apply:
         for rel in stale:
             _copy(chosen[rel], target / rel)
-        for rel in orphans:
+        for rel in orphans + noise:
             (target / rel).unlink()
         for directory in sorted((p for p in target.rglob("*") if p.is_dir()),
                                 key=lambda p: -len(p.parts)):

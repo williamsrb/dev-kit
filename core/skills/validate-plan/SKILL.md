@@ -97,9 +97,9 @@ Copy and tick:
    Then always load [references/realism-and-kb.md](references/realism-and-kb.md).
 4. **Structure gate** — `agentctl plan validate <file-or-dir> --kind <kind> --json` (omit `--kind` to use resolve inference). `valid: false` is a real plan defect: fix the file. See [Structure gate semantics](#structure-gate-semantics) for what the validator does and does not flag.
 5. **Judge** — apply the kind reference + consistency How-to against the draft and (for impl) the sectioned PRD. Collect chat exclusions; they beat Figma/PRD/inferred ACs. Run both extra validations: **Is realistic or hallucination?** and **Is using the KB properly?**
-6. **Fix** — rewrite the plan **on disk** (Write / StrReplace). Narrow toward exclusions; never widen toward a broader Figma reading. Fold open questions into TBD (impl) or reachability blockers (evidence). Fold inferred extras into Implicit requirements (impl). Do not invent product decisions. Replace hallucinated claims with measured source, TBD, or delete. Add missing KB citations (offline-reference / testing How-to paths).
+6. **Fix** — rewrite the plan **on disk** (Write / StrReplace). Narrow toward exclusions; never widen toward a broader Figma reading. Fold open questions into TBD (impl, **jira**) or resolve them as local PO (impl, **local**: auto-select the recommended path, encode as AC/FR/Constraint, `- TBD: none`) or reachability blockers (evidence). Fold inferred extras into Implicit requirements (impl). **jira:** do not invent product decisions. **local:** auto-select is required, not invented-then-hidden — record **Local PO decisions**. Replace hallucinated *technical* claims with measured source, TBD (jira) / local PO default (local), or delete. Add missing KB citations (offline-reference / testing How-to paths).
 7. **Re-validate** — agentctl again; re-check exclusions, consistency, realism, and KB use on the edited sections only.
-8. **Report** — template below. Surface leftover TBD / implicit / reachability gaps. **Stop.** Non-empty TBD is not a plan **NO-GO**; it **is** a hard-stop before coding. Non-empty implicit is not a coding hard-stop. An untestable evidence plan can still be **GO-WITH-FIXES** if the file records the blocker; it is **not** execution-ready.
+8. **Report** — template below. Surface leftover TBD / implicit / reachability gaps. **Stop.** Non-empty TBD is not a plan **NO-GO**. **jira:** it **is** a hard-stop before coding. **local:** leftover gaps must be auto-selected before this skill finishes; do not hard-stop. Non-empty implicit is not a coding hard-stop. An untestable evidence plan can still be **GO-WITH-FIXES** if the file records the blocker; it is **not** execution-ready.
 
 Nested callers (`called_from: plan-implementation` / `plan-task-evidence` / `multitask-same-repo`) skip any cascade back into those skills.
 
@@ -107,11 +107,11 @@ Nested callers (`called_from: plan-implementation` / `plan-task-evidence` / `mul
 
 | Verdict | Meaning |
 |---------|---------|
-| **GO** | Plan is internally consistent, exclusions recorded, ACs do not violate them, core steps reachable (evidence), **Is realistic or hallucination?** PASS, **Is using the KB properly?** PASS or n/a. Ready for a later `run-plan` once TBD is empty or the user accepts assumptions. |
+| **GO** | Plan is internally consistent, exclusions recorded, ACs do not violate them, core steps reachable (evidence), **Is realistic or hallucination?** PASS, **Is using the KB properly?** PASS or n/a. **jira:** ready for a later `run-plan` once TBD is empty or the user accepts assumptions. **local:** execution-ready after auto-select (`TBD: none` + Local PO decisions). |
 | **GO-WITH-FIXES** | Defects were (or should be) fixed by **narrowing** the plan (including stripping hallucinations and adding KB citations). File on disk is the contract. |
 | **NO-GO** | Unfixable without a product decision the user/analyst has not given; ACs still demand a forbidden delta on an excluded element; or leftover invented facts / unsourced platform behavior after the rewrite attempt. |
 
-Do not start `run-plan` from a **NO-GO**. Do not treat silence as acceptance of TBD.
+Do not start `run-plan` from a **NO-GO**. **jira:** do not treat silence as acceptance of TBD. **local:** auto-selected Local PO decisions **are** acceptance.
 
 ## Structure gate semantics
 
@@ -146,8 +146,8 @@ Only for a real capability gap (e.g. Figma reader). Follow `find-skills` with `c
 - PASS | FAIL | n/a — <element: allowed delta vs plan ACs>
 
 ### TBD / blockers
-- TBD: none | <checklist> (impl)
-- Implicit: none | <checkbox list> (impl) — not a coding hard-stop
+- TBD: none | <checklist> (impl) — **jira:** coding hard-stop if non-empty. **local:** must be `none` plus Local PO decisions.
+- Implicit: none | <checkbox list> (impl) — not a coding hard-stop; **local:** `[x]` auto-selected in scope
 - Reachability: all core steps reachable | <missing inputs> (evidence)
 
 ### Consistency
@@ -161,7 +161,8 @@ Only for a real capability gap (e.g. Figma reader). Follow `find-skills` with `c
 
 ### Follow-up
 - Do not implement or execute from this skill.
-- Non-empty TBD → analyst (or explicit implement-with-assumptions) before `run-plan`.
+- **jira:** non-empty TBD → analyst (or explicit implement-with-assumptions) before `run-plan`.
+- **local:** auto-select leftover TBD; plan is execution-ready. Do not ask an analyst.
 - Evidence not execution-ready → keep the plan file; do not run Execution.
 ```
 

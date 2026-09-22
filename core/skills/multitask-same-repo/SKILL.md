@@ -48,13 +48,15 @@ Preferred layout (siblings under the same parent folder):
 <parent>/REPO-NAME-multitask/<TASK-KEY>   # branch <TASK-KEY>
 ```
 
-From the **parent** repo (the real clone), use `set-up-worktree` so the sibling `REPO-NAME-multitask/` root is derived automatically:
+From the **parent** repo (the real clone), **on the development branch you build from** (e.g. `PROJ-295` — never `review`), use `set-up-worktree` so the sibling `REPO-NAME-multitask/` root is derived automatically:
 
 ```bash
 python3 ~/.agents/skills/set-up-worktree/scripts/set_up_worktree.py <KEY> [<KEY>...]
 ```
 
-Or, with an explicit multitask root: `python3 ./scripts/add_worktrees.py --repo <parent> --root <multitask-root> <KEY> [<KEY>...]`
+Base = tip of that checkout's **current branch**. Do **not** pass `--base origin/review`. `review` is a testing/deploy line and is hard-rejected by the scripts.
+
+Or, with an explicit multitask root: `python3 ./scripts/add_worktrees.py --repo <parent> --root <multitask-root> <KEY> [<KEY>...]` (same default / same `review` ban).
 
 Rules:
 
@@ -166,5 +168,5 @@ PRDs/plans stay under `~/.agents/prds` and `~/.agents/plans` (Claude plans dir m
 
 ## Scripts
 
-- `../set-up-worktree` — sibling `REPO-NAME-multitask/<SLUG>` from current HEAD
+- `../set-up-worktree` — sibling `REPO-NAME-multitask/<SLUG>` from the start checkout's current branch tip (never `review`)
 - [scripts/add_worktrees.py](scripts/add_worktrees.py) — batch with explicit `--repo` / `--root`

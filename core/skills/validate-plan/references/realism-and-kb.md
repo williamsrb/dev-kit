@@ -18,16 +18,18 @@ A claim is **realistic** only when a local source backs it. Otherwise it is a **
    - sectioned PRD / comment **id**
    - user/chat exclusion or decision
    - a specific KB page (next section)
-3. No source → hallucination. Rewrite: measure and correct, mark **to be created**, or move to TBD. Do not invent a plausible path or API to fill the gap.
-4. Product guesses (copy, locale, env, which component, Figma node, ownership) presented as AC/FR/step → hallucination. Fold into TBD; do not keep them as requirements.
+3. No source → hallucination. Rewrite: measure and correct, mark **to be created**, or move to TBD (**jira**) / Local PO default (**local**). Do not invent a plausible path or API to fill the gap.
+4. Product guesses (copy, locale, env, which component, Figma node, ownership) presented as AC/FR/step **without** a source:
+   - **jira:** hallucination. Fold into TBD; do not keep them as requirements.
+   - **local:** auto-select the recommended path, mark `_(local PO: …)_`, record under **Local PO decisions** with a one-line reason from PRD / code / sister / How-to. That record **is** the source. Do not fold a recorded Local PO choice back into blocking TBD.
 5. Re-derive counts from the registration site, not a README — `~/.agents/kb/validation/How-to-validate-a-plan-document-for-internal-consistency.md`.
 
 ### Pass / fail
 
 | Result | When |
 |--------|------|
-| **PASS** | Every mechanical claim is sourced, explicitly “to be created”, or TBD |
-| **FAIL** | Invented files, APIs, URLs, counts, or product decisions remain written as fact |
+| **PASS** | Every mechanical claim is sourced, explicitly “to be created”, TBD (**jira**), or a recorded Local PO decision (**local**) |
+| **FAIL** | Invented files, APIs, URLs, or counts remain written as fact; **jira:** product decisions written as fact with no analyst answer; **local:** product choices with no Local PO record |
 
 **FAIL** after the rewrite attempt → cannot **GO**. Remaining invented requirements → **NO-GO**. Remaining invented steps that were stripped → **GO-WITH-FIXES**.
 
@@ -46,7 +48,7 @@ Catalog: `~/.agents/kb/offline-reference/README.md`. Always enter a catalog via 
 | XP / React4XP / lib / schema / CMS product behavior | `~/.agents/kb/offline-reference/{xp7,xp8,react4xp-5.x,react4xp-6.x,react4xp-stable,content-studio-stable,content-studio-5.x}/` | Official semantics. **No** write-back. |
 | Site instrumentation (clicks, selectors, Guillotine, Data Toolbox, auth tips, URL patterns) | `~/.agents/kb/testing/_shared` and `~/.agents/kb/testing/<project>` | How we automate **this** site. Write-back only on evidence **execute**, not this skill. |
 | User exclusions | `~/.agents/kb/validation/How-to-respect-user-scope-exclusions.md` | Already a gate. |
-| Analyst TBD phrasing | `~/.agents/kb/_shared/How-to-write-analyst-questions-with-options.md` | Options + recommendation first. |
+| Analyst TBD phrasing | `~/.agents/kb/_shared/How-to-write-analyst-questions-with-options.md` | **jira only.** Options + recommendation first. Skip when `mode` is `local`. |
 
 Do **not** mix roles: testing How-tos are not API docs; offline-reference is not a screenshot script.
 

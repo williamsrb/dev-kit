@@ -11,7 +11,7 @@ metadata:
 
 ## Host gate
 
-If the **Task** tool is available (Cursor): stop. Do not spawn `claude-opus-5`, `claude-opus-5-thinking-high`, or any Claude slug. Read and follow `${HOME}/.cursor/skills/orchestrate/SKILL.md` (same bytes as `~/.agents/skills-vendor/cursor/orchestrate/SKILL.md`). Quality spawn is `cursor-grok-4.6-high`; `deterministic` is `composer-2.5-fast`.
+If the **Task** tool is available (Cursor): stop. Do not spawn `claude-opus-5`, `claude-opus-5-thinking-high`, or any Claude slug. Read and follow `${HOME}/.cursor/skills/orchestrate/SKILL.md` (same bytes as `~/.agents/skills-vendor/cursor/orchestrate/SKILL.md`). Cursor ladder: `composer-2.5-fast` (`explore`/`follow`), `cursor-grok-4.7-medium` (`implement`/`task-owner`), `cursor-grok-4.7-high` (`quality-gate`), `auto` (`deterministic`).
 
 If **spawn_agent** is available (Codex): follow `~/.codex/skills/orchestrate/SKILL.md` instead.
 

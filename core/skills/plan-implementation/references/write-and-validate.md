@@ -4,8 +4,8 @@
 
 Use the template below. Fill in all fields from the **offline copy** (and classification / prototype checks / TBD harvest above).
 The output file must always be written in English, regardless of the language used in the PRD or by the user. `<ISSUE-KEY>` in the template is the `<TASK-ID>` (Jira key or kebab slug).
-**TBD is required** in every plan (either checklist items or `- TBD: none`). Do not omit the heading. Do not write guessed product decisions as ACs/FRs.
-**Implicit requirements are required** in every plan (tick-list checkboxes or `- Implicit: none`). Classify with `~/.agents/kb/implementation/How-to-handle-implicit-requirements.md`. Do not write tick-list extras as ACs/FRs.
+**TBD is required** in every plan (jira: checklist items or `- TBD: none`; local: `- TBD: none` plus **Local PO decisions** after auto-select). Do not omit the heading. **jira:** do not write guessed product decisions as ACs/FRs. **local:** auto-selected choices **are** ACs/FRs, marked `_(local PO: …)_`.
+**Implicit requirements are required** in every plan (tick-list checkboxes or `- Implicit: none`). Classify with `~/.agents/kb/implementation/How-to-handle-implicit-requirements.md`. Do not write tick-list extras as ACs/FRs. **local:** auto-tick `[x]` extras that belong in this delivery.
 
 ```markdown
 # <ISSUE-KEY>: <Task Title>
@@ -66,13 +66,23 @@ When the user (or an elevated comment) says an element is out of scope except fo
 
 ## TBD (ask analyst before implement)
 
-> Unanswered gaps for the analyst **before implementation**. Copy this checklist to Slack/Jira. Do not encode these as requirements. If this list is not `TBD: none`, do not start Implementation Steps until the analyst answers or the user says to **implement with these assumptions**. Decided exclusions belong in Constraints / Non-Goals, not here. Phrase each item with `write-analyst-message` — one decision, product language, why it blocks, **2-3 options with the recommendation first**. See `~/.agents/kb/_shared/How-to-write-analyst-questions-with-options.md`.
+> **jira:** Unanswered gaps for the analyst **before implementation**. Copy this checklist to Slack/Jira. Do not encode these as requirements. If this list is not `TBD: none`, do not start Implementation Steps until the analyst answers or the user says to **implement with these assumptions**. Phrase each item with `write-analyst-message` — one decision, product language, why it blocks, **2-3 options with the recommendation first**. See `~/.agents/kb/_shared/How-to-write-analyst-questions-with-options.md`.
+>
+> **local:** Product-owner record. Harvest, reason, auto-select the recommended option, encode into AC/FR/Constraint (`_(local PO: …)_`). After resolve this list is `- TBD: none` plus **Local PO decisions**. Do not ask. Do not hard-stop. Do not use `write-analyst-message`.
+>
+> Decided exclusions belong in Constraints / Non-Goals, not here.
 
-<If no gaps:>
+<If no gaps, or local and all resolved:>
 
 - TBD: none
 
-<If gaps exist, one checklist item per gap — never leave this section missing:>
+<local, after auto-select — audit trail only; not a coding stop:>
+
+### Local PO decisions
+
+- **<decision>:** (a) <chosen>. <one-line reason from PRD / code / sister / How-to>
+
+<jira, if gaps exist — one checklist item per gap; never leave this section missing:>
 
 - [ ] **<question phrased as a decision the analyst can answer without opening the repo>**
   - Blocks: <why this blocks the page/feature they own — product language>
@@ -80,13 +90,16 @@ When the user (or an elevated comment) says an element is out of scope except fo
   - (b) <option>. <consequence>
   - (c) <option>. <consequence — omit if only two real choices exist>
 
-<Name the default when silence decides it. When a gap needs no analyst decision (we can verify it ourselves), say so in the Blocks line instead of inflating their queue.>
+<jira: name the default when silence decides it. When a gap needs no analyst decision (we can verify it ourselves), say so in the Blocks line instead of inflating their queue.>
 
 ---
 
 ## Implicit requirements (techlead tick)
 
-> Extras the ticket did not state. Techlead ticks which ones this delivery should include. Unticked items stay out of scope. Classify with `~/.agents/kb/implementation/How-to-handle-implicit-requirements.md`. Not TBD. Not ACs. DOs (stack wiring, recorded How-tos) go in Implementation Steps, not here.
+> Extras the ticket did not state. Classify with `~/.agents/kb/implementation/How-to-handle-implicit-requirements.md`. Not TBD. Not ACs. DOs (stack wiring, recorded How-tos) go in Implementation Steps, not here.
+>
+> **jira:** Techlead ticks which ones this delivery should include. Unticked items stay out of scope.
+> **local:** Planner is the techlead. `[x]` = in scope (auto-selected). `[ ]` = follow-up, out of scope. Do not wait. Do not post.
 
 <If none:>
 
@@ -147,7 +160,7 @@ Trigger: user asks to **validate the plan**, **fix the plan**, or Phase-1 multit
 
 Do **not** hand-roll a review here. Read and follow `../validate-plan/SKILL.md` as a nested prerequisite (`called_from: plan-implementation`). That skill validates **and** rewrites the resolved plan (`agentctl plan resolve <TASK-ID>` — folder companions or an evidence plan when that is the target).
 
-After the nested run: surface TBD and implicit in chat (same TBD hard-stop as Step 6). Non-empty TBD is not a plan NO-GO; it **is** a hard-stop before coding. Non-empty implicit is not a coding hard-stop; post or paste it if the nested run added items that were not posted.
+After the nested run: surface TBD and implicit in chat (same Step 6 rules). **jira:** non-empty TBD is not a plan NO-GO; it **is** a hard-stop before coding. **local:** leftover gaps must be auto-selected (recommended path) before this skill finishes; do not hard-stop. Non-empty implicit is not a coding hard-stop; post (jira) or report auto-ticks (local) if the nested run added items that were not posted.
 
 ---
 
@@ -156,7 +169,7 @@ After the nested run: surface TBD and implicit in chat (same TBD hard-stop as St
 1. Write the final content to `<plans-dir>/<TASK-ID>/` (run `agentctl plan init --kind implementation --issue <TASK-ID> --output <plans-dir>/<TASK-ID>` if the folder does not exist). Split Overview/Non-Goals/Constraints into `plan.md`, User Stories/FR into `requirements.md`, TBD into `tbd.md`, Implicit requirements into `implicit.md`, Implementation Plan into `implementation.md`, Validation into `validation.md`. A legacy `<TASK-ID>.md` may still be updated in place when that is the resolved entry. Keep only the `_Source` line that matches `mode`.
 2. **Implicit-requirements comment (mandatory after the files exist):**
    - If the list is empty: say **Implicit: none**. Do not post.
-   - If `mode` is `local` and the list is non-empty: paste the checkbox list in chat. Do not post to Jira.
+   - If `mode` is `local` and the list is non-empty: report the auto-ticks in chat (`[x]` in scope, `[ ]` follow-up). Do not post to Jira. Do not wait for ticks.
    - If `mode` is `jira` and the list is non-empty: run `python3 ~/.agents/skills/plan-implementation/scripts/post_implicit_requirements.py --issue <TASK-ID> --file <implicit.md-or-legacy-plan>`. That posts ADF checkboxes for the techlead (creates, or edits the stored `_Comment-id:` after backup). The body states they are extras, not bugs or blockers. Do not use MCP. Do not mix TBD into this comment. Report the comment id in chat. Failure to post does not fail the plan — paste the list in chat.
 3. Report to the user:
    - The absolute path of the generated file (and which agent plans dir was used)
@@ -166,8 +179,9 @@ After the nested run: surface TBD and implicit in chat (same TBD hard-stop as St
    - Whether any comments influenced the acceptance criteria
 4. **TBD in the chat summary (mandatory — not a footnote):**
    - If TBD is empty: say **TBD: none**.
-   - If TBD is non-empty: paste the TBD checklist (analyst-ready). Tell the user to take it to the analyst **before implementation**.
-5. **Hard-stop before coding:** if TBD is non-empty, **do not start implementation**. Wait for analyst answers, or an explicit **implement with these assumptions**. Silence is not acceptance. Unticked implicit extras are out of scope; they are not a coding hard-stop. This skill’s success is the written plan file plus the TBD summary plus the implicit post-or-paste — not code.
+   - If `mode` is `jira` and TBD is non-empty: paste the TBD checklist (analyst-ready). Tell the user to take it to the analyst **before implementation**.
+   - If `mode` is `local`: paste **Local PO decisions** (what was auto-selected and why). Say **TBD: none**. Do not tell the user to take it to an analyst.
+5. **Hard-stop before coding (`jira` only):** if TBD is non-empty, **do not start implementation**. Wait for analyst answers, or an explicit **implement with these assumptions**. Silence is not acceptance. **local:** the plan is execution-ready after auto-select; do not hard-stop for TBD or implicit. Unticked implicit extras are out of scope; they are not a coding hard-stop. This skill’s success is the written plan file plus the TBD summary plus the implicit post-or-report — not code.
 
 ---
 
@@ -176,12 +190,12 @@ After the nested run: surface TBD and implicit in chat (same TBD hard-stop as St
 - **Offline first**: Prefer `~/.agents/prds/<TASK-ID>.md`. Missing + `mode` jira → nested `download-jira-task`. Missing + `mode` local → nested `handoff` (PRD). Mark nested runs with `called_from: plan-implementation`.
 - **Enonic offline docs**: For XP/React4XP work, route via Step 4c (`~/.agents/kb/offline-reference/…/llm-index.md` for XP7, XP8, React4XP v5, React4XP v6) before inventing API/framework details.
 - **Language**: The generated Markdown file must always be in English, even if the PRD or user messages are in another language. Translate descriptions, comments, and criteria as needed.
-- **Comments drive criteria**: Comments are the most recent source of truth for requirements when they clearly extend or supersede. Do not surface raw comments in the output — absorb their intent into the criteria. Comment conflicts with no clear winner go to **TBD**, not a silent pick.
-- **Inferred extras**: Do not write `_(inferred)_` ACs for behaviors the ticket did not state. Classify with `How-to-handle-implicit-requirements.md`: DO → Implementation Steps; Tick → implicit checkbox; DON'T → Non-Goals; product gap → TBD.
-- **TBD**: Every plan has `## TBD (ask analyst before implement)` after Constraints / Non-Goals and before Implicit requirements. Checklist items (question + Blocks + 2-3 options, recommendation first) or `- TBD: none`. Surface the list in chat. Non-empty TBD → hard-stop before coding unless the user explicitly accepts the recommended options. Draft TBD copy with `write-analyst-message` so the analyst can answer by picking a letter, without implementation context.
-- **Implicit requirements**: Every plan has `## Implicit requirements (techlead tick)` after TBD and before Implementation Plan. Checkboxes or `- Implicit: none`. Post (jira) or paste (local) immediately after writing the plan. Unticked extras stay out of scope. Do not mix with TBD. Do not use `write-analyst-message` for this comment.
+- **Comments drive criteria**: Comments are the most recent source of truth for requirements when they clearly extend or supersede. Do not surface raw comments in the output — absorb their intent into the criteria. Comment conflicts with no clear winner: **jira** → **TBD**; **local** → auto-select the recommended/later winner and record it as a Local PO decision.
+- **Inferred extras**: Do not write `_(inferred)_` ACs for behaviors the ticket did not state. Classify with `How-to-handle-implicit-requirements.md`: DO → Implementation Steps; Tick → implicit checkbox; DON'T → Non-Goals; product gap → TBD (jira: ask; local: auto-select).
+- **TBD**: Every plan has `## TBD (ask analyst before implement)` after Constraints / Non-Goals and before Implicit requirements. **jira:** checklist items (question + Blocks + 2-3 options, recommendation first) or `- TBD: none`. Surface the list in chat. Non-empty TBD → hard-stop before coding unless the user explicitly accepts the recommended options. Draft TBD copy with `write-analyst-message`. **local:** auto-select the recommended path, encode as AC/FR/Constraint, `- TBD: none` plus **Local PO decisions**. Do not ask. Do not hard-stop. Do not use `write-analyst-message`.
+- **Implicit requirements**: Every plan has `## Implicit requirements (techlead tick)` after TBD and before Implementation Plan. Checkboxes or `- Implicit: none`. **jira:** post immediately after writing the plan; unticked extras stay out of scope. **local:** auto-tick extras that belong; report `[x]`/`[ ]` in chat; do not wait. Do not mix with TBD. Do not use `write-analyst-message` for this comment.
 - **User stories**: Break the task into small, specific stories. Each should represent one user-facing behavior. Avoid mega-stories that bundle multiple unrelated behaviors.
-- **Functional requirements**: Extract explicit system behaviors from the description and criteria. Number them (FR-1, FR-2, ...) so implementation steps can reference them precisely. Do not promote TBD assumptions into FRs.
+- **Functional requirements**: Extract explicit system behaviors from the description and criteria. Number them (FR-1, FR-2, ...) so implementation steps can reference them precisely. **jira:** do not promote TBD assumptions into FRs. **local:** auto-selected Local PO choices **are** FRs, marked `_(local PO: …)_`.
 - **Non-goals**: Always include at least one non-goal to clarify scope boundaries. Infer from context if not stated. When the user limits an element to a single delta (e.g. order only), Non-Goals + **Constraints** must forbid position, styling, and markup beyond that delta — see `~/.agents/kb/validation/How-to-respect-user-scope-exclusions.md`.
 - **User exclusions win**: Explicit user/chat exclusions outrank Figma composition and inferred ACs. Mark `_(user said)_` vs `_(inferred from Figma)_`. Never encode an inferred layout that violates an exclusion. Exclusions are **not** TBD.
 - **Implementation plan**: Be concrete and technical. Avoid vague statements like "implement the feature". Analyze the task context to suggest specific files, functions, or application layers likely to be affected.

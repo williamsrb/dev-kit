@@ -104,7 +104,9 @@ Nothing on Arch may require the AUR.
 ## Gates
 
 Every gate runs as an ordinary local command. CI makes them non-optional, but
-nothing here is CI-only.
+nothing here is CI-only. A gate is never left red on purpose: fix the failure,
+or delete the test and say why in the commit. A known-red gate teaches everyone
+to ignore red.
 
 ```bash
 ./devkit export --check                     # core/ is not behind its source

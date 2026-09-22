@@ -14,10 +14,14 @@ configuration must **not** have it, because a config file owned by root in a
 user's home is a support ticket. Keeping them in one script means one privilege
 level for both, and the wrong one for at least one of them.
 
-Every elevation prints the plan first, then asks `sudo` for a password.
-`bootstrap.sh --apply` lists the package commands; `install.py --apply` writes
-user-owned config, then lists the `/usr/lib/devkit` rsyncs. Dry-run labels the
-same commands `would run (as root):` and does not prompt.
+Every elevation prints the plan first, then asks for administrator privileges.
+A terminal on stdin or stdout uses `sudo`. When neither is a terminal, the
+command runs under `pkexec`, or `sudo -A`
+when `pkexec` is absent. Package elevation is the start of the workflow
+(`bootstrap.sh --apply`). `install.py --apply` writes user-owned config, then
+the `/usr/lib/devkit` rsyncs are the end (`devkit profile apps-sync`). Each
+elevated command can be run on its own before or after the rest. Dry-run
+labels the same commands `would run (as root):` and does not prompt.
 
 They also assume nothing about each other. Either can run on a machine where the
 other has not.

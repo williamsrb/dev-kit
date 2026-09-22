@@ -14,9 +14,13 @@ claude-dummy
 ```
 
 Neither step assumes the other had network access. Privileged work prints its
-plan, then asks `sudo` — never the other way around. Step 1 uses that for
-package transactions. Step 2 writes configuration as your user (it refuses to
-write home as root) and only then asks `sudo` for the desktop identity forks.
+plan, then asks for administrator privileges — never the other way around. A
+terminal uses `sudo`. A non-interactive shell (no terminal on stdin or stdout)
+uses `pkexec`, or `sudo -A` when `pkexec` is absent. Step 1 is that elevation
+at the start, for package transactions. Step 2 writes configuration as your
+user (it refuses to write home as root) and only then elevates, at the end,
+for the desktop identity forks. Each elevated command can be run on its own
+before or after the rest.
 
 ## What a profile is
 

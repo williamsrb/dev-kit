@@ -5,8 +5,15 @@ The rule is: escalate for packages and identity forks, never for configuration.
 refuse to write config as root, because a config file written by root into a
 user's home is a support ticket, not an install.
 
-Every elevation prints the plan first, then asks sudo for a password. Never
-the other way around.
+Every elevation prints the plan first, then asks for administrator privileges.
+Never the other way around.
+
+Package elevation is the start of `bootstrap.sh`. Desktop-fork elevation is the
+end of `install.py` / `devkit profile apps-sync`. Each of those is a separate
+command, so it can be run on its own before or after the rest of the workflow.
+
+A terminal on stdin or stdout uses `sudo`. When neither is a terminal, that
+path uses `pkexec`, or `sudo -A` when `pkexec` is not on PATH.
 """
 
 from __future__ import annotations
@@ -60,8 +67,13 @@ def refuse_root(target_user: str | None = None) -> pwd.struct_passwd:
     return resolve_target_user(target_user)
 
 
+def shell_is_interactive() -> bool:
+    """True when stdin or stdout is a terminal."""
+    return sys.stdin.isatty() or sys.stdout.isatty()
+
+
 def explain_elevation(reason: str, steps: list[str]) -> None:
-    """Print why root is needed and what will run, before sudo prompts."""
+    """Print why root is needed and what will run, before the prompt."""
     print(f"These steps need administrator privileges: {reason}")
     for step in steps:
         print(f"  {step}")
@@ -70,25 +82,41 @@ def explain_elevation(reason: str, steps: list[str]) -> None:
 
 
 def run_privileged(argv: list[str], reason: str, steps: list[str]) -> int:
-    """Print the privileged plan, then run it under sudo.
+    """Print the privileged plan, then run it as root.
 
-    Returns sudo's exit code. Does not re-exec this process, so a caller can
-    still write user-owned config afterwards.
+    Returns the elevation command's exit code. Does not re-exec this process,
+    so a caller can still write user-owned config afterwards.
     """
     if is_root():
         raise DevkitError(
             "already running as root",
             "run the privileged command directly rather than escalating")
     explain_elevation(reason, steps)
+    interactive = shell_is_interactive()
     sudo = shutil.which("sudo")
-    if not sudo:
+    pkexec = shutil.which("pkexec")
+    if interactive:
+        if not sudo:
+            raise DevkitError(
+                "sudo is not on PATH",
+                "install sudo, or re-run the printed commands as root")
+        command = [sudo, "--", *argv]
+    elif pkexec:
+        command = [pkexec, *argv]
+    elif sudo:
+        command = [sudo, "-A", "--", *argv]
+    else:
         raise DevkitError(
-            "sudo is not on PATH",
-            "install sudo, or re-run the printed commands as root")
-    printed = " ".join(argv)
-    print(f"  + sudo -- {printed}")
+            "pkexec and sudo are not on PATH",
+            "install pkexec or sudo, or re-run the printed commands as root")
+    if not interactive:
+        print("Non-interactive shell: stdin and stdout are not terminals.")
+        print("Run the elevated command below on its own, before or after the "
+              "rest of this workflow, if the dialog does not appear here.")
+    printed = " ".join(command)
+    print(f"  + {printed}")
     sys.stdout.flush()
-    return subprocess.run([sudo, "--", *argv], check=False).returncode
+    return subprocess.run(command, check=False).returncode
 
 
 def owned_by(path: Path, uid: int) -> bool:

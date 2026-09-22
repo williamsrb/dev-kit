@@ -524,15 +524,34 @@ class PrivilegeTests(unittest.TestCase):
         self.assertLess(text.find("sudo apt-get update"),
                         text.find(privilege.ELEVATION_BANNER))
 
-    def test_run_privileged_invokes_sudo_after_printing(self):
+    def _run_privileged_with(self, path_dir: Path, *, interactive: bool):
         # CI runs this suite as root. run_privileged refuses uid 0; this test
-        # is about print-then-sudo order, so pretend we still need to escalate.
+        # is about print-then-elevate order, so pretend we still need to escalate.
         original_is_root = privilege.is_root
+        original_interactive = privilege.shell_is_interactive
         privilege.is_root = lambda: False
+        privilege.shell_is_interactive = lambda: interactive
+        saved_path = os.environ.get("PATH", "")
+        os.environ["PATH"] = str(path_dir)
+        buf = io.StringIO()
+        try:
+            with redirect_stdout(buf):
+                rc = privilege.run_privileged(
+                    [sys.executable, str(path_dir / "inner.py")],
+                    reason="they write into /usr/lib/devkit.",
+                    steps=["rsync stock -> fork"],
+                )
+        finally:
+            privilege.is_root = original_is_root
+            privilege.shell_is_interactive = original_interactive
+            os.environ["PATH"] = saved_path
+        return rc, buf.getvalue()
+
+    def test_run_privileged_invokes_sudo_after_printing(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            sudo = root / "sudo"
             marker = root / "order.txt"
+            sudo = root / "sudo"
             sudo.write_text(
                 "#!/bin/sh\n"
                 f"echo sudo-ran >> '{marker}'\n"
@@ -544,27 +563,124 @@ class PrivilegeTests(unittest.TestCase):
             inner.write_text(
                 f"open({str(marker)!r}, 'a').write('inner-ran\\n')\n",
                 encoding="utf-8")
-            saved_path = os.environ.get("PATH", "")
-            os.environ["PATH"] = f"{root}{os.pathsep}{saved_path}"
-            buf = io.StringIO()
-            try:
-                with redirect_stdout(buf):
-                    rc = privilege.run_privileged(
-                        [sys.executable, str(inner)],
-                        reason="they write into /usr/lib/devkit.",
-                        steps=["rsync stock -> fork"],
-                    )
-            finally:
-                privilege.is_root = original_is_root
-                os.environ["PATH"] = saved_path
+            rc, text = self._run_privileged_with(root, interactive=True)
             self.assertEqual(rc, 0)
-            text = buf.getvalue()
             self.assertIn("rsync stock -> fork", text)
             self.assertIn(privilege.ELEVATION_BANNER, text)
             self.assertIn("sudo --", text)
             self.assertLess(text.find(privilege.ELEVATION_BANNER),
                             text.find("sudo --"))
             self.assertEqual(marker.read_text().splitlines(), ["sudo-ran", "inner-ran"])
+
+    def test_run_privileged_uses_pkexec_when_not_a_tty(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            marker = root / "order.txt"
+            pkexec = root / "pkexec"
+            pkexec.write_text(
+                "#!/bin/sh\n"
+                f"echo pkexec-ran >> '{marker}'\n"
+                "exec \"$@\"\n",
+                encoding="utf-8")
+            pkexec.chmod(0o755)
+            inner = root / "inner.py"
+            inner.write_text(
+                f"open({str(marker)!r}, 'a').write('inner-ran\\n')\n",
+                encoding="utf-8")
+            rc, text = self._run_privileged_with(root, interactive=False)
+            self.assertEqual(rc, 0)
+            self.assertIn("pkexec", text)
+            self.assertNotIn("sudo --", text)
+            self.assertIn("Non-interactive shell", text)
+            self.assertLess(text.find(privilege.ELEVATION_BANNER),
+                            text.find("pkexec"))
+            self.assertEqual(marker.read_text().splitlines(), ["pkexec-ran", "inner-ran"])
+
+    def test_run_privileged_uses_sudo_askpass_without_pkexec(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            marker = root / "order.txt"
+            sudo = root / "sudo"
+            sudo.write_text(
+                "#!/bin/sh\n"
+                f"echo sudo-A-ran >> '{marker}'\n"
+                "while [ \"$1\" = -A ] || [ \"$1\" = -- ]; do shift; done\n"
+                "exec \"$@\"\n",
+                encoding="utf-8")
+            sudo.chmod(0o755)
+            inner = root / "inner.py"
+            inner.write_text(
+                f"open({str(marker)!r}, 'a').write('inner-ran\\n')\n",
+                encoding="utf-8")
+            rc, text = self._run_privileged_with(root, interactive=False)
+            self.assertEqual(rc, 0)
+            self.assertIn("sudo -A --", text)
+            self.assertEqual(marker.read_text().splitlines(), ["sudo-A-ran", "inner-ran"])
+
+    def test_bootstrap_elevate_uses_pkexec_when_not_a_tty(self):
+        src = (REPO / "bootstrap.sh").read_text(encoding="utf-8")
+        start = src.index("interactive_shell()")
+        end = src.index("\n# ---------------------------------------------------------------- family")
+        funcs = src[start:end]
+        bash = shutil.which("bash")
+        self.assertIsNotNone(bash)
+
+        def run(path_dir: Path) -> subprocess.CompletedProcess[str]:
+            script = (
+                "say() { printf '%s\\n' \"$*\"; }\n"
+                f"{funcs}\n"
+                "APPLY=1\n"
+                "ELEVATION_ANNOUNCED=1\n"
+                "ELEVATION_ASKED=0\n"
+                "elevate /bin/true\n"
+            )
+            env = os.environ.copy()
+            env["PATH"] = str(path_dir)
+            return subprocess.run(
+                [bash, "-c", script],
+                stdin=subprocess.DEVNULL, capture_output=True, text=True,
+                check=False, env=env)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            pkexec = root / "pkexec"
+            pkexec.write_text("#!/bin/sh\necho pkexec-ran \"$@\"\n", encoding="utf-8")
+            pkexec.chmod(0o755)
+            result = run(root)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("Non-interactive shell", result.stdout)
+            self.assertIn("+ pkexec /bin/true", result.stdout)
+            self.assertIn("pkexec-ran /bin/true", result.stdout)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            sudo = root / "sudo"
+            sudo.write_text("#!/bin/sh\necho sudo-ran \"$@\"\n", encoding="utf-8")
+            sudo.chmod(0o755)
+            result = run(root)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("+ sudo -A -- /bin/true", result.stdout)
+            self.assertIn("sudo-ran -A -- /bin/true", result.stdout)
+
+    def test_noninteractive_shell_has_no_tty_on_stdin_or_stdout(self):
+        # Same check elevate() uses: a line prints only when that fd is a tty.
+        script = (
+            "if [ -t 0 ] ; then echo stdin; fi\n"
+            "if [ -t 1 ] ; then echo stdout; fi\n"
+        )
+        cmd = subprocess.run(
+            ["bash", "-c", script],
+            stdin=subprocess.DEVNULL, capture_output=True, text=True, check=False)
+        self.assertEqual(cmd.stdout, "")
+        env = os.environ.copy()
+        env["PYTHONPATH"] = str(REPO)
+        probe = subprocess.run(
+            [sys.executable, "-c",
+             ("from devkit_cli.privilege import shell_is_interactive\n"
+              "print('yes' if shell_is_interactive() else 'no')")],
+            stdin=subprocess.DEVNULL, capture_output=True, text=True,
+            check=False, env=env)
+        self.assertEqual(probe.stdout.strip(), "no", probe.stderr)
 
     def test_bootstrap_dry_run_labels_root_commands(self):
         result = subprocess.run(

@@ -14,4 +14,9 @@ AGENTS_HOME="${PROFILE_AGENTS_HOME}"
 export AGENTS_HOME
 PATH="${PROFILE_BIN_DIR}:${PATH}"
 export PATH
+# graft writes .gitignore and .ignore into every repo it builds in; the kit
+# ships those patterns in the global git ignore instead.
+GRAFT_NO_GITIGNORE=1
+GRAFT_NO_IGNORE=1
+export GRAFT_NO_GITIGNORE GRAFT_NO_IGNORE
 exec "${PROFILE_CLAUDE_CLI}" "$@"

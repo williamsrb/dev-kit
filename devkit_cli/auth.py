@@ -356,11 +356,15 @@ def bind_profile_env(home: Path, profile: str) -> None:
 
     PATH prepend is required so `agentctl` resolves to the profile bin/.
     It is not sufficient: harness tools read $AGENTS_HOME, not $HOME/.agents.
+    The GRAFT_NO_* pair stops graft writing ignore files into every repo; the
+    kit ships those patterns in the global git ignore instead.
     """
     harness = home / ".agents-profiles" / profile
     os.environ["DEVKIT_PROFILE"] = profile
     os.environ["DEVKIT_PROFILE_HOME"] = str(harness)
     os.environ["AGENTS_HOME"] = str(harness / "agents")
+    os.environ["GRAFT_NO_GITIGNORE"] = "1"
+    os.environ["GRAFT_NO_IGNORE"] = "1"
     bin_dir = harness / "bin"
     if not bin_dir.is_dir():
         return

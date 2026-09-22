@@ -28,3 +28,4 @@ Scripts scattered because each vendor grew its own `scripts/` and PATH copies we
 - Byte-identical real files are replaced by a symlink.
 - Cron already calls `~/.agents/bin` with an absolute path. Do not add those names to `PATH_SHIMS` unless they are also typed on PATH.
 - `verify-links.sh` flags a real file under vendor `scripts/` as TANGIBLE.
+- `--apply` prunes every `~/.local/bin` symlink that points into `~/.agents/bin` but is not in `PATH_SHIMS`. Dropping a name from `PATH_SHIMS` deletes its launcher on the next run. The command still resolves only because `~/.agents/bin` is itself on `PATH`; check that before removing a shim.

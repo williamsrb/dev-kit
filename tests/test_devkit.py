@@ -26,6 +26,7 @@ from devkit_cli import (
     appfork,
     auth,
     export,
+    globalignore,
     instances,
     manifest,
     paths,
@@ -1068,6 +1069,11 @@ class ProfileCliPathTests(unittest.TestCase):
         codex = (REPO / "templates" / "shell" / "codex.sh").read_text()
         self.assertIn('exec "${PROFILE_CODEX_CLI}" "$@"', codex)
         self.assertIn('AGENTS_HOME="${PROFILE_AGENTS_HOME}"', codex)
+        for name in ("claude.sh", "codex.sh", "cursor.sh", "cursor-agent.sh",
+                     "profile-tool.sh"):
+            text = (REPO / "templates" / "shell" / name).read_text()
+            with self.subTest(template=name):
+                self.assertIn("export GRAFT_NO_GITIGNORE GRAFT_NO_IGNORE", text)
         agent = (REPO / "templates" / "shell" / "cursor-agent.sh").read_text()
         self.assertIn('"${PROFILE_CURSOR_AGENT}" "$@"', agent)
         self.assertIn('AGENTS_HOME="${PROFILE_AGENTS_HOME}"', agent)
@@ -1132,7 +1138,8 @@ class ProfileCliPathTests(unittest.TestCase):
             bin_dir = home / ".agents-profiles" / "dummy" / "bin"
             bin_dir.mkdir(parents=True)
             saved = {key: os.environ.get(key) for key in
-                     ("PATH", "DEVKIT_PROFILE", "DEVKIT_PROFILE_HOME", "AGENTS_HOME")}
+                     ("PATH", "DEVKIT_PROFILE", "DEVKIT_PROFILE_HOME", "AGENTS_HOME",
+                      "GRAFT_NO_GITIGNORE", "GRAFT_NO_IGNORE")}
             os.environ["PATH"] = "/usr/bin"
             for key in ("DEVKIT_PROFILE", "DEVKIT_PROFILE_HOME", "AGENTS_HOME"):
                 os.environ.pop(key, None)
@@ -1145,6 +1152,8 @@ class ProfileCliPathTests(unittest.TestCase):
                                  str(home / ".agents-profiles" / "dummy"))
                 self.assertEqual(os.environ["AGENTS_HOME"],
                                  str(home / ".agents-profiles" / "dummy" / "agents"))
+                self.assertEqual(os.environ["GRAFT_NO_GITIGNORE"], "1")
+                self.assertEqual(os.environ["GRAFT_NO_IGNORE"], "1")
             finally:
                 for key, value in saved.items():
                     if value is None:
@@ -1394,6 +1403,9 @@ def _run_uninstall(home: Path, *args: str, script: Path | None = None) -> subpro
         write_uninstaller(script)
     env = os.environ.copy()
     env["HOME"] = str(home)
+    # git reads --global config from $XDG_CONFIG_HOME too; an inherited one would
+    # point the ignore-block strip at the real machine's file.
+    env["XDG_CONFIG_HOME"] = str(home / ".config")
     return subprocess.run(
         ["bash", str(script), *args],
         capture_output=True, text=True, check=False, env=env)
@@ -1586,6 +1598,89 @@ class UninstallerIsAlwaysWrittenTests(unittest.TestCase):
     def test_doctor_is_quiet_when_nothing_is_installed(self):
         with tempfile.TemporaryDirectory() as tmp:
             self.assertNotIn(DEST_NAME, self._doctor(Path(tmp)))
+
+
+class GlobalIgnoreTests(unittest.TestCase):
+    """The kit's ignore patterns live in the global git ignore, not in each repo."""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.home = Path(self._tmp.name)
+        self._saved = {key: os.environ.get(key) for key in ("HOME", "XDG_CONFIG_HOME")}
+        os.environ["HOME"] = str(self.home)
+        os.environ["XDG_CONFIG_HOME"] = str(self.home / ".config")
+
+    def tearDown(self):
+        for key, value in self._saved.items():
+            if value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = value
+        self._tmp.cleanup()
+
+    def _set_excludes(self, value: str) -> None:
+        (self.home / ".gitconfig").write_text(
+            f"[core]\n\texcludesFile = {value}\n", encoding="utf-8")
+
+    def test_default_file_gets_the_block_once(self):
+        dry = Plan(False)
+        globalignore.ensure(self.home, dry)
+        default = self.home / ".config" / "git" / "ignore"
+        self.assertEqual(len(dry.actions), 1)
+        self.assertFalse(default.exists())
+        globalignore.ensure(self.home, Plan(True))
+        text = default.read_text(encoding="utf-8")
+        self.assertIn(globalignore.BEGIN, text)
+        self.assertLess(text.index("\ngraft\n"), text.index("!**/skills/graft\n"))
+        again = Plan(True)
+        globalignore.ensure(self.home, again)
+        self.assertEqual(again.actions, [])
+
+    def test_configured_excludes_file_is_used_and_kept(self):
+        self._set_excludes("~/.gitignore_global")
+        target = self.home / ".gitignore_global"
+        target.write_text("*.log", encoding="utf-8")
+        globalignore.ensure(self.home, Plan(True))
+        text = target.read_text(encoding="utf-8")
+        self.assertTrue(text.startswith("*.log\n\n" + globalignore.BEGIN))
+        self.assertFalse((self.home / ".config" / "git" / "ignore").exists())
+
+    def test_patterns_already_present_write_nothing(self):
+        self._set_excludes("~/.gitignore_global")
+        target = self.home / ".gitignore_global"
+        target.write_text("\n".join(globalignore.PATTERNS) + "\n", encoding="utf-8")
+        plan = Plan(True)
+        globalignore.ensure(self.home, plan)
+        self.assertEqual(plan.actions, [])
+        self.assertNotIn(globalignore.BEGIN, target.read_text(encoding="utf-8"))
+
+    def test_uninstall_strips_only_the_block(self):
+        self._set_excludes("~/.gitignore_global")
+        target = self.home / ".gitignore_global"
+        target.write_text("*.log\n", encoding="utf-8")
+        globalignore.ensure(self.home, Plan(True))
+        result = _run_uninstall(self.home, "--apply")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(target.read_text(encoding="utf-8"), "*.log\n")
+
+    def test_uninstall_keeps_a_block_without_its_end_line(self):
+        self._set_excludes("~/.gitignore_global")
+        target = self.home / ".gitignore_global"
+        text = f"{globalignore.BEGIN}\ngraft\n*.log\n"
+        target.write_text(text, encoding="utf-8")
+        result = _run_uninstall(self.home, "--apply")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(target.read_text(encoding="utf-8"), text)
+
+    def test_uninstaller_markers_match(self):
+        self.assertIn(f"IGNORE_BEGIN='{globalignore.BEGIN}'", SCRIPT)
+        self.assertIn(f"IGNORE_END='{globalignore.END}'", SCRIPT)
+
+    def test_every_profile_writing_command_calls_ensure(self):
+        body = (REPO / "devkit_cli" / "profiles.py").read_text(encoding="utf-8")
+        self.assertIn("globalignore.ensure(home, plan)",
+                      (REPO / "install.py").read_text(encoding="utf-8"))
+        self.assertEqual(body.count("globalignore.ensure(home, plan)"), 2)
 
 
 class UninstallDocTests(unittest.TestCase):

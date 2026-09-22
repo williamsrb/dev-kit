@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Fetch and register user-level MCP servers for the four agent vendors.
+"""Fetch and register user-level MCP servers for the three agent vendors.
 
-Extracted from ~/.cursor, ~/.claude, ~/.claude_personal, ~/.codex.
+Extracted from ~/.cursor, ~/.claude, ~/.codex.
 Secrets stay in env files / existing vendor configs — never in this tree.
 
   python3 ~/.agents/mcp/install.py list
@@ -31,11 +31,10 @@ HERE = Path(__file__).resolve().parent
 CATALOG_PATH = HERE / "catalog.json"
 HOME = Path.home()
 SECRET_HINTS = ("TOKEN", "SECRET", "AUTHORIZATION", "PASSWORD", "BEARER")
-VENDOR_ORDER = ("cursor", "claude", "claude_personal", "codex")
+VENDOR_ORDER = ("cursor", "claude", "codex")
 VENDOR_LABELS = {
     "cursor": "cursor",
     "claude": "claude",
-    "claude_personal": "personal",
     "codex": "codex",
 }
 
@@ -152,7 +151,7 @@ def build_spec(catalog: dict, name: str, vendor: str, existing: dict | None) -> 
     }
     if env_values:
         built["env"] = env_values
-    if vendor in ("claude", "claude_personal"):
+    if vendor == "claude":
         built = {"type": "stdio", **built}
     return built
 
@@ -199,7 +198,7 @@ def existing_spec(vendor: str, name: str, catalog: dict) -> dict | None:
         if not path.is_file():
             return None
         return (json.loads(path.read_text()).get("mcpServers") or {}).get(name)
-    if vendor in ("claude", "claude_personal"):
+    if vendor == "claude":
         return claude_mcp_map(vendor_home(catalog, vendor)).get(name)
     if vendor == "codex":
         return codex_mcp_map().get(name)
@@ -415,7 +414,7 @@ def unregister_one(catalog: dict, name: str, vendors: list[str], dry_run: bool) 
         print(f"[{vendor}] unregister {name}")
         if vendor == "cursor":
             rc |= unregister_cursor(name, dry_run)
-        elif vendor in ("claude", "claude_personal"):
+        elif vendor == "claude":
             rc |= unregister_claude(
                 name,
                 claude_config_dir(catalog, vendor),
@@ -437,7 +436,7 @@ def register_one(catalog: dict, name: str, vendors: list[str], dry_run: bool, fo
         print(f"[{vendor}] {name}")
         if vendor == "cursor":
             rc |= register_cursor(name, built, dry_run, force)
-        elif vendor in ("claude", "claude_personal"):
+        elif vendor == "claude":
             rc |= register_claude(
                 name, built,
                 claude_config_dir(catalog, vendor),
@@ -527,7 +526,7 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("action", choices=("list", "fetch", "register", "unregister", "install"))
     ap.add_argument("names", nargs="*", help="server names; default is all catalog entries")
-    ap.add_argument("--vendors", help="comma-separated: cursor,claude,claude_personal,codex")
+    ap.add_argument("--vendors", help="comma-separated: cursor,claude,codex")
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--force", action="store_true", help="replace existing vendor entries")
     args = ap.parse_args()

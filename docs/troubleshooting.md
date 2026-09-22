@@ -68,8 +68,8 @@ update of Claude / ChatGPT / Cursor:
 
 That prints the plan, then asks `sudo` for a password. The hooks
 (`99-devkit-profile-apps` and `60devkit-profile-apps`) do the same after
-future package updates. They do not replace the Claude Personal or Cursor
-recolor hooks. Config under `~/.agents-profiles` is not involved.
+future package updates. They do not replace the Cursor recolor hooks. Config
+under `~/.agents-profiles` is not involved.
 
 ## `could not badge <vendor> icon`
 
@@ -122,7 +122,7 @@ handler.
 ```bash
 ./devkit doctor
 ./devkit profile sync dummy --apply
-./devkit profile auth restore --apply    # back to stock/Personal handlers
+./devkit profile auth restore --apply    # back to stock handlers
 ```
 
 ### `ambiguous …:// callback`

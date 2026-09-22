@@ -58,7 +58,7 @@ DEFAULT_HOST = "localhost"
 LOOPBACK_HOSTS = {"127.0.0.1", "::1", "0.0.0.0", "[::]"}
 DEFAULT_PORT_BASE = 8931
 DEFAULT_CAPS = ["vision", "pdf", "devtools", "network", "storage", "testing"]
-VENDORS = ("cursor", "claude", "claude_personal", "codex")
+VENDORS = ("cursor", "claude", "codex")
 ID_CHARS = set("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789._-")
 
 
@@ -442,7 +442,7 @@ def enable_vendors(name: str, url: str, vendors: list[str], dry_run: bool) -> li
             print(f"[{vendor}] enable {name} -> {url}", file=sys.stderr)
             if vendor == "cursor":
                 rc = install.register_cursor(name, spec, dry_run, force=True)
-            elif vendor in ("claude", "claude_personal"):
+            elif vendor == "claude":
                 rc = install.register_claude(
                     name,
                     spec,
@@ -470,7 +470,7 @@ def profile_mcp_targets(home: Path, vendors: list[str],
     root = home / ".agents-profiles"
     if not root.is_dir():
         return []
-    wanted = {v for v in vendors if v != "claude_personal"}
+    wanted = set(vendors)
     current = profile if profile is not None else os.environ.get("DEVKIT_PROFILE", "").strip()
     found: list[tuple[str, Path, str]] = []
     for profile_dir in sorted(root.iterdir()):

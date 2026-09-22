@@ -27,9 +27,9 @@ other has not.
 Config isolation is environment variables, a uniquely named CLI wrapper, and a
 `.desktop` file. Dock identity needs more: Electron bakes `desktopName` into
 `app.asar`, so several profiles of the same vendor would otherwise share one
-`WM_CLASS`. Each profile GUI is a Personal-style rsync of the stock app under
-`/usr/lib/devkit/`, with a patched identity. Stock Claude, ChatGPT, Cursor, and
-Claude Personal stay untouched.
+`WM_CLASS`. Each profile GUI is a rsync of the stock app under
+`/usr/lib/devkit/`, with a patched identity. Stock Claude, ChatGPT, and Cursor
+stay untouched.
 
 PATH prepend is required so `agentctl` resolves to the profile's `bin/`, but it
 is not sufficient: `agentctl` and other harness tools used to hardcode

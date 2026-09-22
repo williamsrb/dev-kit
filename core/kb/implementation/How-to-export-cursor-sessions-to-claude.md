@@ -10,7 +10,7 @@ prose: caveman-lite
 
 # Export Cursor sessions to Claude
 
-One-way native parent chats → work Claude. Personal is a fan-out of `sync-claude-desktop-sessions.py`, not a second writer.
+One-way native parent chats → work Claude (`~/.claude/projects`). Desktop sync is a later fan-out, not a second writer.
 
 TBD defaults (operator silence, 2026-08-25): parent JSONL only; full corpus (no `--since`); skip when dest SHA diverged (`claude-diverged`).
 

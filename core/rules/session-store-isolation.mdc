@@ -10,7 +10,7 @@ Cursor and Claude are separate products with separate session files. A delete, w
 ## Stores
 
 - **Cursor:** `composerHeaders`, `cursorDiskKV`, `composerData`, conversation-search, `~/.cursor/projects/**/agent-transcripts`, `~/.cursor/memory`, `glass.claudeCodeSessionRegistry.v1` visibility/archive flags that only change Cursor’s sidebar.
-- **Claude:** `~/.claude/projects/**/*.jsonl`, `~/.claude_personal/**`, `~/.claude/session-env`, `~/.config/Claude/claude-code-sessions`, `~/.config/ClaudePersonal/claude-code-sessions`, `~/.local/share/cursor-to-claude-sync/exports.json`.
+- **Claude:** `~/.claude/projects/**/*.jsonl`, `~/.claude/session-env`, `~/.config/Claude/claude-code-sessions`, `~/.local/share/cursor-to-claude-sync/exports.json`.
 
 ## Do not infer Claude from Cursor
 
@@ -34,7 +34,7 @@ If the user said Cursor and you think the Claude copy should go too, **stop and 
 ```
 # ❌ BAD — user: "Delete both [cursor] … chats on Cursor"
 rm ~/.claude/projects/**/851e2e36-….jsonl
-# also bad: delete Desktop indexes, Personal copies, or the export ledger row
+# also bad: delete Desktop indexes, or the export ledger row
 
 # ✅ GOOD — Cursor rows/transcripts/search only. Leave Claude JSONL and indexes alone.
 ```

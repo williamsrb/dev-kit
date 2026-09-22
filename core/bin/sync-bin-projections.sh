@@ -4,7 +4,6 @@
 #
 # Vendor-specific (like skills-vendor):
 #   ~/.claude/scripts            <- bin-vendor/claude
-#   ~/.claude_personal/scripts   <- bin-vendor/claude_personal
 #   ~/.codex/scripts             <- bin-vendor/codex
 #   ~/.cursor/scripts            <- bin-vendor/cursor
 #
@@ -38,7 +37,6 @@ LOCAL_BIN="$HOME_DIR/.local/bin"
 # root:vendor
 TARGETS=(
   "$HOME_DIR/.claude/scripts:claude"
-  "$HOME_DIR/.claude_personal/scripts:claude_personal"
   "$HOME_DIR/.codex/scripts:codex"
   "$HOME_DIR/.cursor/scripts:cursor"
 )
@@ -46,7 +44,6 @@ TARGETS=(
 # Basenames in ~/.agents/bin that are used on PATH today.
 PATH_SHIMS=(
   agentctl
-  claude-personal
   claude-work
   export-canvas-html
   recolor-white-black-icons.sh

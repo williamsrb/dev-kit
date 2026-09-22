@@ -7,7 +7,7 @@ alwaysApply: true
 
 Every chat prompt and its assistant result are logged automatically by user-level hooks — Cursor, Claude Code, and Codex share one script and one destination. The agent does **not** write these files.
 
-- **Root:** `~/.agents/history/` (`~/.cursor/history`, `~/.claude/history`, `~/.claude_personal/history`, and `~/.codex/history` are symlinks to it)
+- **Root:** `~/.agents/history/` (`~/.cursor/history`, `~/.claude/history`, and `~/.codex/history` are symlinks to it)
 - **Daily folder:** `[iso-date]/`, e.g. `2026-06-16/`
 - **Prompt file:** `[iso-datetime]_prompt.md` — slug uses `-` instead of `:`, e.g. `2026-06-16T15-30-00Z_prompt.md`
 - **Result file:** matching `[iso-datetime]_result.md`

@@ -1,4 +1,4 @@
-"""Per-profile Electron app forks, same shape as Claude Personal.
+"""Per-profile Electron app forks.
 
 Stock packages own /usr/lib/claude-desktop, /usr/lib/chatgpt and
 /usr/share/cursor. Apt/dpkg overwrite those trees. A profile fork is a
@@ -7,8 +7,7 @@ patched identity (asar desktopName, Cursor nameShort) so WM_CLASS / Wayland
 app_id is unique.
 
 This module is copied to /usr/local/bin/sync-devkit-profile-apps.py for the
-apt/dpkg hooks. It must stay stdlib-only. Never write the stock trees or
-Claude Personal.
+apt/dpkg hooks. It must stay stdlib-only. Never write the stock trees.
 """
 
 from __future__ import annotations
@@ -35,8 +34,6 @@ APPARMOR_DIR = Path("/etc/apparmor.d")
 LOG_PATH = Path("/var/log/devkit-profile-apps.log")
 HOME_ROOT = Path("/home")
 PROVENANCE_NAME = ".devkit-profile.json"
-
-PERSONAL_LIB = Path("/usr/lib/claude-desktop-personal")
 
 APP_NAME = {"claude": "Claude", "codex": "Codex", "cursor": "Cursor"}
 
@@ -133,7 +130,7 @@ def gui_bin(vendor: str, profile: str, env: Env | None = None) -> Path:
     return fork_dir(vendor, profile, env) / spec.binary
 
 
-# ---------------------------------------------------------------- asar (Personal)
+# ---------------------------------------------------------------- asar
 
 def pickle_uint32(n: int) -> bytes:
     return struct.pack("<I", 4) + struct.pack("<I", n)
@@ -223,29 +220,34 @@ def _replace_json_string(blob: bytes, key: str, new_value: str) -> bytes:
     return blob[:start] + prefix + new_value.encode() + blob[end:]
 
 
-def patch_asar_desktop_name(path: Path, wanted: str, *, dry_run: bool) -> str:
+def patch_asar_package(path: Path, updates: dict[str, str], *, dry_run: bool) -> str:
     st = path.stat()
     header, data, _header_end = read_asar(path)
     files = header.get("files")
     if not isinstance(files, dict) or "package.json" not in files:
         raise RuntimeError(f"no root package.json in {path}")
     meta = files["package.json"]
+    summary = ", ".join(f"{k}={v}" for k, v in updates.items())
     if meta.get("unpacked"):
         unpacked = path.parent / "app.asar.unpacked" / "package.json"
-        action = f"patch unpacked {unpacked} desktopName -> {wanted}"
+        action = f"patch unpacked {unpacked} {summary}"
         if dry_run:
             return action
-        unpacked.write_bytes(_replace_json_string(unpacked.read_bytes(),
-                                                  "desktopName", wanted))
+        blob = unpacked.read_bytes()
+        for key, value in updates.items():
+            blob = _replace_json_string(blob, key, value)
+        unpacked.write_bytes(blob)
         return action
     offset = int(meta["offset"])
     size = int(meta["size"])
     blob = data[offset : offset + size]
-    current = json.loads(blob).get("desktopName")
-    new_blob = _replace_json_string(blob, "desktopName", wanted)
-    if new_blob == blob and current == wanted:
-        return f"asar already has desktopName={wanted}"
-    if "asarIntegrity" in json.loads(blob):
+    pkg = json.loads(blob)
+    if all(pkg.get(k) == v for k, v in updates.items()):
+        return f"asar already {summary}"
+    new_blob = blob
+    for key, value in updates.items():
+        new_blob = _replace_json_string(new_blob, key, value)
+    if "asarIntegrity" in pkg:
         log("warning: package.json has asarIntegrity; Electron may refuse a patched asar")
     block_size = int((meta.get("integrity") or {}).get("blockSize") or 4194304)
     integ = integrity_for(new_blob, block_size)
@@ -260,8 +262,9 @@ def patch_asar_desktop_name(path: Path, wanted: str, *, dry_run: bool) -> str:
     meta["size"] = len(new_blob)
     meta["offset"] = str(new_offset)
     meta["integrity"] = integ
+    before = ", ".join(f"{k} {pkg.get(k)} -> {v}" for k, v in updates.items())
     action = (
-        f"patch {path} desktopName {current} -> {wanted} "
+        f"patch {path} {before} "
         f"({how}, size {size} -> {len(new_blob)}, integrity {integ['hash']})"
     )
     if dry_run:
@@ -329,15 +332,10 @@ def dpkg_installed(name: str) -> bool:
 def _forbidden(dest: Path, spec: Vendor) -> str | None:
     resolved = dest.resolve() if dest.exists() else dest
     stock = spec.stock_lib.resolve() if spec.stock_lib.exists() else spec.stock_lib
-    personal = PERSONAL_LIB.resolve() if PERSONAL_LIB.exists() else PERSONAL_LIB
     if resolved == stock:
         return f"refusing to rsync onto stock {stock}"
-    if resolved == personal:
-        return f"refusing to rsync onto Claude Personal {personal}"
     if stock in resolved.parents:
         return f"refusing to nest a fork under stock {stock}"
-    if personal in resolved.parents:
-        return f"refusing to nest a fork under Claude Personal {personal}"
     return None
 
 
@@ -376,7 +374,8 @@ def patch_identity(spec: Vendor, dest: Path, profile: str, *, dry_run: bool) -> 
     wanted = desktop_name(spec.name, profile)
     actions: list[str] = []
     if spec.asar_rel:
-        actions.append(patch_asar_desktop_name(dest / spec.asar_rel, wanted, dry_run=dry_run))
+        actions.append(patch_asar_package(
+            dest / spec.asar_rel, {"desktopName": wanted}, dry_run=dry_run))
     if spec.package_json_rel:
         path = dest / spec.package_json_rel
         actions.append(_patch_json_file(path, {"desktopName": wanted}, dry_run=dry_run))

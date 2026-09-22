@@ -12,11 +12,11 @@ other profile — of any type — may reuse that name.
 
 Creating one gives you a config directory, a projected skill set, a uniquely
 named CLI wrapper, a launcher, an icon colour, and a name that shows up in the
-status line. Several profiles can run at once. Each desktop is a Personal-style
-fork of the stock app (its own copy under `/usr/lib/devkit/`, patched
-`desktopName` / `WM_CLASS`, stock icons badged with a coloured shield). Stock Claude, ChatGPT,
-Cursor, and Claude Personal stay as they are. The fork is rebuilt after apt/dpkg
-updates of the original package.
+status line. Several profiles can run at once. Each desktop is a fork of the
+stock app (its own copy under `/usr/lib/devkit/`, patched `desktopName` /
+`WM_CLASS`, stock icons badged with a coloured shield). Stock Claude, ChatGPT,
+and Cursor stay as they are. The fork is rebuilt after apt/dpkg updates of the
+original package.
 
 `create` / `sync` / `install.py --apply` write user-owned files first, then
 print the rsync/asar/hook plan and ask `sudo`. `install.py --apply` with no
@@ -166,16 +166,16 @@ stub survives and keeps failing closed. Re-running is a no-op.
 If the vendor file already exists, `fix-home-rules` aborts and names it;
 `--force` appends under a marked block rather than overwriting.
 
-## Stock apps, Claude Personal, and profile forks
+## Stock apps and profile forks
 
-Stock Claude, ChatGPT/Codex, Cursor, and Claude Personal stay launchable from
-their own `.desktop` files. The kit never writes those trees.
+Stock Claude, ChatGPT/Codex, and Cursor stay launchable from their own
+`.desktop` files. The kit never writes those trees.
 
-Each profile desktop is a dpkg-unowned rsync copy of the stock app, the same
-recipe as Claude Personal: patch `desktopName` in `app.asar` (Cursor also
-patches `nameShort` in `product.json`), badge in-tree icons from **stock**
-assets with a coloured shield emblem, keep `chrome-sandbox` mode `4755`. Apt
-only updates stock, so a pair of hooks rebuild every fork afterwards:
+Each profile desktop is a dpkg-unowned rsync copy of the stock app: patch
+`desktopName` in `app.asar` (Cursor also patches `nameShort` in
+`product.json`), badge in-tree icons from **stock** assets with a coloured
+shield emblem, keep `chrome-sandbox` mode `4755`. Apt only updates stock, so a
+pair of hooks rebuild every fork afterwards:
 
 - `/etc/apt/apt.conf.d/99-devkit-profile-apps` (`DPkg::Post-Invoke`)
 - `/etc/dpkg/dpkg.cfg.d/60devkit-profile-apps` (`post-invoke` — apt's hook does
@@ -189,21 +189,20 @@ place. Do not edit vendor `postinst` files; they are rewritten on every
 
 Config, skills, wrappers, and session data live under `~/.agents-profiles` and
 (for Claude/Codex desktops) `~/.config/Claude-<name>` / `~/.config/Codex-<name>`
-— package upgrades never touch them. Stock `~/.config/Claude`,
-`~/.config/ClaudePersonal`, and `~/.config/Cursor` stay the stock/Personal apps.
+— package upgrades never touch them. Stock `~/.config/Claude` and
+`~/.config/Cursor` stay the stock apps.
 
-## Desktop user-data (same idea as Claude Personal)
+## Desktop user-data
 
-Claude Personal is `CLAUDE_CONFIG_DIR=~/.claude_personal` plus
-`--user-data-dir=~/.config/ClaudePersonal`. A profile named `dummy` is the same
-split, not a fake `$HOME`:
+A profile named `dummy` splits harness config from the desktop user-data dir.
+It is not a fake `$HOME`:
 
-| | Claude Personal | Profile `dummy` |
-|---|---|---|
-| Harness / CLI | `~/.claude_personal` | `~/.agents-profiles/dummy/<vendor>` |
-| Claude Desktop | `~/.config/ClaudePersonal` | `~/.config/Claude-dummy` |
-| ChatGPT Desktop | n/a | `~/.config/Codex-dummy` (`CODEX_ELECTRON_USER_DATA_PATH`) |
-| Cursor IDE | n/a | `--user-data-dir=~/.agents-profiles/dummy/cursor` |
+| | Profile `dummy` |
+|---|---|
+| Harness / CLI | `~/.agents-profiles/dummy/<vendor>` |
+| Claude Desktop | `~/.config/Claude-dummy` |
+| ChatGPT Desktop | `~/.config/Codex-dummy` (`CODEX_ELECTRON_USER_DATA_PATH`) |
+| Cursor IDE | `--user-data-dir=~/.agents-profiles/dummy/cursor` |
 
 `$HOME`, `~/.ssh`, `~/.gitconfig`, and `~/Workspace` stay the real ones.
 `cursor-agent` sets `XDG_CONFIG_HOME` on its exec line only and never exports it.
@@ -228,6 +227,6 @@ callback and more than one copy is running, the dispatcher refuses rather than
 guessing.
 
 ```bash
-./devkit profile auth restore --apply    # stock/Personal handlers again
+./devkit profile auth restore --apply    # stock handlers again
 ./devkit doctor                          # reports whether the dispatcher is default
 ```

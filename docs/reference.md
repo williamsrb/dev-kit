@@ -16,7 +16,7 @@ Install and manage isolated agent-harness profiles.
 
 devkit keeps several agent harnesses on one machine without collision: each
 profile has its own config dir, skills, rules, kb, MCP set, CLI wrapper,
-desktop launcher, and a Personal-style GUI fork (unique desktopName / WM_CLASS).
+desktop launcher, and a GUI fork (unique desktopName / WM_CLASS).
 Wrappers export DEVKIT_PROFILE and AGENTS_HOME and prepend the profile bin to
 PATH, so agentctl and other harness tools see only that profile. PATH alone is
 not enough: those tools read AGENTS_HOME, not $HOME/.agents.
@@ -113,8 +113,7 @@ commands:
     adopt      Record an existing dir as an instance.
     migrate    Move an instance to another fork.
     auth       Install or restore URL-redirect auth handlers.
-    apps-sync  Rebuild per-profile desktop app forks (Personal-style rsync +
-               asar identity).
+    apps-sync  Rebuild per-profile desktop app forks (rsync + asar identity).
 ```
 
 #### `devkit profile list`
@@ -220,7 +219,7 @@ options:
 
 commands:
   COMMAND
-    restore   Put stock/Personal scheme handlers back.
+    restore   Put stock scheme handlers back.
 ```
 
 #### `devkit profile apps-sync`
@@ -228,7 +227,7 @@ commands:
 ```
 usage: devkit profile apps-sync [-h] [--user NAME] [--profile NAME] [--vendor VENDOR] [--install-hook] [--icons-only] [--apply]
 
-Rebuild per-profile desktop app forks from the stock packages. Same recipe as Claude Personal: rsync into /usr/lib/devkit/, patch desktopName / WM_CLASS, badge in-tree icons with a coloured shield emblem. Never writes stock trees or Claude Personal. --apply prints the plan, then asks sudo.
+Rebuild per-profile desktop app forks from the stock packages. Rsync into /usr/lib/devkit/, patch desktopName / WM_CLASS, and badge in-tree icons with a coloured shield emblem. Never writes stock trees. --apply prints the plan, then asks sudo.
 
 options:
   -h, --help       show this help message and exit

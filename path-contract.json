@@ -59,7 +59,7 @@
       "id": "literal-home",
       "severity": "error",
       "applies_to": "all",
-      "pattern": "(?<![\\w/])/home/[a-z_][a-z0-9_-]*/\\.(agents|claude|claude_personal|cursor|codex|config|local|cache)\\b",
+      "pattern": "(?<![\\w/])/home/[a-z_][a-z0-9_-]*/\\.(agents|claude|cursor|codex|config|local|cache)\\b",
       "message": "literal home path into a harness directory names one machine",
       "fix": "use ${HOME} (kit source) or $HOME (shell), never a hardcoded home",
       "_comment": "Anchored to a harness dotdir on purpose. A bare /home/<x>/ also matches container paths (/enonic-xp/home/, a Dockerfile's /home/builder) which are correct as written and not this machine's home."
@@ -68,7 +68,7 @@
       "id": "literal-home-macos",
       "severity": "error",
       "applies_to": "all",
-      "pattern": "(?<![\\w/])/Users/[A-Za-z_][A-Za-z0-9_-]*/\\.(agents|claude|claude_personal|cursor|codex|config|local|cache)\\b",
+      "pattern": "(?<![\\w/])/Users/[A-Za-z_][A-Za-z0-9_-]*/\\.(agents|claude|cursor|codex|config|local|cache)\\b",
       "message": "literal macOS home path names one machine",
       "fix": "use ${HOME}"
     },

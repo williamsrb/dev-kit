@@ -6,7 +6,6 @@
 #
 #   ~/.cursor/skills            <- shared + skills-vendor/cursor
 #   ~/.claude/skills            <- shared + skills-vendor/claude
-#   ~/.claude_personal/skills   <- shared + skills-vendor/claude
 #   ~/.codex/skills             <- shared + skills-vendor/codex (preserves .system)
 #
 # Idempotent. Run it after adding, renaming, or removing any skill.
@@ -38,7 +37,6 @@ VENDOR="$AGENTS/skills-vendor"
 TARGETS=(
   "$HOME_DIR/.cursor/skills:cursor"
   "$HOME_DIR/.claude/skills:claude"
-  "$HOME_DIR/.claude_personal/skills:claude"
   "$HOME_DIR/.codex/skills:codex"
 )
 

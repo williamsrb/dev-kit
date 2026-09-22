@@ -16,8 +16,8 @@ login URLs (`claude://`, `claude-cli://`, `codex://`,
 
 ## Prerequisites
 
-- Profile copies share the vendor binary (Tier 2). Distinct dock icons need a
-  Personal-style install fork; that does not fix scheme ownership.
+- Profile copies share the vendor binary (Tier 2). Distinct dock icons need an
+  install fork under `/usr/lib/devkit/`; that does not fix scheme ownership.
 - Tests that call `xdg-mime` must pass `HOME` / `XDG_CONFIG_HOME` /
   `XDG_DATA_HOME` for the fake home, or they rewrite the operator's
   `mimeapps.list`.
@@ -41,6 +41,6 @@ login URLs (`claude://`, `claude-cli://`, `codex://`,
 
 - `StartupWMClass=` only matches. The process still emits asar `desktopName`
   / Cursor `product.json`. Same binary → dock grouping.
-- Claude Personal claiming `claude://` still cannot multiplex N profiles.
+- One handler for `claude://` still cannot multiplex N profiles.
 - `xdg-mime default` follows process `HOME`, not a Python `home=` argument,
   unless you pass the env explicitly.

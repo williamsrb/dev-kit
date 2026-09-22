@@ -37,8 +37,11 @@ PATTERNS = (
 )
 
 
-def target(home: Path) -> Path:
-    """The file git reads for this home: core.excludesFile, else git's default."""
+def target(home: Path) -> Path | None:
+    """The file git reads for this home: core.excludesFile, else git's default.
+
+    None without git: there is no repo to keep clean and no config to read.
+    """
     try:
         configured = subprocess.run(
             ["git", "config", "--global", "--get", "core.excludesFile"],
@@ -46,7 +49,7 @@ def target(home: Path) -> Path:
             env={**os.environ, "HOME": str(home)},
         ).stdout.strip()
     except FileNotFoundError:
-        configured = ""
+        return None
     if not configured:
         return Path(os.environ.get("XDG_CONFIG_HOME") or home / ".config") / "git" / "ignore"
     if configured.startswith("~/"):
@@ -62,6 +65,8 @@ def ensure(home: Path, plan: Plan) -> None:
     appending just the missing lines could re-ignore skills/graft.
     """
     path = target(home)
+    if path is None:
+        return
     current = path.read_text(encoding="utf-8") if path.is_file() else ""
     lines = {line.strip() for line in current.splitlines()}
     if BEGIN in lines or all(pattern in lines for pattern in PATTERNS):

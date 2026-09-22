@@ -22,8 +22,10 @@ variables:
 tests:
   stage: gate
   # The image runs as root, and the uninstaller refuses root on purpose. Run the
-  # suite as the kind of account that installs profiles.
+  # suite as the kind of account that installs profiles, with git installed as
+  # on any machine that has repos to keep clean.
   script:
+    - apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends git >/dev/null
     - useradd --create-home ci
     - chown -R ci "$CI_PROJECT_DIR"
     - runuser -u ci -- env HOME=/home/ci python3 -m unittest discover -s tests -v

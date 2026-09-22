@@ -1600,6 +1600,7 @@ class UninstallerIsAlwaysWrittenTests(unittest.TestCase):
             self.assertNotIn(DEST_NAME, self._doctor(Path(tmp)))
 
 
+@unittest.skipUnless(shutil.which("git"), "reads core.excludesFile through git")
 class GlobalIgnoreTests(unittest.TestCase):
     """The kit's ignore patterns live in the global git ignore, not in each repo."""
 
@@ -1681,6 +1682,21 @@ class GlobalIgnoreTests(unittest.TestCase):
         self.assertIn("globalignore.ensure(home, plan)",
                       (REPO / "install.py").read_text(encoding="utf-8"))
         self.assertEqual(body.count("globalignore.ensure(home, plan)"), 2)
+
+
+class GlobalIgnoreWithoutGitTests(unittest.TestCase):
+    def test_no_git_writes_nothing(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            saved = os.environ.get("PATH")
+            os.environ["PATH"] = str(home)
+            try:
+                plan = Plan(True)
+                globalignore.ensure(home, plan)
+            finally:
+                os.environ["PATH"] = saved or ""
+            self.assertEqual(plan.actions, [])
+            self.assertFalse((home / ".config").exists())
 
 
 class UninstallDocTests(unittest.TestCase):

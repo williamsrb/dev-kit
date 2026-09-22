@@ -84,7 +84,8 @@ and records a provenance file. Wrappers and launchers also export
 `.gitignore` and `.ignore` into every repo it builds in. Instead, the kit's
 ignore block (graft, graphify and agentctl security-scan output, at any depth)
 is appended to your global git ignore: the file `core.excludesFile` names, or
-`~/.config/git/ignore`. It is skipped when every pattern is already there.
+`~/.config/git/ignore`. It is skipped when every pattern is already there, or
+when git is not installed.
 Desktop identity forks (patched asar / `WM_CLASS`) rsync into `/usr/lib/devkit/`. `install.py --apply` prints that plan and then
 asks `sudo` for a password. Re-run later with:
 

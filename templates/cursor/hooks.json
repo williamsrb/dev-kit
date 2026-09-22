@@ -6,7 +6,15 @@
   ],
   "version": 1,
   "hooks": {
+    "beforeShellExecution": [
+      {
+        "command": "./hooks/deny-git-push.sh",
+        "matcher": "(rtk\\s+)?git(\\s|$)",
+        "failClosed": true
+      }
+    ],
     "beforeSubmitPrompt": [{ "command": "./hooks/history-log-prompt.sh" }],
+    "afterAgentResponse": [{ "command": "./hooks/history-log-response.sh" }],
     "stop": [{ "command": "./hooks/history-log-stop.sh" }],
     "sessionStart": [{ "command": "./hooks/memory-recall.sh" }]
   }

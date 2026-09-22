@@ -17,8 +17,9 @@ Parent skills call this when drafting client-facing text:
 | Parent | When to load this skill |
 |--------|-------------------------|
 | `plan-task-evidence` / `run-plan` on an evidence plan | E2 evidence comment body (Jira when `mode` is `jira`; otherwise paste/chat) |
-| `plan-implementation` | TBD checklist the user will copy to the analyst |
+| `plan-implementation` | **jira only.** TBD checklist the user will copy to the analyst |
 | `plan-implementation` implicit-requirements comment | **Do not use this skill.** Techlead tick list, ADF checkboxes, not a/b/c options. See `How-to-handle-implicit-requirements.md`. |
+| `plan-implementation` in `mode: local` | **Do not use this skill.** Planner is the product owner. Auto-select; no analyst copy. |
 | Any analyst-facing text (Jira, Slack, or paste) | Before posting or handing the copy over |
 
 Do **not** use this skill for chat-to-user orchestration, commit messages,
@@ -73,7 +74,7 @@ Chat report-back to the user **does** include logistics. The analyst body does n
 - **Keep domain words they already use** (acceptance criteria, Content Studio, publish, Figma, review environment). Translate the rest — see [jargon.md](references/jargon.md).
 - **One evidence unit = meaning + image.** The sentence above the screenshot says what to look for and which AC it proves. Never an orphan image or a gallery dump.
 - **Changes summary** is the product outcome in 1–3 sentences. Not a changelog of files, libraries, or CSS.
-- **TBD questions** are a **separate** comment (or Slack), never mixed into an evidence post. One decision each, in product language, with why it blocks and **2-3 options, recommended first and marked as the recommendation**. The analyst must be able to answer by picking a letter, without opening the repo. A bare "Assumption (not decided)" line is not an answer path — see `~/.agents/kb/_shared/How-to-write-analyst-questions-with-options.md`.
+- **TBD questions** (`jira` only) are a **separate** comment (or Slack), never mixed into an evidence post. One decision each, in product language, with why it blocks and **2-3 options, recommended first and marked as the recommendation**. The analyst must be able to answer by picking a letter, without opening the repo. A bare "Assumption (not decided)" line is not an answer path — see `~/.agents/kb/_shared/How-to-write-analyst-questions-with-options.md`. Do not draft TBD questions when `mode` is `local`.
 - **Implicit-requirements comments** are a **separate** techlead checkbox post after `plan-implementation`. Do not draft them with this skill. Do not mix them into TBD or evidence.
 - **Respect, not praise.** Address the analyst by name and say why each finding matters to them. Respect comes from doing their thinking for them — precise answers, options, clear evidence — never from adjectives.
 - **Never thank, praise, or grade the analyst.** No "thanks for reporting", no "good catch", no "that was the right call", no verdict on their judgment or their reasoning. They are doing their job; commenting on how well they did it is condescending and reads as filler. State what was found, what changed, and what the evidence shows.

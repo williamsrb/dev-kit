@@ -15,12 +15,12 @@ Sorted cheapest/simplest first.
 
 | Role | Codex | Claude | Cursor |
 |---|---|---|---|
-| `deterministic` | `gpt-5.6-luna` `high` | `claude-4.5-haiku` default | `composer-2.5-fast` |
-| `explore` | `gpt-5.6-luna` `xhigh` | `claude-opus-5` `low` | `cursor-grok-4.6-high` |
-| `follow` | `gpt-5.6-luna` `xhigh` | `claude-opus-5` `low` | `cursor-grok-4.6-high` |
-| `implement` | `gpt-5.6-luna` `max` | `claude-opus-5` `medium` | `cursor-grok-4.6-high` |
-| `task-owner` | `gpt-5.6-terra` `xhigh` | `claude-opus-5` `medium` | `cursor-grok-4.6-high` |
-| `quality-gate` | `gpt-5.6-sol` `medium` | `claude-opus-5` `high` | `cursor-grok-4.6-high` |
+| `deterministic` | `gpt-5.6-luna` `high` | `claude-4.5-haiku` default | `auto` |
+| `explore` | `gpt-5.6-luna` `xhigh` | `claude-opus-5` `low` | `composer-2.5-fast` |
+| `follow` | `gpt-5.6-luna` `xhigh` | `claude-opus-5` `low` | `composer-2.5-fast` |
+| `implement` | `gpt-5.6-luna` `max` | `claude-opus-5` `medium` | `cursor-grok-4.7-medium` |
+| `task-owner` | `gpt-5.6-terra` `xhigh` | `claude-opus-5` `medium` | `cursor-grok-4.7-medium` |
+| `quality-gate` | `gpt-5.6-sol` `medium` | `claude-opus-5` `high` | `cursor-grok-4.7-high` |
 
 ### What each role is
 
@@ -37,15 +37,18 @@ Sorted cheapest/simplest first.
 
 ### Notes
 
-- **Cursor** has no Luna/Terra/Sol ladder. Every quality role is
-  `cursor-grok-4.6-high`. `deterministic` is `composer-2.5-fast` only.
+- **Cursor** has no Luna/Terra/Sol product ladder. Route like Claude’s
+  effort split: `composer-2.5-fast` for `explore`/`follow`,
+  `cursor-grok-4.7-medium` for `implement`/`task-owner`,
+  `cursor-grok-4.7-high` for `quality-gate`, `auto` for `deterministic`.
+  Grok 4.7 has no DeepSWE rows yet — provisional until a new benchmark file.
 - **Claude** collapses Luna max, Terra xhigh, and Sol medium coding into Opus
   `medium`. `quality-gate` is Opus `high` (DeepSWE High already matches Sol xhigh).
 - **Codex** `deterministic` is Luna `high` only (Haiku analogue). Do not use
   Luna medium or low for SWE.
 - **`quality-gate` (Codex):** bump to Sol `xhigh` only when consequence is extreme
-  (architecture, security, payment, release-risk). Cursor has no Sol-xhigh
-  equivalent; grok is the critic too.
+  (architecture, security, payment, release-risk). Cursor uses
+  `cursor-grok-4.7-high` for that slot.
 
 ## Skills
 

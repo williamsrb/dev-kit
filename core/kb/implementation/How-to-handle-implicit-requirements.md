@@ -2,7 +2,7 @@
 id: how-to-handle-implicit-requirements
 when_skills: [plan-implementation, validate-plan, run-plan, validate-impl]
 inputs: [PRD, plan ACs, Figma/sister-part extras]
-outputs: [implicit.md, techlead Jira checkbox comment]
+outputs: [implicit.md, techlead Jira checkbox comment (jira), auto-ticked local list (local)]
 stop_if: [encoding an implicit extra as an AC; implementing an unticked extra]
 read: section
 prose: caveman-lite
@@ -10,9 +10,12 @@ prose: caveman-lite
 
 # Handle implicit requirements
 
-An implicit requirement is a verifiable extra the implementer is tempted to add that the ticket ACs and comments do not state. Silent yes is what the techlead calls AI slop. Silent no is what they call incomplete. After delivery they may also call those extras **bugs** and bounce the ticket (JOT-270). Do not guess. Classify, then put the grey zone on a techlead tick list before coding.
+An implicit requirement is a verifiable extra the implementer is tempted to add that the ticket ACs and comments do not state. Silent yes is what a techlead calls AI slop. Silent no is what they call incomplete. After delivery they may also call those extras **bugs** and bounce the ticket (JOT-270). Classify first. **jira:** put the grey zone on a techlead tick list before coding. **local:** auto-tick extras that belong; leave the rest `[ ]`.
 
-This is not TBD. TBD is a missing **product** decision for the analyst (copy, locale, URL, env, which component, ownership, Figma node, AC conflicts). Implicit extras are **engineering completeness** for the techlead.
+This is not TBD. TBD is a missing **product** decision (copy, locale, URL, env, which component, ownership, Figma node, AC conflicts). Implicit extras are **engineering completeness**.
+
+- **jira:** TBD goes to the analyst. Implicit extras go to the techlead tick list.
+- **local:** There is no analyst and no techlead. The planner is the product owner and the techlead. Auto-select the recommended TBD path and auto-tick extras that belong. Do not ask. Do not block execution.
 
 ## Classify
 
@@ -20,9 +23,9 @@ This is not TBD. TBD is a missing **product** decision for the analyst (copy, lo
 |--------|-------------|------|-----------|
 | Explicit AC / comment / user exclusion | already decided | User Stories / Constraints | yes |
 | **DO** | nobody to ask | Implementation Steps / Definition of Done only | yes, always |
-| **Tick** (grey zone) | techlead | `## Implicit requirements (techlead tick)` | only if ticked |
+| **Tick** (grey zone) | techlead (jira) / planner as techlead (local) | `## Implicit requirements (techlead tick)` | jira: only if ticked; local: `[x]` after auto-select |
 | **DON'T** | nobody | Non-Goals if tempting | never |
-| **TBD** | analyst | `## TBD` with 2–3 options | hard-stop |
+| **TBD** | analyst (jira) / planner as PO (local) | `## TBD` with 2–3 options | jira: hard-stop; local: auto-select recommended, then implement |
 
 ## DOs (always ship — not on the tick list)
 
@@ -36,7 +39,7 @@ Do these when the change type requires them, even with no AC:
 
 ## DON'Ts (never — not on the tick list)
 
-- Invent copy, locale, URL, env, component, or Figma node. That is TBD.
+- Invent copy, locale, URL, env, component, or Figma node as a silent extra. That is TBD (jira: ask; local: auto-select via 3f, then encode). Do not hide it as a tick-list item.
 - Drive-by refactors, new abstractions, extra locales, Storybook/docs, sister-bug fixes, tests in a layer that has none.
 - Narrating comments, speculative try/catch, `any` casts. That is deslop, not a tick item.
 - Figma deltas on an excluded element.
@@ -61,8 +64,10 @@ One checkbox per extra the ticket did not ask for but Figma, a sister part, or h
 1. Harvest extras while reading the PRD, Figma, and code. Classify with the tables above.
 2. Write `implicit.md` (folder) or `## Implicit requirements (techlead tick)` (legacy file). Checklist or `- Implicit: none`.
 3. Do not promote tick-list items into ACs or FRs. Do not put DOs on the tick list.
-4. After the plan file is written, post when `mode` is `jira` and the list is non-empty. Local mode: paste the list in chat. Do not wait for ticks to finish planning.
-5. TBD remains the coding hard-stop. Implicit is not.
+4. After the plan file is written:
+   - **jira:** post when the list is non-empty. Do not wait for ticks to finish planning.
+   - **local:** auto-tick `[x]` extras that belong in this delivery (same-component sibling states; completeness the AC cannot ship without looking broken). Leave `[ ]` for follow-up (new CMS editor contracts, cross-ticket helpers, optional chrome). Report `[x]`/`[ ]` in chat. Do not post. Do not wait.
+5. **jira:** TBD remains the coding hard-stop. Implicit is not. **local:** auto-select TBD (recommended path) and auto-tick implicit. Neither blocks execution.
 
 ## Procedure — post (jira mode)
 
@@ -74,15 +79,16 @@ One checkbox per extra the ticket did not ask for but Figma, a sister part, or h
 
 1. Explicit ACs and DOs: implement.
 2. Unticked tick-list items: out of scope. Missing them is not incomplete.
-3. Ticked items (Jira checkbox or the user said "include X"): in scope.
+3. Ticked items (Jira checkbox, local `[x]`, or the user said "include X"): in scope.
 4. QA: delivering an unticked item is scope creep (Concern; remove). Missing a DO the AC cannot ship without is a Blocker. Code-shape slop stays deslop.
-5. Review extras after delivery: classify with the tables. Do not promote them to Blockers or rewrite the original ACs. If the techlead decides they come next, that is a **review-time tick** — follow-up increment or a new ticket, not a FAIL of the first delivery. See [How-to-handle-implicit-requirements-examples.md](How-to-handle-implicit-requirements-examples.md) (JOT-270).
+5. Review extras after delivery: classify with the tables. Do not promote them to Blockers or rewrite the original ACs. If the techlead (or local PO) decides they come next, that is a **review-time tick** — follow-up increment or a new ticket, not a FAIL of the first delivery. See [How-to-handle-implicit-requirements-examples.md](How-to-handle-implicit-requirements-examples.md) (JOT-270).
 
 ## Pitfalls
 
 - Do not mix TBD and implicit in one Jira comment.
 - Do not wait for techlead ticks before coding the explicit AC.
-- Do not treat silence on the tick list as approval.
+- **jira:** do not treat silence on the tick list as approval.
+- **local:** do not ask an analyst or techlead. Auto-select. Do not hard-stop for TBD or implicit.
 - Do not post in local mode.
 - One-line checkboxes only. Nested a/b/c is TBD, not a tick item.
 - Do not encode a tick-list extra as `_(inferred)_` and then implement it.

@@ -79,9 +79,6 @@ start logging in or navigating for capture from this skill. Do not guess credent
 Do not try to log in silently with stored passwords. Do not use the Cursor IDE embedded
 browser as the login path unless the user overrides.
 
-Do not try to log in silently with stored passwords. Do not use the Cursor IDE embedded
-browser as the login path unless the user overrides.
-
 ---
 
 ## Companion files (for plan authors and later executors)

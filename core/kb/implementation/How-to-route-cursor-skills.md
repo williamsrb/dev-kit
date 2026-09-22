@@ -40,12 +40,12 @@ Jira:  download-jira-task → plan-implementation (posts implicit tick list) →
          → run-plan (impl) → validate-impl → lint-and-draft-enonic|generic-commit-message
          → plan-task-evidence → validate-plan (evidence) → run-plan (evidence)
 
-Local: handoff (PRD) → plan-implementation → validate-plan (impl)
+Local: handoff (PRD) → plan-implementation (auto-select TBD + auto-tick implicit) → validate-plan (impl)
          → run-plan (impl) → validate-impl → lint-and-draft-enonic|generic-commit-message
          → plan-task-evidence → validate-plan (evidence) → run-plan (evidence)
 ```
 
-Not an automation instruction. User may pass **only** `<TASK-ID>` (Jira key or kebab slug). Skills **auto-resolve** `~/.agents/prds/<TASK-ID>.md` and `agentctl plan resolve <TASK-ID>` (folder or legacy `.md` / `-evidence-plan.md`) — do **not** solicit redundant full paths. See `How-to-resolve-task-context.md` and `How-to-optimize-agent-token-usage.md`. Local mode skips Jira download, branch-equals-key, and Jira evidence posting (capture + chat report still run).
+Not an automation instruction. User may pass **only** `<TASK-ID>` (Jira key or kebab slug). Skills **auto-resolve** `~/.agents/prds/<TASK-ID>.md` and `agentctl plan resolve <TASK-ID>` (folder or legacy `.md` / `-evidence-plan.md`) — do **not** solicit redundant full paths. See `How-to-resolve-task-context.md` and `How-to-optimize-agent-token-usage.md`. Local mode skips Jira download, branch-equals-key, analyst TBD, techlead ticks, and Jira evidence posting (capture + chat report still run). The planner is the product owner: auto-select recommended TBD and auto-tick implicit extras; do not ask; do not hard-stop.
 
 ## Validation vs review vs syntax
 

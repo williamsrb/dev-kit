@@ -1,18 +1,25 @@
 ---
 description: >-
-  Cursor Task/orchestrate/`mult` may spawn only grok-4.6 or composer-2.5.
-  Cursor indexes ~/.claude/skills, which would otherwise load the Opus table.
+  Cursor Task/orchestrate/`mult` may spawn only composer-2.5-fast,
+  cursor-grok-4.7-medium/high, or auto. Cursor indexes ~/.claude/skills,
+  which would otherwise load the Opus table.
 alwaysApply: true
 ---
 # Cursor subagent models
 
-When using the Task tool — including `mult`, `orchestrate`, or any subagent spawn — pass only:
+When using the Task tool — including `mult`, `orchestrate`, or any subagent spawn — pass only the slugs below.
 
-- `cursor-grok-4.6-high` for quality work
-- `composer-2.5-fast` for deterministic work
+The role list applies only when the spawn runs a skill (`metadata.recommendedRole`):
+
+- `composer-2.5-fast` for `explore` / `follow`
+- `cursor-grok-4.7-medium` for `implement` / `task-owner`
+- `cursor-grok-4.7-high` for `quality-gate`
+- `auto` for `deterministic`
 - `inherit` if the parent is already that model
 
-Never pass `claude-opus-5-thinking-high`, `claude-opus-5`, other `claude-*`, `gpt-5.6-*`, `gpt-5.3-codex`, `gemini-3.1-pro`, `glm-5.2-high`, or `kimi-k3-max`, even if Task lists them.
+When freely orchestrating, with no skill role, the default general-purpose model is `cursor-grok-4.7-medium`.
+
+Never pass `claude-opus-5-thinking-high`, `claude-opus-5`, other `claude-*`, `gpt-5.6-*`, `gpt-5.3-codex`, `gemini-3.1-pro`, `glm-5.2-high`, `kimi-k3-max`, `cursor-grok-4.6-high`, or `cursor-grok-4.5-high`, even if Task lists them.
 
 If the `orchestrate` SKILL.md you opened names Opus, Luna, Terra, or Sol, you opened the Claude or Codex copy. Read `${HOME}/.cursor/skills/orchestrate/SKILL.md` and follow that instead.
 

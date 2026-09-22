@@ -13,6 +13,13 @@ share a single skill, rule, or MCP registration.
 claude-dummy
 ```
 
+Running this as an assistant rather than reading it: go to
+[docs/install.md#agent-runbook](docs/install.md#agent-runbook) before running
+anything. It is the same two steps as ordered commands, each with its success
+signal, its exit codes and its stop condition, plus the uninstall sequence and
+the questions to put to the operator first. The rest of this README is
+orientation, not a procedure.
+
 Neither step assumes the other had network access. Privileged work prints its
 plan, then asks for administrator privileges — never the other way around. A
 terminal uses `sudo`. A non-interactive shell (no terminal on stdin or stdout)
@@ -84,6 +91,8 @@ Nothing on Arch may require the AUR.
 | Guide | Read it when |
 |-------|--------------|
 | [docs/install.md](docs/install.md) | Installing on a new machine, or a step failed |
+| [docs/install.md#agent-runbook](docs/install.md#agent-runbook) | An assistant is running the install or the uninstall |
+| [docs/install.md#uninstalling](docs/install.md#uninstalling) | Removing profiles, launchers, and desktop forks |
 | [docs/profiles.md](docs/profiles.md) | Creating, syncing, or adopting a profile |
 | [docs/paths.md](docs/paths.md) | Something rendered `~/...` literally, or a link is broken |
 | [docs/updates.md](docs/updates.md) | Updating, or an update refused to apply |

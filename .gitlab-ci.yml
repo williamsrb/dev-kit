@@ -90,7 +90,7 @@ shellcheck:
   script:
     - ./bootstrap.sh --profile "${PROFILE:-core}" --apply --third-party no
     # bootstrap.sh is a subprocess, so nvm and $HOME/.local/bin never land on
-    # this shell's PATH. Re-establish them before the independent --verify.
+    # this shell's PATH. Re-establish them before the independent deps check.
     - export PATH="${HOME}/.local/bin:${PATH}"
     - |
       if [ -s "${NVM_DIR:-$HOME/.nvm}/nvm.sh" ]; then
@@ -98,7 +98,7 @@ shellcheck:
       fi
     # Same contract as bootstrap: --third-party no means needs_repo binaries
     # are skipped, not missing (rocky proves that).
-    - python3 devkit_cli/bootstrap_plan.py --profile "${PROFILE:-core}" --verify --third-party-declined
+    - ./devkit deps --profile "${PROFILE:-core}" --third-party-declined
 
 debian:
   extends: .matrix

@@ -164,6 +164,27 @@ def _rung_by_binary(profile: dict) -> dict[str, str]:
     return rungs
 
 
+def default_manager(family: str | None) -> str:
+    return {"debian": "apt", "rhel": "dnf", "fedora": "dnf",
+            "arch": "pacman"}.get(family or "", "apt")
+
+
+def cmd_deps(args) -> int:
+    """`devkit deps` — is every binary a profile declares on PATH?
+
+    The same check as `bootstrap_plan.py --verify`, on the CLI the docs use
+    everywhere else. The plan-emitting path stays a module entry point, because
+    bootstrap.sh calls it before `devkit` is guaranteed to work.
+    """
+    family = args.family or detect_family()
+    return verify(
+        manifest.load(args.profile),
+        manager=args.manager or default_manager(family),
+        family=family,
+        third_party_declined=args.third_party_declined,
+    )
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(prog="bootstrap_plan.py", description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -189,15 +210,9 @@ def main() -> int:
 
     if args.verify:
         family = args.family or detect_family()
-        manager = args.manager or {
-            "debian": "apt",
-            "rhel": "dnf",
-            "fedora": "dnf",
-            "arch": "pacman",
-        }.get(family or "", "apt")
         return verify(
             profile,
-            manager=manager,
+            manager=args.manager or default_manager(family),
             family=family,
             third_party_declined=args.third_party_declined,
         )

@@ -30,6 +30,7 @@ from devkit_cli import (
     manifest,
     paths,
     privilege,
+    profiles,
     update,
 )
 from devkit_cli.common import Plan
@@ -40,7 +41,7 @@ from devkit_cli.profiles import (
     load_for_create,
     materialize,
 )
-from devkit_cli.uninstaller import SCRIPT, write_uninstaller
+from devkit_cli.uninstaller import DEST_NAME, SCRIPT, ensure, write_uninstaller
 
 
 def _kit_lineage() -> str:
@@ -730,6 +731,25 @@ class DocsGateTests(unittest.TestCase):
             self.assertEqual(run("docs", "generate", "--check").returncode, 1)
         finally:
             orphan.unlink()
+
+
+class IgnoredPathTests(unittest.TestCase):
+    """'The gate reads tracked source, not local state.'
+
+    agentctl writes scan JSON into .security-local/, and trivy embeds commit
+    messages in it. Without the ignore entry a routine scan fails lint-paths
+    over a path nobody wrote.
+    """
+
+    def test_local_state_is_not_scanned(self):
+        contract = json.loads((REPO / "path-contract.json").read_text())
+        planted = REPO / ".security-local" / "lint-fixture.json"
+        planted.parent.mkdir(exist_ok=True)
+        planted.write_text('{"note": "~/.local/bin"}\n', encoding="utf-8")
+        try:
+            self.assertEqual(paths.scan([REPO], contract), [])
+        finally:
+            planted.unlink()
 
 
 class InlineCodeTests(unittest.TestCase):
@@ -1494,6 +1514,113 @@ class UninstallTests(unittest.TestCase):
             result = _run_uninstall(Path(tmp), "--root-only", "/etc/passwd")
         self.assertEqual(result.returncode, 2)
         self.assertIn("root", result.stderr)
+
+
+class UninstallerIsAlwaysWrittenTests(unittest.TestCase):
+    """'Every command that creates a profile leaves a way to undo it.'"""
+
+    def test_ensure_records_then_writes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            dry = Plan(False)
+            ensure(home, dry)
+            self.assertEqual(len(dry.actions), 1)
+            self.assertFalse((home / ".local" / "bin" / DEST_NAME).exists())
+
+            wet = Plan(True)
+            ensure(home, wet)
+            dest = home / ".local" / "bin" / DEST_NAME
+            self.assertTrue(dest.is_file())
+            self.assertTrue(os.access(dest, os.X_OK))
+
+    def test_ensure_is_idempotent(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            ensure(home, Plan(True))
+            again = Plan(True)
+            ensure(home, again)
+            self.assertEqual(again.actions, [])
+
+    def test_ensure_rewrites_a_stale_copy(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            dest = home / ".local" / "bin" / DEST_NAME
+            dest.parent.mkdir(parents=True)
+            dest.write_text("# an older devkit wrote this\n", encoding="utf-8")
+            plan = Plan(True)
+            ensure(home, plan)
+            self.assertEqual(len(plan.actions), 1)
+            self.assertIn("FORK_ROOT", dest.read_text(encoding="utf-8"))
+
+    def test_every_profile_writing_command_calls_ensure(self):
+        """A create or sync path that forgets this leaves nothing to undo it."""
+        body = (REPO / "devkit_cli" / "profiles.py").read_text(encoding="utf-8")
+        self.assertIn("uninstaller.ensure(home, plan)",
+                      (REPO / "install.py").read_text(encoding="utf-8"))
+        self.assertEqual(body.count("uninstaller.ensure(home, plan)"), 2,
+                         "cmd_create and cmd_sync must both call ensure")
+
+    def _doctor(self, home: Path) -> str:
+        saved = os.environ.get("HOME")
+        os.environ["HOME"] = str(home)
+        try:
+            buffer = io.StringIO()
+            with redirect_stdout(buffer):
+                profiles.cmd_doctor(argparse.Namespace(profile=None))
+            return buffer.getvalue()
+        finally:
+            if saved is None:
+                os.environ.pop("HOME", None)
+            else:
+                os.environ["HOME"] = saved
+
+    def test_doctor_reports_an_installed_machine_with_no_uninstaller(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            materialize(load_for_create("dummy", "core"), ["claude"], home,
+                        Plan(apply=True), force=True)
+            self.assertIn(f"{DEST_NAME}: missing", self._doctor(home))
+            ensure(home, Plan(True))
+            self.assertNotIn(f"{DEST_NAME}: missing", self._doctor(home))
+
+    def test_doctor_is_quiet_when_nothing_is_installed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertNotIn(DEST_NAME, self._doctor(Path(tmp)))
+
+
+class UninstallDocTests(unittest.TestCase):
+    """'docs/install.md lists what devkit-uninstall.sh actually removes.'
+
+    The uninstall list is prose, so nothing else catches a path added to the
+    script and never documented.
+    """
+
+    DOC = REPO / "docs" / "install.md"
+
+    def _uninstall_section(self) -> str:
+        text = self.DOC.read_text(encoding="utf-8")
+        start = text.index("## Uninstalling")
+        end = text.find("\n## ", start + 1)
+        return text[start:] if end == -1 else text[start:end]
+
+    def test_every_root_owned_target_is_documented(self):
+        section = self._uninstall_section()
+        for name in ("FORK_ROOT", "WORKER", "APT_CONF", "DPKG_CONF", "LOG_PATH",
+                     "APPARMOR_DIR"):
+            declared = re.search(rf"^{name}=(\S+)$", SCRIPT, re.MULTILINE)
+            with self.subTest(constant=name):
+                self.assertIsNotNone(declared, f"{name} is no longer declared")
+                self.assertIn(declared.group(1), section,
+                              f"{name} is removed but not documented")
+
+    def test_every_literal_home_target_is_documented(self):
+        section = self._uninstall_section()
+        literals = set(re.findall(r'remove_(?:file|dir) "\$HOME/([^"$]+)"', SCRIPT))
+        self.assertTrue(literals, "the script stopped naming home paths literally")
+        for rel in sorted(literals):
+            with self.subTest(path=rel):
+                self.assertIn(rel, section,
+                              f"$HOME/{rel} is removed but not documented")
 
 
 if __name__ == "__main__":

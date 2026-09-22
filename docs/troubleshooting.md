@@ -34,6 +34,15 @@ The kit moved on since that instance was installed:
 ./devkit profile sync <profile> --apply
 ```
 
+## `~/.local/bin/devkit-uninstall.sh: missing`
+
+Profiles are installed and nothing on PATH removes them. Any profile will
+write the command back:
+
+```bash
+./devkit profile sync <profile> --apply
+```
+
 ## `N path(s) not owned by you`
 
 Something was installed with `sudo` that should not have been. Fix the

@@ -15,7 +15,7 @@ import argparse
 import sys
 from typing import Callable
 
-from . import docsgen, export, paths, profiles, update
+from . import bootstrap_plan, docsgen, export, paths, profiles, update
 from .errors import DevkitError
 
 DESCRIPTION = """\
@@ -38,6 +38,7 @@ Common examples:
   devkit profile auth restore
   devkit update check
   devkit doctor
+  devkit deps --profile enonic       # are the declared binaries on PATH?
 
 Run 'devkit GROUP --help' or 'devkit GROUP COMMAND --help' for details.
 """
@@ -104,6 +105,20 @@ def build_parser() -> argparse.ArgumentParser:
     doc.add_argument("--profile", metavar="NAME", help="Check only this profile.")
     doc.set_defaults(func=profiles.cmd_doctor)
 
+    # -- deps ---------------------------------------------------------------
+    deps = flat("deps", "Check that every binary a profile declares is on PATH.")
+    deps.add_argument("--profile", default="core", metavar="TYPE",
+                      help="Profile type whose deps to check (default: core).")
+    deps.add_argument("--manager", choices=["apt", "dnf", "pacman"],
+                      help="Package manager. Default: derived from --family.")
+    deps.add_argument("--family", metavar="NAME",
+                      help="Distribution family (debian, rhel, fedora, arch). "
+                           "Default: /etc/os-release.")
+    deps.add_argument("--third-party-declined", action="store_true",
+                      help="Binaries that only live in a third-party repo are "
+                           "skipped, not missing.")
+    deps.set_defaults(func=bootstrap_plan.cmd_deps)
+
     # -- profile ------------------------------------------------------------
     profile = group("profile",
                     "Create, inspect, sync, and rebuild isolated harness profiles.")
@@ -148,8 +163,9 @@ def build_parser() -> argparse.ArgumentParser:
         help="Re-materialize after a manifest change.",
         description=(
             "Re-write the instance from the current manifest: prune a leftover "
-            "core/ symlink, refresh AGENTS_HOME projections, keep spawned "
-            "playwright-<id> MCP entries. --apply writes user-owned config, "
+            "core/ symlink, refresh AGENTS_HOME projections, restore a missing "
+            "devkit-uninstall.sh, keep spawned playwright-<id> MCP entries. "
+            "--apply writes user-owned config, "
             "then prints the desktop-fork plan and asks sudo."
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,

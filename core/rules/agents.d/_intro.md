@@ -1,6 +1,6 @@
 # User rules (Claude Code / Codex)
 
-Constitution: `BASE.md` (Cursor loads `BASE.mdc` with `alwaysApply: true`). The BASE body is prepended below so Claude Code (`~/.claude/CLAUDE.md`) and Codex (`~/.codex/AGENTS.md`) ingest it **once**. Do **not** symlink this directory to `~/.claude/rules` or `~/.claude_personal/rules` — Claude auto-loads every `*.md` there and would inject `AGENTS.md` plus `BASE.md` again. Operational `.mdc` amendments follow.
+Constitution: `BASE.md` (Cursor loads `BASE.mdc` with `alwaysApply: true`). The BASE body is prepended below so Claude Code (`~/.claude/CLAUDE.md`) and Codex (`~/.codex/AGENTS.md`) ingest it **once**. Do **not** symlink this directory to `~/.claude/rules` — Claude auto-loads every `*.md` there and would inject `AGENTS.md` plus `BASE.md` again. Operational `.mdc` amendments follow.
 
 **This file is generated.** Do not edit it. The source is `manifest.json` plus
 `BASE.md` and the bodies it names; run `bin/generate-agents-md.py --apply` after

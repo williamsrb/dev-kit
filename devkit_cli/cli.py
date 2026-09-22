@@ -23,7 +23,7 @@ Install and manage isolated agent-harness profiles.
 
 devkit keeps several agent harnesses on one machine without collision: each
 profile has its own config dir, skills, rules, kb, MCP set, CLI wrapper,
-desktop launcher, and a Personal-style GUI fork (unique desktopName / WM_CLASS).
+desktop launcher, and a GUI fork (unique desktopName / WM_CLASS).
 Wrappers export DEVKIT_PROFILE and AGENTS_HOME and prepend the profile bin to
 PATH, so agentctl and other harness tools see only that profile. PATH alone is
 not enough: those tools read AGENTS_HOME, not $HOME/.agents.
@@ -189,20 +189,19 @@ def build_parser() -> argparse.ArgumentParser:
         dest="auth_action", required=False, title="commands", metavar="COMMAND"
     )
     p_auth_restore = auth_cmds.add_parser(
-        "restore", help="Put stock/Personal scheme handlers back.")
+        "restore", help="Put stock scheme handlers back.")
     p_auth_restore.add_argument("--apply", action="store_true",
                                 help="Write. Default: dry run.")
     p_auth_restore.set_defaults(func=profiles.cmd_auth_restore)
 
     p_apps = profile.add_parser(
         "apps-sync",
-        help="Rebuild per-profile desktop app forks (Personal-style rsync + asar identity).",
+        help="Rebuild per-profile desktop app forks (rsync + asar identity).",
         description=(
             "Rebuild per-profile desktop app forks from the stock packages. "
-            "Same recipe as Claude Personal: rsync into /usr/lib/devkit/, patch "
-            "desktopName / WM_CLASS, badge in-tree icons with a coloured "
-            "shield emblem. Never writes stock "
-            "trees or Claude Personal. --apply prints the plan, then asks sudo."
+            "Rsync into /usr/lib/devkit/, patch desktopName / WM_CLASS, and "
+            "badge in-tree icons with a coloured shield emblem. Never writes "
+            "stock trees. --apply prints the plan, then asks sudo."
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )

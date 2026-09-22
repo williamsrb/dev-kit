@@ -729,7 +729,7 @@ def _appfork_steps() -> list[str]:
         "write /etc/apt/apt.conf.d/99-devkit-profile-apps",
         "write /etc/dpkg/dpkg.cfg.d/60devkit-profile-apps",
         "rsync stock Claude/ChatGPT/Cursor into /usr/lib/devkit/<vendor>-<profile>/",
-        "patch desktopName / WM_CLASS in the copy only (never stock, never Personal)",
+        "patch desktopName / WM_CLASS in the copy only (never stock)",
         "badge in-tree icons from stock with a coloured shield emblem; " +
         "keep chrome-sandbox mode 4755",
     ]
@@ -766,7 +766,7 @@ def escalate_appforks(home: Path, profile: dict | None, user: str) -> int:
             print(line)
         return appfork.sync_homes(
             [home], env, dry_run=False, profile=profile_name)
-    print("Desktop identity forks need a Personal-style copy of each stock app.")
+    print("Desktop identity forks need a copy of each stock app under /usr/lib/devkit/.")
     for line in appfork.install_hook(env, dry_run=True):
         print(f"  {line}")
     appfork.sync_homes([home], env, dry_run=True, profile=profile_name)

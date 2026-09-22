@@ -1,5 +1,5 @@
 {
-  "comment": "User-level MCP servers extracted from the Cursor, Claude, Claude Personal and Codex config dirs. No secrets. Paths use ${HOME}.",
+  "comment": "User-level MCP servers extracted from the Cursor, Claude, and Codex config dirs. No secrets. Paths use ${HOME}.",
   "vendors": {
     "cursor": {
       "home": "${HOME}/.cursor"
@@ -7,10 +7,6 @@
     "claude": {
       "home": "${HOME}/.claude",
       "claude_config_dir": "${HOME}/.claude"
-    },
-    "claude_personal": {
-      "home": "${HOME}/.claude_personal",
-      "claude_config_dir": "${HOME}/.claude_personal"
     },
     "codex": {
       "home": "${HOME}/.codex"
@@ -28,7 +24,6 @@
       "vendors": [
         "cursor",
         "claude",
-        "claude_personal",
         "codex"
       ],
       "fetch": null
@@ -40,7 +35,6 @@
       "vendors": [
         "cursor",
         "claude",
-        "claude_personal",
         "codex"
       ],
       "fetch": null
@@ -57,7 +51,6 @@
       "vendors": [
         "cursor",
         "claude",
-        "claude_personal",
         "codex"
       ],
       "fetch": "gitlab-mcp-server"
@@ -76,7 +69,6 @@
       "vendors": [
         "cursor",
         "claude",
-        "claude_personal",
         "codex"
       ],
       "fetch": "browser-control-mcp"
@@ -90,7 +82,6 @@
       "vendors": [
         "cursor",
         "claude",
-        "claude_personal",
         "codex"
       ],
       "vendor_overrides": {
@@ -106,7 +97,6 @@
       "vendors": [
         "cursor",
         "claude",
-        "claude_personal",
         "codex"
       ],
       "fetch": "playwright-mcp",
@@ -119,8 +109,7 @@
         "${HOME}/.agents/mcp/image-to-disk/server.py"
       ],
       "vendors": [
-        "claude",
-        "claude_personal"
+        "claude"
       ],
       "fetch": null
     },
@@ -134,14 +123,11 @@
         "${HOME}/.cursor",
         "${HOME}/.codex",
         "${HOME}/.claude",
-        "${HOME}/.claude_personal",
         "${HOME}/.config/Codex",
-        "${HOME}/.config/Claude",
-        "${HOME}/.config/ClaudePersonal"
+        "${HOME}/.config/Claude"
       ],
       "vendors": [
-        "claude",
-        "claude_personal"
+        "claude"
       ],
       "fetch": "filesystem-mcp"
     },
@@ -154,7 +140,6 @@
       "vendors": [
         "cursor",
         "claude",
-        "claude_personal",
         "codex"
       ],
       "fetch": null
@@ -173,12 +158,10 @@
     "comment": "Marketplace plugins that also expose MCP tools. Installed via each vendor's plugin UI/CLI, not mcp add.",
     "atlassian@claude-plugins-official": [
       "claude",
-      "claude_personal",
       "codex"
     ],
     "slack@claude-plugins-official": [
       "claude",
-      "claude_personal",
       "codex"
     ]
   },

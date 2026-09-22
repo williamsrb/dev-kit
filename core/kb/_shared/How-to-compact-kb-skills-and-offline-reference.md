@@ -10,7 +10,7 @@ prose: caveman-lite
 
 # Compact KB, skills, and offline-reference
 
-Canonical tree is `~/.agents`. Harness homes (`~/.cursor`, `~/.claude`, `~/.codex`, `~/.claude_personal`) consume it via skill link-farms and `kb` → `~/.agents/kb`. Edit here only. Do not copy files into vendor folders.
+Canonical tree is `~/.agents`. Harness homes (`~/.cursor`, `~/.claude`, `~/.codex`) consume it via skill link-farms and `kb` → `~/.agents/kb`. Edit here only. Do not copy files into vendor folders.
 
 Prose register: caveman-lite (`How-to-author-ai-howtos.md`). Stock Caveman full/ultra is forbidden.
 

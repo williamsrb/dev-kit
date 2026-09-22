@@ -57,7 +57,7 @@ def server_entry(catalog: dict, name: str, vendor: str, home: Path) -> dict:
         "command": _expand(spec["command"], home),
         "args": [_expand(a, home) for a in spec.get("args") or []],
     }
-    if vendor in ("claude", "claude_personal"):
+    if vendor == "claude":
         built = {"type": "stdio", **built}
     return built
 

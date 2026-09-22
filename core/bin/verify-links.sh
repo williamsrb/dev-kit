@@ -17,7 +17,7 @@ set -uo pipefail
 : "${HOME:?HOME is not set; export it and re-run}"
 HOME_DIR="$HOME"
 AGENTS="$HOME_DIR/.agents"
-ROOTS=("$AGENTS" "$HOME_DIR/.cursor" "$HOME_DIR/.claude" "$HOME_DIR/.claude_personal")
+ROOTS=("$AGENTS" "$HOME_DIR/.cursor" "$HOME_DIR/.claude")
 # Deliberately NOT here: `agents`. Cursor and Codex ship their own builds of the same
 # subagents (~/.cursor/agents/*.md differ from ~/.claude's; ~/.codex/agents/*.toml are a
 # different format entirely), so a flat shared-asset list reports them as CROSS/TANGIBLE when
@@ -30,7 +30,6 @@ SHARED=(history hooks kb plans prds rules skills)
 # ~/.agents/rules would double-load BASE. Cursor still whole-dir-links rules/.
 CLAUDE_RULES_PATHS=(
   "$HOME_DIR/.claude/rules"
-  "$HOME_DIR/.claude_personal/rules"
 )
 
 cycles=0; dead=0; chains=0; cross=0; tangible=0
@@ -65,7 +64,7 @@ hdr "shared assets resolve to ~/.agents"
 for root in "${ROOTS[@]:1}"; do
   [[ -d "$root" ]] || continue
   for a in "${SHARED[@]}"; do
-    if [[ "$a" == "rules" && ( "$root" == "$HOME_DIR/.claude" || "$root" == "$HOME_DIR/.claude_personal" ) ]]; then
+    if [[ "$a" == "rules" && "$root" == "$HOME_DIR/.claude" ]]; then
       continue
     fi
     p="$root/$a"
@@ -92,7 +91,7 @@ hdr "no tangible assets left outside ~/.agents"
 
 for root in "${ROOTS[@]:1}"; do
   for a in "${SHARED[@]}"; do
-    if [[ "$a" == "rules" && ( "$root" == "$HOME_DIR/.claude" || "$root" == "$HOME_DIR/.claude_personal" ) ]]; then
+    if [[ "$a" == "rules" && "$root" == "$HOME_DIR/.claude" ]]; then
       continue
     fi
     p="$root/$a"
@@ -127,7 +126,6 @@ done
 hdr "vendor scripts/ project to ~/.agents/bin-vendor"
 SCRIPT_ROOTS=(
   "$HOME_DIR/.claude/scripts:$AGENTS/bin-vendor/claude"
-  "$HOME_DIR/.claude_personal/scripts:$AGENTS/bin-vendor/claude_personal"
   "$HOME_DIR/.codex/scripts:$AGENTS/bin-vendor/codex"
   "$HOME_DIR/.cursor/scripts:$AGENTS/bin-vendor/cursor"
 )
@@ -153,8 +151,7 @@ done
 
 hdr "impeccable resolves per vendor"
 for p in "$HOME_DIR/.cursor/skills/impeccable" \
-         "$HOME_DIR/.claude/skills/impeccable" \
-         "$HOME_DIR/.claude_personal/skills/impeccable"; do
+         "$HOME_DIR/.claude/skills/impeccable"; do
   if [[ -e "$p" ]]; then
     id=$(grep -o 'IMPECCABLE_PROVIDER_ID = "[^"]*"' "$p/scripts/lib/provider.mjs" 2>/dev/null | head -1)
     printf '   %-46s %s\n' "$p" "${id:-<provider.mjs unreadable>}"

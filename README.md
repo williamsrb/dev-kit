@@ -42,7 +42,7 @@ inheriting 3.4M of Enonic XP reference.
 
 Every row was measured on the reference machine, not inferred from
 documentation. "Tier 1" is a CLI wrapper; "Tier 2" adds a desktop launcher with
-an isolated config directory. "Tier 3" is a Personal-style fork of the GUI so
+an isolated config directory. "Tier 3" is a fork of the GUI so
 each profile has its own `desktopName`, `WM_CLASS`, and badged in-app icons. Apt/dpkg
 hooks rebuild those forks after the original package updates.
 
@@ -59,9 +59,8 @@ Two details worth knowing before you debug something:
   profile via `CODEX_ELECTRON_USER_DATA_PATH=~/.config/Codex-<profile>`. The
   stock ChatGPT package stays shared as the rsync source; each profile launches
   its fork.
-- **Claude Desktop** uses `--user-data-dir=~/.config/Claude-<profile>`, the same
-  shape as Claude Personal's `~/.config/ClaudePersonal`. Stock `~/.config/Claude`
-  is untouched. Cursor's GUI user-data is the profile dir
+- **Claude Desktop** uses `--user-data-dir=~/.config/Claude-<profile>`. Stock
+  `~/.config/Claude` is untouched. Cursor's GUI user-data is the profile dir
   (`~/.agents-profiles/<name>/cursor`), not `~/.config/Cursor-<name>`.
 - **`cursor-agent`** reads `XDG_CONFIG_HOME`, which is a *generic* variable.
   Its wrapper sets it on the `exec` line only, never exports it, because
@@ -120,7 +119,7 @@ python3 -m unittest discover -s tests       # the acceptance checklist
 
 The kit does not containerize the harness for profile isolation. Config
 isolation is environment variables, a wrapper, and a `.desktop` file; dock
-identity is a Personal-style copy of the vendor GUI. Containerizing to obtain
+identity is a copy of the vendor GUI. Containerizing to obtain
 that would cost a rebuild per profile switch. A containerized harness driving
 `docker compose` or `enonic sandbox` needs a mounted Docker socket, which is
 root-equivalent on the host and erases the isolation the container was for.

@@ -1061,9 +1061,8 @@ class AuthDispatcherTests(unittest.TestCase):
 
 
 class AppForkTests(unittest.TestCase):
-    """Per-profile Electron forks follow the Claude Personal recipe:
-    rsync stock, patch identity, never write the stock tree, survive via
-    apt + dpkg hooks (Cursor's dual hook; Personal is apt-only)."""
+    """Per-profile Electron forks rsync stock, patch identity, never write
+    the stock tree, and survive via apt and dpkg hooks."""
 
     def _asar(self, path: Path, desktop: str) -> None:
         blob = (json.dumps({"name": "app", "desktopName": desktop,
@@ -1084,8 +1083,8 @@ class AppForkTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "app.asar"
             self._asar(path, "com.anthropic.Claude.desktop")
-            appfork.patch_asar_desktop_name(
-                path, "Claude-dummy.desktop", dry_run=False)
+            appfork.patch_asar_package(
+                path, {"desktopName": "Claude-dummy.desktop"}, dry_run=False)
             self.assertEqual(appfork.asar_desktop_name(path), "Claude-dummy.desktop")
 
     def test_asar_dry_run_does_not_write(self):
@@ -1093,9 +1092,30 @@ class AppForkTests(unittest.TestCase):
             path = Path(tmp) / "app.asar"
             self._asar(path, "chatgpt.desktop")
             before = path.read_bytes()
-            appfork.patch_asar_desktop_name(
-                path, "Codex-dummy.desktop", dry_run=True)
+            appfork.patch_asar_package(
+                path, {"desktopName": "Codex-dummy.desktop"}, dry_run=True)
             self.assertEqual(path.read_bytes(), before)
+
+    def test_asar_identity_follows_the_profile_slug(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            stock = root / "stock"
+            stock.mkdir()
+            spec = appfork.Vendor(
+                name="claude", package="claude-desktop", stock_lib=stock,
+                binary="claude-desktop",
+                stock_desktop_name="com.anthropic.Claude.desktop",
+                asar_rel="resources/app.asar",
+            )
+            for profile in ("enonic", "php"):
+                dest = root / f"claude-{profile}"
+                self._asar(dest / "resources" / "app.asar",
+                           "com.anthropic.Claude.desktop")
+                appfork.patch_identity(spec, dest, profile, dry_run=False)
+                self.assertEqual(
+                    appfork.asar_desktop_name(dest / "resources" / "app.asar"),
+                    f"Claude-{profile}.desktop",
+                )
 
     def test_cursor_unpacked_identity_patches_desktop_name_and_nameshort(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -1125,14 +1145,11 @@ class AppForkTests(unittest.TestCase):
             self.assertEqual(product["nameShort"], "Cursor-dummy")
             self.assertTrue(any("desktopName=Cursor-dummy.desktop" in line for line in lines))
 
-    def test_refuses_to_rsync_onto_stock_or_personal(self):
+    def test_refuses_to_rsync_onto_stock(self):
         spec = appfork.VENDORS["claude"]
         with self.assertRaises(RuntimeError) as caught:
             appfork.rsync_stock(spec, spec.stock_lib, dry_run=True)
         self.assertIn("stock", str(caught.exception))
-        with self.assertRaises(RuntimeError) as caught:
-            appfork.rsync_stock(spec, appfork.PERSONAL_LIB, dry_run=True)
-        self.assertIn("Personal", str(caught.exception))
 
     def test_cheap_gate_skips_when_version_and_desktop_name_match(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -1175,7 +1192,6 @@ class AppForkTests(unittest.TestCase):
             self.assertTrue(env.worker.is_file())
             self.assertTrue((env.fork_root / appfork.EMBLEM_NAME).is_file())
             self.assertNotIn("99-cursor-recolor", apt)
-            self.assertNotIn("99-claude-personal-sync", apt)
 
     def test_desktop_tokens_point_at_the_fork_not_stock(self):
         tokens = instances.render_tokens(

@@ -1,6 +1,6 @@
 ---
 name: orchestrate
-description: "Claude Code / Claude Personal only. Split independent workstreams with the Agent tool (claude-opus-5, claude-4.5-haiku). Use on `mult`, this skill name, 2+ independent streams, a blocking long command, or an independent review. Skip sequential or overlapping edits. Cursor: ~/.cursor/skills/orchestrate. Jira same-repo: multitask-same-repo. | recommendedRole: task-owner."
+description: "Claude Code only. Split independent workstreams with the Agent tool (claude-opus-5, claude-4.5-haiku). Use on `mult`, this skill name, 2+ independent streams, a blocking long command, or an independent review. Skip sequential or overlapping edits. Cursor: ~/.cursor/skills/orchestrate. Jira same-repo: multitask-same-repo. | recommendedRole: task-owner."
 metadata:
   recommendedRole: task-owner
   cliDependencies:
@@ -15,7 +15,7 @@ If the **Task** tool is available (Cursor): stop. Do not spawn `claude-opus-5`, 
 
 If **spawn_agent** is available (Codex): follow `~/.codex/skills/orchestrate/SKILL.md` instead.
 
-This copy is for Claude Code / Claude Personal only (Agent tool).
+This copy is for Claude Code only (Agent tool).
 
 Keep the root responsible for decomposition, user communication, approvals, synthesis, and the final claim. Delegate outcomes, not vague help.
 

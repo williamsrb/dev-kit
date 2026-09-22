@@ -4,10 +4,14 @@
 # Bash, not Python, for one reason: this runs before Python is guaranteed. Every
 # other helper in the kit is Python 3.12 stdlib (prefer-python-over-shell).
 #
-# Privilege rule: sudo is scoped to package transactions, and every sudo
-# prints the plan before it asks for a password. This script never writes
-# into a user's home and never touches configuration — that is install.py's
-# job, and install.py refuses to write configuration as root.
+# Privilege rule: elevation is scoped to package transactions, and every
+# elevated command prints the plan before it asks for a password. This script
+# never writes into a user's home and never touches configuration — that is
+# install.py's job, and install.py refuses to write configuration as root.
+#
+# This script is the start of the install workflow: re-run it on its own before
+# install.py. Desktop forks are the end (devkit profile apps-sync) and can be
+# re-run after.
 #
 # Usage:
 #   ./bootstrap.sh                    # dry run: print the plan, change nothing
@@ -32,14 +36,18 @@ usage() {
 Usage: bootstrap.sh [options]
 
 Installs the dependencies a profile declares. Writes no configuration.
-Privileged package commands print the plan, then ask sudo; they never
-prompt for a password before you have seen what will run.
+Privileged package commands print the plan, then ask for administrator
+privileges; they never prompt before you have seen what will run. A terminal
+on stdin or stdout uses sudo. When neither is a terminal, the same
+commands run under pkexec, or under sudo -A when pkexec is absent.
 
 Options:
   --profile NAME       Profile whose deps to install (default: core)
   --apply              Actually install. Prints privileged commands, then
-                       asks sudo. Without it this is a dry run (commands
-                       show as "would run (as root): sudo …").
+                       asks for administrator privileges (sudo on a
+                       terminal; pkexec, or sudo -A, otherwise). Without it
+                       this is a dry run (commands show as
+                       "would run (as root): sudo …").
   --wire-path          Add ~/.local/bin to PATH in your shell profile, after
                        reporting which file would change.
   --third-party yes|no Answer the third-party repository prompt up front.
@@ -78,10 +86,14 @@ warn() { printf 'warning: %s\n' "$*" >&2; }
 die()  { printf 'error: %s\n' "$1" >&2; [ -n "${2:-}" ] && printf 'fix:   %s\n' "$2" >&2; exit 1; }
 run()  { if [ "$APPLY" -eq 1 ]; then say "  + $*"; "$@"; else say "  would run: $*"; fi; }
 
-# Privileged commands print the plan, then invoke sudo (which may ask for a
-# password). Never the other way around.
+# Privileged commands print the plan, then elevate. Never the other way around.
+# A terminal on stdin or stdout uses sudo. When neither is, use pkexec or
+# sudo -A so the prompt does not need a tty.
 ELEVATION_ANNOUNCED=0
 ELEVATION_ASKED=0
+interactive_shell() {
+  [ -t 0 ] || [ -t 1 ]
+}
 announce_elevation() {
   say "These steps need administrator privileges: $1"
   ELEVATION_ANNOUNCED=1
@@ -91,6 +103,10 @@ ask_elevation() {
     return 0
   fi
   say "Asking for administrator privileges."
+  if ! interactive_shell; then
+    say "Non-interactive shell: stdin and stdout are not terminals."
+    say "Run this script on its own before the rest of the install if the dialog does not appear here."
+  fi
   ELEVATION_ASKED=1
 }
 elevate() {
@@ -102,8 +118,16 @@ elevate() {
     announce_elevation "they write into the system package locations."
   fi
   ask_elevation
-  say "  + sudo $*"
-  sudo "$@"
+  if interactive_shell; then
+    say "  + sudo -- $*"
+    sudo -- "$@"
+  elif command -v pkexec >/dev/null 2>&1; then
+    say "  + pkexec $*"
+    pkexec "$@"
+  else
+    say "  + sudo -A -- $*"
+    sudo -A -- "$@"
+  fi
 }
 
 # ---------------------------------------------------------------- family

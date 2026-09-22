@@ -137,9 +137,12 @@ profile's desktop launcher (or CLI) and start login from there.
 
 ## `sudo is not on PATH`
 
-Desktop forks and package installs need `sudo`. Install it, or re-run the
-printed commands as root. The plan is always printed before that prompt; a
-cancelled password leaves user-owned config in place.
+Desktop forks and package installs need `sudo` on a terminal, or `pkexec` /
+`sudo -A` when stdin and stdout are not terminals. Install one of those, or
+re-run the printed commands as root. The plan is always printed before that
+prompt; a cancelled password leaves user-owned config in place. The elevated
+command is the start (`bootstrap.sh --apply`) or the end
+(`devkit profile apps-sync --apply`), so it can be run on its own.
 
 ## Codex warns about helper binaries under a temporary directory
 

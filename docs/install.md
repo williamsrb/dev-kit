@@ -6,7 +6,7 @@ writing root-owned files into a user's home.
 
 | Step | Installs | Writes config | Privilege |
 |------|----------|---------------|-----------|
-| `bootstrap.sh` | packages | no | `sudo`, after printing the plan |
+| `bootstrap.sh` | packages | no | elevation, after the plan |
 | `install.py` | nothing | yes | your own user; refuses root |
 
 ## Step 1: dependencies
@@ -18,8 +18,12 @@ writing root-owned files into a user's home.
 
 It detects your distribution family through `ID_LIKE`, so a derivative is
 handled as its parent without needing its own entry. `--apply` prints every
-`sudo` command, then asks for a password. Without `--apply` the same commands
-show as `would run (as root): sudo …`.
+root command, then asks for administrator privileges. A terminal on stdin or
+stdout uses `sudo`. When neither is a terminal, the same commands run under
+`pkexec`, or under `sudo -A` when `pkexec` is
+absent. That block is the start of the workflow, so it can be run on its own
+before `install.py`. Without `--apply` the same commands show as
+`would run (as root): sudo …`.
 
 Dependencies resolve down a ladder: distribution package first, then nvm for
 Node, then npm, then `uv` for Python tools, then a direct binary from a GitHub

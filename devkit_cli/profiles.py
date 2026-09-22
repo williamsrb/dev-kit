@@ -751,7 +751,7 @@ def finish_appforks(home: Path, profile: dict, user: str) -> None:
 
 
 def escalate_appforks(home: Path, profile: dict | None, user: str) -> int:
-    """Print the fork plan, then sudo. Config writes must already have finished."""
+    """Print the fork plan, then elevate. Config writes must already have finished."""
     missing = appfork.doctor_lines(home)
     if profile:
         prefix = f"{profile['name']}/"

@@ -1,12 +1,15 @@
 """The detached uninstaller, written to $HOME/.local/bin at install time.
 
-The checkout does not contain a shell file. install.py writes the text below
-to devkit-uninstall.sh.
+The checkout does not contain a shell file. Every command that materializes a
+profile writes the text below to devkit-uninstall.sh, so a machine can always
+be undone by the command that is already on PATH.
 """
 
 from __future__ import annotations
 
 from pathlib import Path
+
+from .common import Plan
 
 SCRIPT = r"""
 #!/usr/bin/env bash
@@ -378,10 +381,26 @@ exit 0
 DEST_NAME = "devkit-uninstall.sh"
 
 
+def _text() -> str:
+    text = SCRIPT.lstrip("\n")
+    return text if text.endswith("\n") else text + "\n"
+
+
 def write_uninstaller(dest: Path) -> None:
     dest.parent.mkdir(parents=True, exist_ok=True)
-    text = SCRIPT.lstrip("\n")
-    if not text.endswith("\n"):
-        text += "\n"
-    dest.write_text(text, encoding="utf-8")
+    dest.write_text(_text(), encoding="utf-8")
     dest.chmod(0o755)
+
+
+def ensure(home: Path, plan: Plan) -> None:
+    """Record the uninstaller, and write it on --apply.
+
+    Every path that creates a profile calls this. A profile created without it
+    would be removable only by hand.
+    """
+    dest = home / ".local" / "bin" / DEST_NAME
+    if dest.is_file() and dest.read_text(encoding="utf-8") == _text():
+        return
+    plan.record(f"write  {dest}")
+    if plan.apply:
+        write_uninstaller(dest)

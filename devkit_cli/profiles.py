@@ -12,7 +12,7 @@ import os
 import sys
 from pathlib import Path
 
-from . import appfork, auth, instances, manifest, mcp, privilege
+from . import appfork, auth, instances, manifest, mcp, privilege, uninstaller
 from .common import (
     EXEC_MODE,
     FILE_MODE,
@@ -549,6 +549,7 @@ def cmd_create(args) -> int:
     plan = Plan(args.apply)
     plan.record(f"color  {pair['light']}")
     materialize(profile, args.vendor, home, plan, args.force)
+    uninstaller.ensure(home, plan)
     result = plan.report(f"profile {args.name}")
     if plan.apply and plan.actions:
         _report_home_root_rules(home)
@@ -562,6 +563,7 @@ def cmd_sync(args) -> int:
     profile = load_for_instance(args.name, home)
     plan = Plan(args.apply)
     materialize(profile, None, home, plan, force=True)
+    uninstaller.ensure(home, plan)
     result = plan.report(f"profile {args.name} (sync)")
     if plan.apply:
         finish_appforks(home, profile, user.pw_name)
@@ -653,10 +655,14 @@ def cmd_doctor(args) -> int:
     problems: list[str] = []
     checked = 0
 
+    installed: list[str] = []
+
     for name, vendor, config_dir, prov in instances.discover_instances(home):
         if args.profile and name != args.profile:
             continue
         checked += 1
+        if name not in installed:
+            installed.append(name)
         label = f"{name}/{vendor}"
         if prov.get("source_commit") != kit_commit:
             problems.append(
@@ -675,6 +681,14 @@ def cmd_doctor(args) -> int:
                 f"{label}: {len(offenders)}+ path(s) not owned by you: {listed}\n"
                 f"    fix: sudo chown -R {uid} {config_dir} "
                 f"— and stop installing config with sudo")
+
+    if installed:
+        undo = home / ".local" / "bin" / uninstaller.DEST_NAME
+        if not undo.is_file():
+            problems.append(
+                f"{relative_to_home(undo)}: missing — {len(installed)} profile(s) "
+                f"are installed and nothing on PATH removes them\n"
+                f"    fix: devkit profile sync {installed[0]} --apply")
 
     problems += _home_root_problems(home)
     auth_lines = auth.doctor_lines(home)

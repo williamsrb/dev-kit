@@ -31,6 +31,7 @@ Common examples:
   devkit profile auth restore
   devkit update check
   devkit doctor
+  devkit deps --profile enonic       # are the declared binaries on PATH?
 
 Run 'devkit GROUP --help' or 'devkit GROUP COMMAND --help' for details.
 
@@ -43,6 +44,7 @@ command groups:
     lint-paths      Fail on home paths in machine-consumed positions.
     doctor          Check instances for staleness, ownership, auth handlers, and
                     desktop forks.
+    deps            Check that every binary a profile declares is on PATH.
     profile         Create, inspect, sync, and rebuild isolated harness
                     profiles.
     update          Check, stage, and apply kit updates (one direction).
@@ -92,6 +94,25 @@ Check instances for staleness, ownership, auth handlers, and desktop forks.
 options:
   -h, --help      show this help message and exit
   --profile NAME  Check only this profile.
+```
+
+### `devkit deps`
+
+```
+usage: devkit deps [-h] [--profile TYPE] [--manager {apt,dnf,pacman}] [--family NAME] [--third-party-declined]
+
+Check that every binary a profile declares is on PATH.
+
+options:
+  -h, --help            show this help message and exit
+  --profile TYPE        Profile type whose deps to check (default: core).
+  --manager {apt,dnf,pacman}
+                        Package manager. Default: derived from --family.
+  --family NAME         Distribution family (debian, rhel, fedora, arch).
+                        Default: /etc/os-release.
+  --third-party-declined
+                        Binaries that only live in a third-party repo are
+                        skipped, not missing.
 ```
 
 ### `devkit profile`
@@ -166,7 +187,7 @@ options:
 ```
 usage: devkit profile sync [-h] [--apply] name
 
-Re-write the instance from the current manifest: prune a leftover core/ symlink, refresh AGENTS_HOME projections, keep spawned playwright-<id> MCP entries. --apply writes user-owned config, then prints the desktop-fork plan and asks sudo.
+Re-write the instance from the current manifest: prune a leftover core/ symlink, refresh AGENTS_HOME projections, restore a missing devkit-uninstall.sh, keep spawned playwright-<id> MCP entries. --apply writes user-owned config, then prints the desktop-fork plan and asks sudo.
 
 positional arguments:
   name

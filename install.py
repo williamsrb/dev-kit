@@ -22,6 +22,8 @@ Usage:
     ./install.py --name dummy --profile enonic --apply
     ./install.py --verify
 
+Exit codes: 0 ok, 1 a refusal or a --verify problem, 2 bad invocation.
+
 Python 3.12, standard library only.
 """
 
@@ -33,7 +35,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from devkit_cli import instances, manifest, privilege
+from devkit_cli import instances, manifest, privilege, uninstaller
 from devkit_cli.common import Plan, repo_file
 from devkit_cli.errors import DevkitError
 from devkit_cli.profiles import (
@@ -45,7 +47,6 @@ from devkit_cli.profiles import (
     load_for_create,
     materialize,
 )
-from devkit_cli.uninstaller import DEST_NAME, write_uninstaller
 
 
 def verify(profile: dict, home: Path) -> int:
@@ -136,10 +137,7 @@ def main() -> int:
 
         plan = Plan(args.apply)
         materialize(profile, args.vendor, home, plan, args.force)
-        dest = home / ".local" / "bin" / DEST_NAME
-        print(f"{'install' if args.apply else 'would install'} {dest}")
-        if args.apply:
-            write_uninstaller(dest)
+        uninstaller.ensure(home, plan)
         result = plan.report(f"profile {name} (type {type_name}) for {user.pw_name}")
 
         if args.fix_home_rules:

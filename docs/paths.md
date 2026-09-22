@@ -59,6 +59,13 @@ listed against specific rule ids rather than blanket-disabling a file.
 The test suite carries deliberate positive fixtures — a test proving a rule
 fires has to contain the string the rule matches — so it is exempt by name.
 
+`ignore` is the blunter list beside it: paths the gate does not read at all,
+rather than a file it reads with one rule switched off. It covers generated and
+vendored content, and the local state this repo's `.gitignore` already declares
+— `.security-local/`, `.ruff_cache/`, `.cache/`, `graft/`. A security scan
+embeds commit messages in its JSON output, so without that entry a routine scan
+can turn the gate red over a path nobody wrote.
+
 ## Rendering
 
 `${HOME}` and `${PROFILE_*}` are rendered at install time, per context, by

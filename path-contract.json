@@ -111,6 +111,13 @@
     "docs/**/*.png",
     "**/__pycache__/**",
     "**/*.pyc",
+    ".security-local/**",
+    ".ruff_cache/**",
+    ".cache/**",
+    "graft/**",
+    "**/*.bak",
+    "**/*.tmp",
+    "**/*.devkit-backup-*",
     "path-contract.json",
     "core/kb/offline-reference/**",
     "core/skills/render-diff-patch/diff2html-ui.min.js"

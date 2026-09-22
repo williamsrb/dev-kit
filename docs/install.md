@@ -79,8 +79,13 @@ knowledge base as per-entry symlinks (the profile's subset, not the whole kit
 `core/` tree), renders the vendor configs, writes the Tier 1 wrappers (with
 `DEVKIT_PROFILE` / `AGENTS_HOME`) and desktop launchers, badges the icons with a
 coloured shield emblem,
-and records a provenance file. Desktop identity forks (patched asar / `WM_CLASS`)
-rsync into `/usr/lib/devkit/`. `install.py --apply` prints that plan and then
+and records a provenance file. Wrappers and launchers also export
+`GRAFT_NO_GITIGNORE=1` and `GRAFT_NO_IGNORE=1`, so graft stops writing
+`.gitignore` and `.ignore` into every repo it builds in. Instead, the kit's
+ignore block (graft, graphify and agentctl security-scan output, at any depth)
+is appended to your global git ignore: the file `core.excludesFile` names, or
+`~/.config/git/ignore`. It is skipped when every pattern is already there.
+Desktop identity forks (patched asar / `WM_CLASS`) rsync into `/usr/lib/devkit/`. `install.py --apply` prints that plan and then
 asks `sudo` for a password. Re-run later with:
 
 ```bash
@@ -170,6 +175,8 @@ Removed:
   `~/.local/state/devkit`
 - the PATH block `bootstrap.sh --wire-path` added, from `.bash_profile`,
   `.profile`, `.zshrc` and `.bashrc`
+- the kit's block in the global git ignore file, between its
+  `# Added by devkit` and `# End of devkit block.` lines
 - with sudo: `/usr/lib/devkit`, `/usr/local/bin/sync-devkit-profile-apps.py`,
   `/etc/apt/apt.conf.d/99-devkit-profile-apps`,
   `/etc/dpkg/dpkg.cfg.d/60devkit-profile-apps`,

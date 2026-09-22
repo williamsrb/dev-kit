@@ -15,12 +15,12 @@ Sorted cheapest/simplest first.
 
 | Role | Codex | Claude | Cursor |
 |---|---|---|---|
-| `deterministic` | `gpt-5.6-luna` `high` | `claude-4.5-haiku` default | `auto` |
-| `explore` | `gpt-5.6-luna` `xhigh` | `claude-opus-5` `low` | `composer-2.5-fast` |
-| `follow` | `gpt-5.6-luna` `xhigh` | `claude-opus-5` `low` | `composer-2.5-fast` |
-| `implement` | `gpt-5.6-luna` `max` | `claude-opus-5` `medium` | `cursor-grok-4.7-medium` |
-| `task-owner` | `gpt-5.6-terra` `xhigh` | `claude-opus-5` `medium` | `cursor-grok-4.7-medium` |
-| `quality-gate` | `gpt-5.6-sol` `medium` | `claude-opus-5` `high` | `cursor-grok-4.7-high` |
+| `deterministic` | `gpt-5.6-luna` `high` | `claude-haiku-4-5-20251001` default | `auto` |
+| `explore` | `gpt-5.6-luna` `xhigh` | `claude-opus-5-5` `low` | `composer-2.5-fast` |
+| `follow` | `gpt-5.6-luna` `xhigh` | `claude-opus-5-5` `low` | `composer-2.5-fast` |
+| `implement` | `gpt-5.6-luna` `max` | `claude-opus-5-5` `medium` | `cursor-grok-4.7-medium` |
+| `task-owner` | `gpt-5.6-terra` `xhigh` | `claude-opus-5-5` `medium` | `cursor-grok-4.7-medium` |
+| `quality-gate` | `gpt-5.6-sol` `medium` | `claude-opus-5-5` `high` | `cursor-grok-4.7-high` |
 
 ### What each role is
 

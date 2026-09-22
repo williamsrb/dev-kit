@@ -1,6 +1,6 @@
 ---
 name: orchestrate
-description: "Claude Code only. Split independent workstreams with the Agent tool (claude-opus-5, claude-4.5-haiku). Use on `mult`, this skill name, 2+ independent streams, a blocking long command, or an independent review. Skip sequential or overlapping edits. Cursor: ~/.cursor/skills/orchestrate. Jira same-repo: multitask-same-repo. | recommendedRole: task-owner."
+description: "Claude Code only. Split independent workstreams with the Agent tool (claude-opus-5-5, claude-haiku-4-5-20251001). Use on `mult`, this skill name, 2+ independent streams, a blocking long command, or an independent review. Skip sequential or overlapping edits. Cursor: ~/.cursor/skills/orchestrate. Jira same-repo: multitask-same-repo. | recommendedRole: task-owner."
 metadata:
   recommendedRole: task-owner
   cliDependencies:
@@ -11,7 +11,7 @@ metadata:
 
 ## Host gate
 
-If the **Task** tool is available (Cursor): stop. Do not spawn `claude-opus-5`, `claude-opus-5-thinking-high`, or any Claude slug. Read and follow `${HOME}/.cursor/skills/orchestrate/SKILL.md` (same bytes as `~/.agents/skills-vendor/cursor/orchestrate/SKILL.md`). Cursor ladder: `composer-2.5-fast` (`explore`/`follow`), `cursor-grok-4.7-medium` (`implement`/`task-owner`), `cursor-grok-4.7-high` (`quality-gate`), `auto` (`deterministic`).
+If the **Task** tool is available (Cursor): stop. Do not spawn `claude-opus-5-thinking-high`, `claude-4.5-haiku-thinking`, or any Claude slug. Read and follow `${HOME}/.cursor/skills/orchestrate/SKILL.md` (same bytes as `~/.agents/skills-vendor/cursor/orchestrate/SKILL.md`). Cursor ladder: `composer-2.5-fast` (`explore`/`follow`), `cursor-grok-4.7-medium` (`implement`/`task-owner`), `cursor-grok-4.7-high` (`quality-gate`), `auto` (`deterministic`).
 
 If **spawn_agent** is available (Codex): follow `~/.codex/skills/orchestrate/SKILL.md` instead.
 
@@ -21,7 +21,7 @@ Keep the root responsible for decomposition, user communication, approvals, synt
 
 Defaults follow `~/.agents/benchmarks/2026-08-deepswe.yaml`. Retune when that file is replaced.
 
-Spawn only `claude-opus-5` and `claude-4.5-haiku` (or the installed Haiku 4.5 slug). Do not spawn `claude-sonnet-5` or `claude-fable-5` unless the user names them. Sonnet is dominated on DeepSWE (worse and more expensive than Opus Low). Fable matches Terra-range scores at 2–4× the cost.
+Spawn only `claude-opus-5-5` and `claude-haiku-4-5-20251001` (or the installed Haiku 4.5 slug). Do not spawn `claude-sonnet-5` or `claude-fable-5-1` unless the user names them. Sonnet is dominated on DeepSWE (worse and more expensive than Opus Low). Fable matches Terra-range scores at 2–4× the cost.
 
 Jira-oriented PRD work on several keys of the same repo is `multitask-same-repo` (worktrees, fresh sessions). Stop here and follow that skill instead.
 
@@ -43,10 +43,10 @@ Claude has no Luna/Terra/Sol family. Route on Opus effort, plus Haiku for `deter
 
 | Model | Effort | Use when | Do not use for |
 |---|---|---|---|
-| `claude-opus-5` | `low` | `explore` or `follow`: docs, CI inspection, defined skill procedures. Closest to Luna xhigh. | Weak-result coding that would cause rework; high-stakes judgment. |
-| `claude-opus-5` | `medium` | `implement` or `task-owner`. Default coding spawn. Collapses Luna max, Terra max, and Sol high. | `deterministic` grep/wait work; the Sol-max `quality-gate` slot. |
-| `claude-opus-5` | `high` | `quality-gate`: architecture, security, payment, or release-risk. Closest to Sol max, cheaper on DeepSWE. | Routine `explore` or ordinary isolated coding. |
-| `claude-4.5-haiku` | default | `deterministic` tool runs whose result is cheap to verify. Guessed Luna-medium clone (score 11). | `explore`, coding, review, or `quality-gate`. |
+| `claude-opus-5-5` | `low` | `explore` or `follow`: docs, CI inspection, defined skill procedures. Closest to Luna xhigh. | Weak-result coding that would cause rework; high-stakes judgment. |
+| `claude-opus-5-5` | `medium` | `implement` or `task-owner`. Default coding spawn. Collapses Luna max, Terra max, and Sol high. | `deterministic` grep/wait work; the Sol-max `quality-gate` slot. |
+| `claude-opus-5-5` | `high` | `quality-gate`: architecture, security, payment, or release-risk. Closest to Sol max, cheaper on DeepSWE. | Routine `explore` or ordinary isolated coding. |
+| `claude-haiku-4-5-20251001` | default | `deterministic` tool runs whose result is cheap to verify. Guessed Luna-medium clone (score 11). | `explore`, coding, review, or `quality-gate`. |
 
 If the Agent tool exposes a thinking or effort argument, set it to the effort above. If it does not, name that effort in the assignment and do not invent a slug. Opus `xhigh` / `max` are optional user-named upgrades, not defaults (High already matches Sol max).
 
@@ -57,7 +57,7 @@ Workers do not spawn further unless the root explicitly assigns coordination of 
 Immediately before every Agent call, tell the user:
 
 - The agent task name.
-- Exact model slug, such as `claude-opus-5`.
+- Exact model slug, such as `claude-opus-5-5`.
 - Exact effort, such as `medium` or `high`.
 - Role, leaf vs authorized coordinator, and `subagent_type`.
 
@@ -65,9 +65,9 @@ Group simultaneous spawns into one compact update. Describe these as requested c
 
 ```text
 Spawning:
-- `log_explore` — `claude-opus-5`, effort `low`, Explore — read-only gather
-- `impl_auth` — `claude-opus-5`, effort `medium`, general-purpose — implement
-- `quality_gate` — `claude-opus-5`, effort `high`, general-purpose — quality-gate
+- `log_explore` — `claude-opus-5-5`, effort `low`, Explore — read-only gather
+- `impl_auth` — `claude-opus-5-5`, effort `medium`, general-purpose — implement
+- `quality_gate` — `claude-opus-5-5`, effort `high`, general-purpose — quality-gate
 ```
 
 ## Personas

@@ -10,7 +10,7 @@ prose: caveman-lite
 
 # Export Cursor sessions to Claude
 
-One-way native parent chats → work Claude (`~/.claude/projects`). Desktop sync is a later fan-out, not a second writer.
+One-way native parent chats → work Claude (`~/.claude/projects`).
 
 TBD defaults (operator silence, 2026-08-25): parent JSONL only; full corpus (no `--since`); skip when dest SHA diverged (`claude-diverged`).
 
@@ -21,7 +21,7 @@ TBD defaults (operator silence, 2026-08-25): parent JSONL only; full corpus (no 
 3. IDs: UUID5 of `cursor:<composerId>` in namespace `https://agents.local/cursor-to-claude`. Title prefix `[cursor] ` once (same as Codex `[codex] `). If the title already starts with `[cursor]`, do not prepend again. `entrypoint=cursor-export`. Do not reuse the raw composer UUID.
 4. JSONL `cwd` is the real workspace folder. Dest path uses that slug. Desktop index uses the same `cwd`. Cursor may list the export next to the native composer (Codex echo). Distinct UUID5 + skip-echo keep that from growing.
 5. Dest: `~/.claude/projects/<project_slug>/<cli>.jsonl` and `local_<cli>.json` under `pick_org_dir(~/.config/Claude/claude-code-sessions)`. Ledger/lock/log: `~/.local/share/cursor-to-claude-sync/` (`export.lock` is not Codex or Claude `sync.lock`).
-6. Batch order in `~/.agents/cron/sync-claude-desktop-sessions.job` and live crontab (`*/5`): Codex export, Cursor export, `backfill-claude-jsonl-ai-titles.py`, then desktop sync.
+6. Batch order in `~/.agents/cron/sync-claude-desktop-sessions.job` and live crontab (`*/5`): Codex export, Cursor export, then `backfill-claude-jsonl-ai-titles.py`.
 7. Do not write `~/.agents/history/*_prompt.md` / `*_result.md`. Do not toggle `cursor.sharedSessionFileWatcher.enabled`. Query the `composerHeaders` **table** (`mode=ro`), not ItemTable `composer.composerHeaders`.
 
 ## Pitfalls

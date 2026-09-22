@@ -322,7 +322,8 @@ PLACEHOLDER_RE = re.compile(
 
 PLAN_HEADINGS = {
     "implementation": ("overview", "functional-requirements", "non-goals", "constraints",
-                       "tbd", "implicit-requirements", "implementation-plan", "validation"),
+                       "tbd", "implicit-requirements", "already-delivered",
+                       "implementation-plan", "validation"),
     "evidence": ("auth-required", "acceptance-criteria", "evidence-steps", "artifacts",
                  "posting-gate"),
 }
@@ -333,6 +334,9 @@ FOLDER_COMPANIONS = (
     "plan.md", "requirements.md", "implementation.md", "validation.md",
     "evidence.md", "tbd.md", "implicit.md", "decisions.md",
 )
+# Run state, not spec. Excluded from validation so a half-finished run can never
+# make a plan invalid, and so re-planning never clobbers recorded progress.
+PROGRESS_FILE = "progress.md"
 
 
 def plan_template(kind: str, issue: str) -> str:
@@ -350,6 +354,10 @@ def plan_template(kind: str, issue: str) -> str:
 ## TBD
 
 ## Implicit requirements
+
+## Already delivered
+
+- Nothing delivered yet. This is the first increment.
 
 ## Implementation Plan
 
@@ -388,7 +396,7 @@ def folder_plan_md(issue: str, kind: str) -> str:
             ("User Stories, Functional Requirements", "requirements.md"),
             ("TBD", "tbd.md"),
             ("Implicit requirements", "implicit.md"),
-            ("Implementation Plan", "implementation.md"),
+            ("Already delivered, Implementation Plan", "implementation.md"),
             ("Validation", "validation.md"),
         ]
         title = "Implementation plan"
@@ -412,7 +420,12 @@ def folder_plan_md(issue: str, kind: str) -> str:
 def folder_companion_bodies(issue: str) -> dict[str, str]:
     return {
         "requirements.md": f"# {issue}: Requirements\n\n## User Stories\n\n## Functional Requirements\n",
-        "implementation.md": f"# {issue}: Implementation\n\n## Implementation Plan\n",
+        "implementation.md": (
+            f"# {issue}: Implementation\n\n"
+            "## Already delivered\n\n"
+            "- Nothing delivered yet. This is the first increment.\n\n"
+            "## Implementation Plan\n"
+        ),
         "validation.md": f"# {issue}: Validation\n\n## Validation\n",
         "tbd.md": f"# {issue}: TBD\n\n## TBD\n",
         "implicit.md": (
@@ -432,9 +445,20 @@ def plan_dir_files(directory: Path) -> list[Path]:
         if path.is_file():
             files.append(path)
     for path in sorted(directory.glob("*.md")):
-        if path not in files:
+        if not is_progress_name(path.name) and path not in files:
             files.append(path)
     return files
+
+
+def is_progress_name(name: str) -> bool:
+    return name == PROGRESS_FILE or name.endswith(".progress.md")
+
+
+def progress_path(plan: Path) -> Path:
+    """One progress file per plan. A shared plans/ directory cannot use one progress.md."""
+    if plan.is_dir():
+        return plan / PROGRESS_FILE
+    return plan.with_name(f"{plan.stem}.progress.md")
 
 
 def collect_headings(paths: list[Path]) -> list[dict[str, Any]]:
@@ -572,6 +596,430 @@ def validate_plan_paths(paths: list[Path], kind: str, label: str) -> dict[str, A
         "unresolved_placeholders": unresolved,
     }
     return payload
+
+
+# --- plan progress -------------------------------------------------------
+# Resume support. A plan is a spec; progress is state. State lives in
+# progress.md next to the plan, is excluded from validation, and is keyed by a
+# hash of the steps text so an edited plan cannot inherit stale ticks.
+#
+# Backward compatibility: when no progress.md exists, state is INFERRED from
+# the plan itself (an "Already delivered" ledger, inline [x]/DONE step marks)
+# and, for evidence plans, from artifacts already on disk. Plans written before
+# this feature therefore resume correctly without being migrated first.
+
+PROGRESS_MARKER_RE = re.compile(r"<!--\s*agentctl:progress\s*(\{.*?\})\s*-->", re.S)
+STEP_EXPLICIT_RE = re.compile(
+    r"^\s*(?:[-*]\s+)?(?:\[[ xX~]\]\s+)?\*{0,2}(S\d+)\b[.):\u2014\u2013-]*\*{0,2}\s*(.*)$"
+)
+STEP_BOLD_RE = re.compile(
+    r"^\s*(?:[-*]\s+)?(?:\[[ xX~]\]\s+)?\*\*Step\s+([0-9]+[A-Za-z]?)\b\s*[.:\u2014\u2013-]*\s*(.*?)\*\*"
+)
+STEP_ORDINAL_RE = re.compile(r"^\s{0,3}(?:[-*]\s+)?(\d+)\.\s+(.*)$")
+STEP_DONE_RE = re.compile(r"\[[xX]\]")
+DONE_TOKEN_RE = re.compile(r"\bDONE\b")
+REQ_ID_RE = re.compile(r"\b(FR|AC|US|S|E)-?(\d+)\b")
+ARTIFACT_RE = re.compile(r"\b([0-9A-Za-z][\w.\-]*\.(?:png|jpe?g|webp|pdf))\b", re.I)
+STEP_SECTION_SLUGS = ("implementation-steps", "evidence-steps", "steps")
+DELIVERED_SLUG = "already-delivered"
+PROGRESS_STATUSES = ("pending", "done", "skipped", "blocked")
+
+
+def normalise_req_id(prefix: str, number: str) -> str:
+    prefix = prefix.upper()
+    return f"{prefix}{number}" if prefix in ("S", "E") else f"{prefix}-{number}"
+
+
+def strip_markdown(text: str) -> str:
+    text = re.sub(r"^\s*\[[ xX~]\]\s*", "", text)
+    text = re.sub(r"[`*_]+", "", text).strip()
+    return re.sub(r"\s+", " ", text)[:160]
+
+
+def plan_section_text(paths: list[Path], slugs: tuple[str, ...]) -> str:
+    chunks: list[str] = []
+    for path in paths:
+        for section in markdown_sections(path):
+            if any(slug in slugs for slug in section["slugs"]):
+                chunks.append(section["text"])
+    return "\n".join(chunks)
+
+
+def steps_source_paths(paths: list[Path], kind: str) -> list[Path]:
+    """A folder plan holds both implementation.md and evidence.md, and both have a
+    steps section. Read the one this kind owns, or the counterpart's steps leak in."""
+    own, other = ("implementation.md", "evidence.md")
+    if kind == "evidence":
+        own, other = other, own
+    owned = [path for path in paths if path.name == own]
+    if owned:
+        return owned
+    return [path for path in paths if path.name != other]
+
+
+def parse_implementation_steps(text: str) -> list[dict[str, Any]]:
+    """Explicit S-ids win outright. Otherwise bold `**Step N**` headers and
+    ordinal list items are both steps, kept in document order. Ordinals are
+    flagged unstable: inserting a step renumbers them, which is why the steps
+    hash exists."""
+    explicit: list[dict[str, Any]] = []
+    fallback: list[dict[str, Any]] = []
+
+    def marked(line: str) -> bool:
+        return bool(STEP_DONE_RE.search(line) or DONE_TOKEN_RE.search(line))
+
+    for line in text.splitlines():
+        match = STEP_EXPLICIT_RE.match(line)
+        if match:
+            explicit.append({
+                "id": match.group(1).upper(),
+                "title": strip_markdown(match.group(2)),
+                "marked_done": marked(line),
+                "id_source": "explicit",
+            })
+            continue
+        match = STEP_BOLD_RE.match(line)
+        if match:
+            fallback.append({
+                "id": f"STEP-{match.group(1).upper()}",
+                "title": strip_markdown(match.group(2)),
+                "marked_done": marked(line),
+                "id_source": "bold",
+            })
+            continue
+        match = STEP_ORDINAL_RE.match(line)
+        if match:
+            fallback.append({
+                "id": f"N{match.group(1)}",
+                "title": strip_markdown(match.group(2)),
+                "marked_done": marked(line),
+                "id_source": "ordinal",
+            })
+    chosen = explicit or fallback
+    seen: set[str] = set()
+    steps: list[dict[str, Any]] = []
+    for step in chosen:
+        if step["id"] in seen:
+            continue
+        seen.add(step["id"])
+        steps.append(step)
+    return steps
+
+
+def parse_evidence_steps(text: str, artifacts_dir: Path | None) -> list[dict[str, Any]]:
+    """Evidence steps are keyed by their planned artifact filename: the strongest
+    id available, and one that lets existence on disk answer "is this done"."""
+    steps: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for line in text.splitlines():
+        stripped = line.strip()
+        if not stripped.startswith("|") or set(stripped) <= set("|- :"):
+            continue
+        found = ARTIFACT_RE.findall(stripped)
+        if not found:
+            continue
+        artifact = found[-1]
+        if artifact in seen or "<" in stripped.split(artifact)[0][-3:]:
+            continue
+        cells = [cell.strip() for cell in stripped.strip("|").split("|")]
+        goal = strip_markdown(cells[1]) if len(cells) > 1 else ""
+        seen.add(artifact)
+        entry = {
+            "id": artifact,
+            "title": goal,
+            "marked_done": False,
+            "id_source": "artifact",
+        }
+        if artifacts_dir is not None:
+            entry["artifact_path"] = str(artifacts_dir / artifact)
+            entry["artifact_exists"] = (artifacts_dir / artifact).is_file()
+        steps.append(entry)
+    return steps
+
+
+def delivered_ids(paths: list[Path]) -> list[str]:
+    """Ids on ticked lines of an `Already delivered` section. Only explicit ids
+    count; prose is never guessed at."""
+    text = plan_section_text(paths, (DELIVERED_SLUG,))
+    ids: list[str] = []
+    for line in text.splitlines():
+        if not re.match(r"^\s*[-*]\s+\[[xX]\]", line):
+            continue
+        for prefix, number in REQ_ID_RE.findall(line):
+            value = normalise_req_id(prefix, number)
+            if value not in ids:
+                ids.append(value)
+    return ids
+
+
+def steps_fingerprint(text: str) -> str:
+    normalised = "\n".join(line.strip() for line in text.splitlines() if line.strip())
+    return hashlib.sha256(normalised.encode("utf-8")).hexdigest()[:16]
+
+
+def evidence_artifacts_dir(issue: str) -> Path:
+    return agents_home() / "prds" / issue / "evidence"
+
+
+def read_progress_state(path: Path) -> dict[str, Any] | None:
+    if not path.is_file():
+        return None
+    text = path.read_text(encoding="utf-8")
+    match = PROGRESS_MARKER_RE.search(text)
+    if match:
+        try:
+            return json.loads(match.group(1))
+        except json.JSONDecodeError:
+            pass
+    # Hand-edited file with the machine block lost: trust the checkboxes.
+    steps: dict[str, Any] = {}
+    for line in text.splitlines():
+        entry = re.match(r"^\s*[-*]\s+\[([ xX~])\]\s+`?([^`\s]+)`?", line)
+        if entry:
+            mark = entry.group(1).lower()
+            steps[entry.group(2)] = {
+                "status": "done" if mark == "x" else "skipped" if mark == "~" else "pending",
+            }
+    return {"version": 1, "steps": steps, "steps_hash": None, "source": "checkboxes"}
+
+
+def render_progress(issue: str, kind: str, state: dict[str, Any],
+                    steps: list[dict[str, Any]]) -> str:
+    mark = {"done": "x", "skipped": "~", "blocked": " ", "pending": " "}
+    lines = [f"# {issue}: Progress", ""]
+    lines.append(
+        f"Run state for `{kind}`. Written by run-plan, not by hand. Excluded from "
+        "`agentctl plan validate`."
+    )
+    lines.append("")
+    meta = [f"Steps hash: `{state.get('steps_hash')}`"]
+    if state.get("branch"):
+        meta.append(f"Branch: `{state['branch']}`")
+    if state.get("updated"):
+        meta.append(f"Updated: {state['updated']}")
+    lines.append(" · ".join(meta))
+    lines.append("")
+    delivered = state.get("delivered") or []
+    if delivered:
+        lines.append(f"Closed before this run (from `Already delivered`): {', '.join(delivered)}")
+        lines.append("")
+    for step in steps:
+        record = state["steps"].get(step["id"], {})
+        status = record.get("status", "pending")
+        suffix = ""
+        if status == "blocked":
+            suffix = " — **blocked**"
+        elif status == "skipped":
+            suffix = " — skipped"
+        note = record.get("note")
+        if note:
+            suffix += f" ({note})"
+        lines.append(f"- [{mark.get(status, ' ')}] `{step['id']}` {step['title']}{suffix}")
+    lines.append("")
+    # `-->` inside a note would close the comment and drop the machine block.
+    blob = json.dumps(state, sort_keys=True).replace("-->", r"--\u003e")
+    lines.append(f"<!-- agentctl:progress {blob} -->")
+    return "\n".join(lines) + "\n"
+
+
+def build_progress(directory: Path, kind: str, issue: str,
+                   artifacts_dir: Path | None) -> dict[str, Any]:
+    paths = plan_dir_files(directory) if directory.is_dir() else [directory]
+    section = plan_section_text(steps_source_paths(paths, kind), STEP_SECTION_SLUGS)
+    if kind == "evidence":
+        steps = parse_evidence_steps(section, artifacts_dir)
+    else:
+        steps = parse_implementation_steps(section)
+    fingerprint = steps_fingerprint(section)
+    closed = delivered_ids(paths)
+
+    recorded = read_progress_state(progress_path(directory))
+    stale = bool(recorded and recorded.get("steps_hash")
+                 and recorded["steps_hash"] != fingerprint)
+    unstable = any(step["id_source"] == "ordinal" for step in steps)
+
+    state: dict[str, Any] = {
+        "version": 1,
+        "kind": kind,
+        "issue": issue,
+        "steps_hash": fingerprint,
+        "branch": (recorded or {}).get("branch") or current_branch(),
+        "delivered": closed,
+        "steps": {},
+    }
+    carry = {}
+    if recorded and not (stale and unstable):
+        # Explicit ids survive an edit; ordinals do not, because the number moves.
+        carry = recorded.get("steps") or {}
+    for step in steps:
+        record = dict(carry.get(step["id"], {}))
+        status = record.get("status")
+        source = "recorded" if status else None
+        if not status:
+            if step["marked_done"] or step["id"] in closed:
+                status, source = "done", "inferred-plan"
+            elif step.get("artifact_exists"):
+                status, source = "done", "inferred-artifact"
+            else:
+                status, source = "pending", "default"
+        record["status"] = status
+        record["source"] = source
+        state["steps"][step["id"]] = record
+    state["updated"] = dt.date.today().isoformat()
+    state["stale"] = stale
+    sources = sorted({step["id_source"] for step in steps})
+    state["id_source"] = "+".join(sources) if sources else None
+    state["unstable_ids"] = unstable
+    return {"state": state, "steps": steps, "paths": paths}
+
+
+def current_branch() -> str | None:
+    try:
+        result = git(Path.cwd(), "branch", "--show-current")
+    except Exception:
+        return None
+    if result.returncode != 0:
+        return None
+    return result.stdout.strip() or None
+
+
+def cmd_plan_progress(args: argparse.Namespace) -> int:
+    resolved = resolve_plan_target(
+        args.target, plans_dir=args.plans_dir.resolve(), kind=args.kind,
+    )
+    if resolved["status"] != "ok":
+        emit(resolved)
+        return 2
+    entry = Path(resolved["entry"])
+    # A folder plan resolves to plan.md; its steps live in implementation.md, so
+    # progress must read the whole folder, not the entry file.
+    root = Path(resolved["root"]) if resolved.get("root") else entry
+    source = root if root.is_dir() else entry
+    kind = args.kind or resolved["kind"]
+    if source.is_dir():
+        issue = source.name
+    else:
+        stem = source.stem
+        suffix = "-evidence-plan"
+        issue = stem[: -len(suffix)] if stem.endswith(suffix) else stem
+    issue = resolved.get("task_id") or issue
+    progress_file = progress_path(source)
+    artifacts_dir = args.artifacts_dir.resolve() if args.artifacts_dir else (
+        evidence_artifacts_dir(issue) if kind == "evidence" else None
+    )
+
+    if args.reset:
+        existed = progress_file.is_file()
+        if existed:
+            progress_file.unlink()
+        emit({"status": "reset", "file": str(progress_file), "existed": existed})
+        return 0
+
+    built = build_progress(source, kind, issue, artifacts_dir)
+    state, steps = built["state"], built["steps"]
+    known = {step["id"] for step in steps}
+    unknown: list[str] = []
+    for assignment in args.set or []:
+        step_id, _, status = assignment.partition("=")
+        step_id, status = step_id.strip(), (status or "done").strip().lower()
+        if status not in PROGRESS_STATUSES:
+            emit({"status": "bad-status", "value": status,
+                  "allowed": list(PROGRESS_STATUSES)})
+            return 2
+        if step_id not in known:
+            unknown.append(step_id)
+            continue
+        record = state["steps"].setdefault(step_id, {})
+        record["status"] = status
+        record["source"] = "recorded"
+        record["at"] = dt.datetime.now().isoformat(timespec="seconds")
+        if args.note:
+            record["note"] = args.note
+    if unknown:
+        emit({"status": "unknown-steps", "steps": unknown, "known": sorted(known)})
+        return 2
+
+    wrote = None
+    if args.set or args.write:
+        progress_file.write_text(render_progress(issue, kind, state, steps), encoding="utf-8")
+        wrote = str(progress_file)
+
+    def ids_with(status: str) -> list[str]:
+        return [step["id"] for step in steps
+                if state["steps"][step["id"]]["status"] == status]
+
+    pending = ids_with("pending")
+    done = ids_with("done")
+    blocked = ids_with("blocked")
+    # done and skipped are finished. blocked stays next so a re-run stops on it.
+    nxt = next(
+        (step["id"] for step in steps
+         if state["steps"][step["id"]]["status"] not in ("done", "skipped")),
+        None,
+    )
+    emit({
+        "status": "ok",
+        "issue": issue,
+        "kind": kind,
+        "plan": str(source),
+        "progress_file": str(progress_file),
+        "progress_file_exists": progress_file.is_file(),
+        "steps_hash": state["steps_hash"],
+        "stale": state["stale"],
+        "id_source": state["id_source"],
+        "unstable_ids": state["unstable_ids"],
+        "delivered": state["delivered"],
+        "total": len(steps),
+        "done": done,
+        "pending": pending,
+        "blocked": blocked,
+        "next": nxt,
+        "steps": [{"id": step["id"], "title": step["title"],
+                   **state["steps"][step["id"]]} for step in steps],
+        "wrote": wrote,
+    })
+    return 0
+
+
+PLAN_STUBS = {
+    "already-delivered": (
+        "## Already delivered\n\n"
+        "- Nothing delivered yet. This is the first increment.\n"
+    ),
+}
+
+
+def cmd_plan_migrate(args: argparse.Namespace) -> int:
+    target = args.file.resolve()
+    if not target.exists():
+        emit({"status": "missing", "file": str(target)})
+        return 2
+    kind = args.kind or infer_plan_kind(target)
+    paths = plan_dir_files(target) if target.is_dir() else [target]
+    sections = collect_headings(paths)
+    present = {slug for section in sections for slug in section["slugs"]}
+    missing = [slug for slug in PLAN_HEADINGS[kind] if slug not in present]
+    addable = [slug for slug in missing if slug in PLAN_STUBS]
+    host = target
+    if target.is_dir():
+        preferred = target / "implementation.md"
+        host = preferred if preferred.is_file() else target / "plan.md"
+    if args.apply and addable:
+        text = host.read_text(encoding="utf-8") if host.is_file() else ""
+        blocks = [PLAN_STUBS[slug] for slug in addable]
+        text = text.rstrip("\n") + "\n\n" + "\n".join(blocks)
+        host.write_text(text, encoding="utf-8")
+    emit({
+        "status": "applied" if (args.apply and addable) else "ok",
+        "file": str(target),
+        "kind": kind,
+        "missing_sections": missing,
+        "added": addable if args.apply else [],
+        "needs": addable,
+        "host": str(host),
+        "unfixable": [slug for slug in missing if slug not in PLAN_STUBS],
+    })
+    return 0
 
 
 def cmd_plan_init(args: argparse.Namespace) -> int:
@@ -1921,6 +2369,63 @@ def build_parser() -> argparse.ArgumentParser:
     )
     validate.add_argument("--json", action="store_true", help=argparse.SUPPRESS)
     validate.set_defaults(func=cmd_plan_validate)
+    progress = plan.add_parser(
+        "progress",
+        help="Read or record per-step progress so a re-run skips finished work.",
+        description=(
+            "Report which plan steps are done, which are pending, and which step is "
+            "next. With no progress file the state is INFERRED from the plan's "
+            "'Already delivered' ledger, inline [x]/DONE step marks, and (evidence "
+            "plans) artifacts already on disk, so plans written before this command "
+            "resume correctly. A folder plan stores progress.md; a single-file plan "
+            "stores <stem>.progress.md beside it, so files that share a directory do "
+            "not share state. Both are excluded from validation. next is the first "
+            "step that is not done or skipped, so a blocked step stays next."
+        ),
+    )
+    progress.add_argument("target", help="Issue key, plan folder, or plan file path.")
+    progress.add_argument(
+        "--kind",
+        choices=sorted(PLAN_HEADINGS),
+        help="Plan schema. Inferred from layout or filename when omitted.",
+    )
+    progress.add_argument(
+        "--set",
+        action="append",
+        metavar="ID=STATUS",
+        help=f"Record a step, e.g. S3=done. Status one of {', '.join(PROGRESS_STATUSES)}. Implies --write.",
+    )
+    progress.add_argument("--note", help="Short note stored with the --set steps.")
+    progress.add_argument("--write", action="store_true",
+                          help="Materialise the progress file from the current state.")
+    progress.add_argument("--reset", action="store_true",
+                          help="Delete the progress file. State falls back to inference.")
+    progress.add_argument("--artifacts-dir", type=Path,
+                          help="Evidence artifacts dir. Defaults to ~/.agents/prds/<TASK-ID>/evidence.")
+    progress.add_argument(
+        "--plans-dir", type=Path, default=PLANS_ROOT,
+        help="Plans root. Defaults to ~/.agents/plans.",
+    )
+    progress.add_argument("--json", action="store_true", help=argparse.SUPPRESS)
+    progress.set_defaults(func=cmd_plan_progress)
+    migrate = plan.add_parser(
+        "migrate",
+        help="Add required sections a plan predates, without touching its content.",
+        description=(
+            "Report (default) or insert (--apply) required headings an older plan "
+            "lacks. Only appends an empty stub; never rewrites existing sections."
+        ),
+    )
+    migrate.add_argument("file", type=Path, help="Plan Markdown file or plan directory.")
+    migrate.add_argument(
+        "--kind",
+        choices=sorted(PLAN_HEADINGS),
+        help="Plan schema. Inferred from layout or filename when omitted.",
+    )
+    migrate.add_argument("--apply", action="store_true",
+                         help="Write the stub sections. Default is a dry run.")
+    migrate.add_argument("--json", action="store_true", help=argparse.SUPPRESS)
+    migrate.set_defaults(func=cmd_plan_migrate)
     plan_resolve = plan.add_parser(
         "resolve",
         help="Resolve a task id to plan entry, kind, and section index.",

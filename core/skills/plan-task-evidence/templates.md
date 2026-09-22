@@ -64,7 +64,12 @@ end-to-end verification. Otherwise: "Single scope — no cross-scope warning.">
 
 ## Steps
 <!-- Goal = what the screenshot will prove toward a requirement/AC (feeds the Jira comment
-     explanation). Never plan a shot that would land in the comment without that prose. -->
+     explanation). Never plan a shot that would land in the comment without that prose.
+     The Screenshot file name is the step's id: `agentctl plan progress <TASK-ID> --kind
+     evidence` reads this column and treats a file already present under
+     ~/.agents/prds/<TASK-ID>/evidence/ as captured, so a re-run resumes instead of
+     re-shooting. Keep names unique and stable across replans — renaming a shot makes it
+     look uncaptured and forces a needless retake. -->
 | # | Goal (what it proves) | URL | Auth | Timeout | Expected result | Screenshot file |
 |---|------|-----|------|---------|-----------------|-----------------|
 | 1 | <ties to AC #…; what analyst should see> | <url> | <y/n realm> | <budget> | <expected> | 01-<name>.png |

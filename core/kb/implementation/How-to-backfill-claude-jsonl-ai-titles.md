@@ -15,10 +15,10 @@ Cursor’s native importer titles from JSONL `aiTitle`, else the first non-meta 
 ## Procedure
 
 1. Script: `~/.agents/bin/backfill-claude-jsonl-ai-titles.py`. Dry-run with `--dry-run`. Single chat: `--session-id <uuid>`.
-2. Write work Claude only (`~/.claude/projects`). `sync-claude-desktop-sessions.py` fans the result out afterwards.
+2. Write work Claude only (`~/.claude/projects`).
 3. Title source, first useful wins: existing non-generic `ai-title` (leave it) → `custom-title` → Desktop index `title`. Generic strings (`Claude Code session`, `Untitled session`, `.`) are not useful.
 4. Insert or replace the `ai-title` line. Do not inject `_comment`. Do not write `*_prompt.md` / `*_result.md`.
-5. Batch order in `~/.agents/cron/sync-claude-desktop-sessions.job` and live crontab (`*/5`): Codex export, Cursor export, this backfill, then desktop sync.
+5. Batch order in `~/.agents/cron/sync-claude-desktop-sessions.job` and live crontab (`*/5`): Codex export, Cursor export, then this backfill.
 6. Ledger/lock/log: `~/.local/share/claude-jsonl-title-backfill/` (not Codex, Cursor, or Claude `sync.lock`).
 
 ## Pitfalls

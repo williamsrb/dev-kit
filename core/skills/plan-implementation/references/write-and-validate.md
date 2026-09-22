@@ -111,6 +111,35 @@ When the user (or an elevated comment) says an element is out of scope except fo
 
 ---
 
+## Already delivered (do not re-do)
+
+<Required section. A re-run must be able to tell shipped work from open work without
+re-reading the ticket. Empty is allowed on a first increment:>
+
+- Nothing delivered yet. This is the first increment.
+
+<On a rework / bounce / second increment, one ticked line per closed item, each
+carrying its id (FR-n, AC-n, or Sn) so `agentctl plan progress` can read it:>
+
+- [x] **FR-1** <what shipped, in one line> — `<SHA or release>`
+- [x] **S3** <shipped step> — `<SHA>`
+
+<Then, in one line each:>
+
+**Open in this increment:** <only the ids that are executable work>.
+
+**Regression guard — a re-check, not a re-proof:** <the cheap confirmation that the
+closed items still hold. Accepted evidence stands; do not recapture it.>
+
+Rules:
+
+- Only ids on a `[x]` line count as closed. Prose is never inferred from.
+- A closed item is not re-implemented, not refactored, and not re-evidenced.
+- Do not tick an item because it looks done. Tick it because a named commit,
+  release, or reviewer sign-off says so, and cite that.
+
+---
+
 ## Implementation Plan
 
 > This section is auto-generated. Review and adjust before using it as an implementation guide.
@@ -138,6 +167,20 @@ The frontend component already exists as a prototype. The Enonic view must rende
 ### Implementation Steps
 
 <Fill using the reference file loaded in Step 4b. Follow its "Implementation Steps — content to generate" section. Reference FR numbers where applicable.>
+
+**Every step carries a stable id.** Write each step as `- [ ] S<n> — <step>`, numbered
+from S1 in document order. The id is the step's permanent name:
+
+- Never renumber. Inserting a step between S2 and S3 gives S12 (next free number), not a
+  reshuffle — a re-run matches recorded progress by id, and renumbering silently moves a
+  tick onto a different step.
+- Never reuse an id from a deleted step.
+- A step already shipped is written `- [x] S<n> — …` and also listed under
+  **Already delivered**.
+
+Plans that predate this convention keep their bare numbered lists; `agentctl plan
+progress` falls back to ordinal ids and flags them `unstable_ids`, which means an edit to
+the steps invalidates recorded progress instead of mis-applying it. Prefer S-ids.
 
 ### Definition of Done
 
@@ -193,6 +236,12 @@ After the nested run: surface TBD and implicit in chat (same Step 6 rules). **ji
 - **Comments drive criteria**: Comments are the most recent source of truth for requirements when they clearly extend or supersede. Do not surface raw comments in the output — absorb their intent into the criteria. Comment conflicts with no clear winner: **jira** → **TBD**; **local** → auto-select the recommended/later winner and record it as a Local PO decision.
 - **Inferred extras**: Do not write `_(inferred)_` ACs for behaviors the ticket did not state. Classify with `How-to-handle-implicit-requirements.md`: DO → Implementation Steps; Tick → implicit checkbox; DON'T → Non-Goals; product gap → TBD (jira: ask; local: auto-select).
 - **TBD**: Every plan has `## TBD (ask analyst before implement)` after Constraints / Non-Goals and before Implicit requirements. **jira:** checklist items (question + Blocks + 2-3 options, recommendation first) or `- TBD: none`. Surface the list in chat. Non-empty TBD → hard-stop before coding unless the user explicitly accepts the recommended options. Draft TBD copy with `write-analyst-message`. **local:** auto-select the recommended path, encode as AC/FR/Constraint, `- TBD: none` plus **Local PO decisions**. Do not ask. Do not hard-stop. Do not use `write-analyst-message`.
+- **Already delivered**: Every implementation plan has `## Already delivered`, required by
+  `agentctl plan validate`. First increment: the one-line "nothing delivered yet". Rework:
+  ticked ids with their SHA, an **Open in this increment** line, and a regression guard.
+  This is what stops a re-run rebuilding shipped work — it is scope, decided at plan time,
+  not run state. Run state is `progress.md`, owned by `run-plan`.
+- **Step ids**: Implementation Steps use `S<n>` ids, never renumbered, never reused.
 - **Implicit requirements**: Every plan has `## Implicit requirements (techlead tick)` after TBD and before Implementation Plan. Checkboxes or `- Implicit: none`. **jira:** post immediately after writing the plan; unticked extras stay out of scope. **local:** auto-tick extras that belong; report `[x]`/`[ ]` in chat; do not wait. Do not mix with TBD. Do not use `write-analyst-message` for this comment.
 - **User stories**: Break the task into small, specific stories. Each should represent one user-facing behavior. Avoid mega-stories that bundle multiple unrelated behaviors.
 - **Functional requirements**: Extract explicit system behaviors from the description and criteria. Number them (FR-1, FR-2, ...) so implementation steps can reference them precisely. **jira:** do not promote TBD assumptions into FRs. **local:** auto-selected Local PO choices **are** FRs, marked `_(local PO: …)_`.

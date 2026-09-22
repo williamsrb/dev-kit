@@ -14,8 +14,8 @@
   "deps": [
     { "provides": ["java"], "apt": "openjdk-21-jdk", "dnf": "java-21-openjdk-devel", "pacman": "jdk21-openjdk",
       "note": "XP 7 and 8 both run on the JVM; the sandbox brings its own but a local build needs a JDK." },
-    { "provides": ["enonic"], "installer": "binary", "repo": "enonic/cli",
-      "note": "Enonic's own installer script also works; the binary rung avoids a curl|sh." }
+    { "provides": ["enonic"], "installer": "npm", "package": "@enonic/cli",
+      "note": "Enonic documents npm install -g @enonic/cli. The old enonic/cli release asset 404s; cli-enonic releases are the fallback, not the install path." }
   ],
 
   "skills": "@allowlist:skills.enonic",

@@ -29,11 +29,21 @@ Apply `~/.agents/kb/validation/How-to-respect-user-scope-exclusions.md`.
 3. When fixing: add/update Constraints; mirror Non-Goals; strip or rewrite ACs that demanded forbidden position/styling/markup. Mark `_(user said)_` vs `_(inferred from Figma)_`.
 4. Decided exclusions stay in Constraints / Non-Goals — **not** TBD.
 
+## Environment gate (review, never production)
+
+Apply `../../plan-implementation/SKILL.md` § Environment boundary. Any AC, FR, step, Validation line, Definition of Done item or TBD that depends on production is a defect. Fix it in place:
+
+- Restate an AC phrased on a production URL as the same behaviour on the review scenario, and move the production wording to Non-Goals. Do not annotate it "confirmed by the analyst/editors on production".
+- Delete production TBD (who publishes or verifies there) and list it as a Non-Goal.
+- Bugs: the steps must run Scenario (reuse on review, else create) → Reproduce → Fix → Test after fix on the same scenario. Add missing phases, keeping existing S-ids.
+- Delete review-wide republishing or data clean-up that stands in for production.
+
 ## TBD harvest
 
 - Fold Questions / Open issues into TBD.
 - Add gaps that would force a product guess (copy, locale, URL, env, which component, ownership, Figma node).
-- **jira:** do **not** invent answers. Do **not** promote TBD into ACs/FRs. Phrase leftover TBD with `write-analyst-message` (decision + Blocks + 2–3 options, recommendation first). Non-empty TBD → hard-stop before coding; not a plan NO-GO by itself.
+- **Both modes, first:** apply the high-confidence test (`../../plan-implementation/references/classify-and-scope.md` § 3f). An open TBD whose recommendation passes it is not a question. Move it to **High-confidence decisions** in `tbd.md`, encode it `_(high confidence: <source>)_`, and do not ask it in the report or the session. A recorded High-confidence decision that fails a test goes back to TBD.
+- **jira:** do **not** invent answers. Do **not** promote the remaining TBD into ACs/FRs. Phrase leftover TBD with `write-analyst-message` (decision + Blocks + 2–3 options, recommendation first). Non-empty TBD → hard-stop before coding; not a plan NO-GO by itself.
 - **local:** auto-select the recommended path when reasoning is enough (PRD, codebase, sister, How-to, surrounding style). Encode as AC/FR/Constraint (`_(local PO: …)_`). Record under **Local PO decisions**. Then `- TBD: none`. Do not ask. Do not hard-stop. If reasoning is thin, pick the least-wrong recommended default that unblocks execution. Do not use `write-analyst-message`. See `~/.agents/kb/_shared/How-to-write-analyst-questions-with-options.md` only for the option-shape while reasoning.
 
 ## Implicit harvest

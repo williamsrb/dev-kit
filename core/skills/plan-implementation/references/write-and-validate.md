@@ -76,6 +76,12 @@ When the user (or an elevated comment) says an element is out of scope except fo
 
 - TBD: none
 
+<jira or local, when a gap passed the high-confidence test (classify-and-scope.md § 3f) — decided, not a coding stop:>
+
+### High-confidence decisions
+
+- **<decision>:** (a) <chosen>. Source: <ticket AC / chat / code path / How-to / doc>. Alternatives lose because <one line>.
+
 <local, after auto-select — audit trail only; not a coding stop:>
 
 ### Local PO decisions
@@ -235,17 +241,20 @@ After the nested run: surface TBD and implicit in chat (same Step 6 rules). **ji
 - **Language**: The generated Markdown file must always be in English, even if the PRD or user messages are in another language. Translate descriptions, comments, and criteria as needed.
 - **Comments drive criteria**: Comments are the most recent source of truth for requirements when they clearly extend or supersede. Do not surface raw comments in the output — absorb their intent into the criteria. Comment conflicts with no clear winner: **jira** → **TBD**; **local** → auto-select the recommended/later winner and record it as a Local PO decision.
 - **Inferred extras**: Do not write `_(inferred)_` ACs for behaviors the ticket did not state. Classify with `How-to-handle-implicit-requirements.md`: DO → Implementation Steps; Tick → implicit checkbox; DON'T → Non-Goals; product gap → TBD (jira: ask; local: auto-select).
+- **High-confidence auto-select**: A gap whose recommended option passes the four tests in `classify-and-scope.md` § 3f is decided in both modes. Encode it `_(high confidence: <source>)_`, record it under **High-confidence decisions**, and never ask it. Only gaps that fail a test become TBD questions.
 - **TBD**: Every plan has `## TBD (ask analyst before implement)` after Constraints / Non-Goals and before Implicit requirements. **jira:** checklist items (question + Blocks + 2-3 options, recommendation first) or `- TBD: none`. Surface the list in chat. Non-empty TBD → hard-stop before coding unless the user explicitly accepts the recommended options. Draft TBD copy with `write-analyst-message`. **local:** auto-select the recommended path, encode as AC/FR/Constraint, `- TBD: none` plus **Local PO decisions**. Do not ask. Do not hard-stop. Do not use `write-analyst-message`.
 - **Already delivered**: Every implementation plan has `## Already delivered`, required by
   `agentctl plan validate`. First increment: the one-line "nothing delivered yet". Rework:
   ticked ids with their SHA, an **Open in this increment** line, and a regression guard.
   This is what stops a re-run rebuilding shipped work — it is scope, decided at plan time,
-  not run state. Run state is `progress.md`, owned by `run-plan`.
+  not run state. Run state is `progress.md` (`evidence.progress.md` for the evidence
+  kind), owned by `run-plan`.
 - **Step ids**: Implementation Steps use `S<n>` ids, never renumbered, never reused.
 - **Implicit requirements**: Every plan has `## Implicit requirements (techlead tick)` after TBD and before Implementation Plan. Checkboxes or `- Implicit: none`. **jira:** post immediately after writing the plan; unticked extras stay out of scope. **local:** auto-tick extras that belong; report `[x]`/`[ ]` in chat; do not wait. Do not mix with TBD. Do not use `write-analyst-message` for this comment.
 - **User stories**: Break the task into small, specific stories. Each should represent one user-facing behavior. Avoid mega-stories that bundle multiple unrelated behaviors.
 - **Functional requirements**: Extract explicit system behaviors from the description and criteria. Number them (FR-1, FR-2, ...) so implementation steps can reference them precisely. **jira:** do not promote TBD assumptions into FRs. **local:** auto-selected Local PO choices **are** FRs, marked `_(local PO: …)_`.
 - **Non-goals**: Always include at least one non-goal to clarify scope boundaries. Infer from context if not stated. When the user limits an element to a single delta (e.g. order only), Non-Goals + **Constraints** must forbid position, styling, and markup beyond that delta — see `~/.agents/kb/validation/How-to-respect-user-scope-exclusions.md`.
+- **Environment boundary**: Review (or local) only. No AC, step, Validation line or Definition of Done item depends on production. Restate production-URL ACs on the review scenario and move the production wording to Non-Goals. Bugs run Scenario → Reproduce → Fix → Test after fix on review. See SKILL.md § Environment boundary.
 - **User exclusions win**: Explicit user/chat exclusions outrank Figma composition and inferred ACs. Mark `_(user said)_` vs `_(inferred from Figma)_`. Never encode an inferred layout that violates an exclusion. Exclusions are **not** TBD.
 - **Implementation plan**: Be concrete and technical. Avoid vague statements like "implement the feature". Analyze the task context to suggest specific files, functions, or application layers likely to be affected.
 - **Idempotency**: Running the skill twice on the same task should produce an equivalent file — do not duplicate sections or erase manual edits the user has made to the Implementation Plan.

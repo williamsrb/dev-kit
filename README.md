@@ -39,10 +39,10 @@ and a visible name in the status line and the dock.
 
 | Profile | Extends | Skills | Rules | Vendors | Required tools |
 |---------|---------|--------|-------|---------|----------------|
-| `client` | `enonic` | 45 | 29 | claude, codex, cursor | 37 |
-| `core` | `—` | 33 | 22 | claude, codex, cursor | 35 |
-| `enonic` | `core` | 45 | 24 | claude, codex, cursor | 37 |
-| `php` | `core` | 33 | 22 | claude, codex | 37 |
+| `client` | `enonic` | 46 | 29 | claude, codex, cursor | 37 |
+| `core` | `—` | 34 | 22 | claude, codex, cursor | 35 |
+| `enonic` | `core` | 46 | 24 | claude, codex, cursor | 37 |
+| `php` | `core` | 34 | 22 | claude, codex | 37 |
 
 <!-- /devkit:generated:profile-table -->
 

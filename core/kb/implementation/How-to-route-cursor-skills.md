@@ -17,6 +17,7 @@ Shared by Cursor, Claude Code, and Codex. Historical filename `How-to-route-curs
 | Persist chat as a local spec | `handoff` → **PRD** | Context Summary; `download-jira-task` |
 | Offline Jira dump | `download-jira-task` | live MCP-only fetch; local `handoff` PRD |
 | Spec / Plan from a PRD (Jira or local) | `plan-implementation` | download-only; handoff-only |
+| Can this ticket go to review with no human? (Autonomous / Human-in-the-loop verdict for the pipeline) | `classify-ticket-autonomy` | `plan-implementation` TBD harvest; `validate-plan` |
 | Implicit extras vs TBD vs slop | `How-to-handle-implicit-requirements.md` (after `plan-implementation`) | encoding extras as ACs; mixing into TBD |
 | Validate/fix an impl or evidence/test plan | `validate-plan` | `validate-impl` (delivery); `run-plan` / `run-validation-plan` (execute) |
 | Run an existing plan file | `run-plan` / `run-implementation-plan` / `run-test-plan` / `run-validation-plan` | inventing a plan |

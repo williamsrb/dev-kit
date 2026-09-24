@@ -35,6 +35,10 @@ From `plan-task-evidence` Phase 3:
 - Browser MCP remains `playwright-<TASK-ID>`. Do not rewrite toward `cursor-ide-browser` / `user-browser-control` unless the user named that tool.
 - Posting gate text: when `mode` is `jira`, post the Jira evidence comment **only** when every AC/step passed; on any fail/block/inconclusive do **not** post and do **not** ask to post a partial. When `mode` is `local`, skip the tracker comment; chat-report the local evidence folder. Local capture/flatten may still be in Execution.
 
+## Environment gate
+
+Evidence is captured on review (or local), never on production. See `../../plan-implementation/SKILL.md` § Environment boundary. A step whose URL is a production host, or that waits on a production publish, is a defect: point it at the review scenario, or cut it with the reason. A production AC is not a "missing input" to ask for.
+
 ## Reachability gate
 
 Every **core** step (directly proves an AC) needs all of:

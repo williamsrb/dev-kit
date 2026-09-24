@@ -17,6 +17,7 @@ Parent skills call this when drafting client-facing text:
 | Parent | When to load this skill |
 |--------|-------------------------|
 | `plan-task-evidence` / `run-plan` on an evidence plan | E2 evidence comment body (Jira when `mode` is `jira`; otherwise paste/chat) |
+| `plan-task-evidence` / `run-plan` on an evidence plan | E2b problem-found comment after the evidence post, when the run found a problem (What we found / What we did / What this means for you) |
 | `plan-implementation` | **jira only.** TBD checklist the user will copy to the analyst |
 | `plan-implementation` implicit-requirements comment | **Do not use this skill.** Techlead tick list, ADF checkboxes, not a/b/c options. See `How-to-handle-implicit-requirements.md`. |
 | `plan-implementation` in `mode: local` | **Do not use this skill.** Planner is the product owner. Auto-select; no analyst copy. |

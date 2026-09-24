@@ -20,6 +20,7 @@
     "history/",
     "deliverables/",
     "kb/worklog/",
+    "kb/calibration/",
     ".cache/",
     ".packages/",
     "tmp/",
@@ -39,6 +40,7 @@
     "core": [
       "audit-heavy-report",
       "blank-space",
+      "classify-ticket-autonomy",
       "color-palette",
       "context7-mcp",
       "describe-image",

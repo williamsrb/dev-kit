@@ -45,13 +45,26 @@ This file serves as the **canonical input** for `run-plan` (aliases: `run-implem
 
 **TBD is first-class.** Collect unknowns into `## TBD (ask analyst before implement)`. Empty TBD is allowed (`TBD: none`). Decided exclusions belong in Constraints + Non-Goals, not TBD.
 
-- **`mode` is `jira`:** Phrase TBD with `write-analyst-message`. Do not invent product decisions to fill gaps. A non-empty TBD is a **hard-stop before coding** unless the user explicitly says to implement with the listed assumptions.
+- **Both modes: do not ask obvious questions.** When the recommended option passes the high-confidence test (`references/classify-and-scope.md` § 3f: sourced, the alternatives lose on the ticket's own terms, within the Operator Gate, not an owner's call), auto-select it. Record it under **High-confidence decisions** in `tbd.md` and move on without interrupting the session.
+- **`mode` is `jira`:** Phrase the remaining TBD with `write-analyst-message`. Do not invent product decisions to fill gaps. A non-empty TBD is a **hard-stop before coding** unless the user explicitly says to implement with the listed assumptions.
 - **`mode` is `local`:** There is no analyst. The planner is the product owner and owns the choice. Harvest the same gaps, reason 2–3 options with the recommendation first, then **auto-select the recommended path** when PRD, codebase, sister parts, recorded How-tos, or surrounding style is enough. Encode the choice as AC/FR/Constraint (`_(local PO: …)_`). Record it under **Local PO decisions** in `tbd.md`, then `- TBD: none`. Do not ask. Do not hard-stop. If reasoning is thin, still pick the least-wrong recommended default that unblocks execution. Operator Gate still applies (auth, schema, irreversible writes).
 
 **Implicit requirements are first-class and not TBD.** Harvest extras the ticket did not state. Classify with `~/.agents/kb/implementation/How-to-handle-implicit-requirements.md`. Implicit is not a coding hard-stop.
 
 - **`mode` is `jira`:** After the plan is written, post a techlead checkbox comment when the list is non-empty. Unticked extras stay out of scope.
 - **`mode` is `local`:** There is no techlead. The planner is the techlead. Reason which extras belong in this delivery. Auto-tick (`[x]`) those; leave `[ ]` for follow-up. Do not paste a waiting tick list. Do not block execution.
+
+---
+
+## Environment boundary: review, never production (hard rule)
+
+Developer work ends on review (or local XP). It ends long before production. No plan depends on production.
+
+- **No production evidence.** No step reads, checks, captures, writes or publishes on production. A production URL, screenshot or report in the PRD is the reporter's symptom, not evidence. The plan proves the behaviour on review.
+- **Production ACs are restated or dropped.** Restate a ticket AC phrased on a production URL (e.g. `https://example.com/...`) as the same behaviour on the review scenario, and move the production wording to Non-Goals. Never write "confirmed by the analyst/editors on production". Never let an AC, step, Validation line or Definition of Done item wait on production.
+- **No production TBD.** Who publishes, republishes or verifies on production is not an analyst question for this plan. It is a Non-Goal (editor / release work).
+- **Bugs: scenario, reproduce, fix, test after the fix, all on review.** Reuse the review scenario if it exists. Otherwise create it (duplicate or recreate the example content on review). If the only example exists on production, the plan's one production-related action is asking the analyst to copy it into review. Test after the fix re-runs the **same** scenario.
+- **No stand-ins.** Do not add review-wide republishing or data clean-up as a proxy for fixing production content.
 
 ---
 

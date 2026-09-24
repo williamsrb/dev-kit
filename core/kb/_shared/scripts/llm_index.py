@@ -293,7 +293,7 @@ def write_bucket_indexes(root: Path, mapping: dict[str, str] | None = None) -> N
 
 def write_owned_indexes() -> None:
     mapping = skill_map()
-    for bucket in ["_shared", "implementation", "testing", "validation", "worklog"]:
+    for bucket in ["_shared", "calibration", "implementation", "testing", "validation", "worklog"]:
         write_bucket_indexes(KB / bucket, mapping)
 
 

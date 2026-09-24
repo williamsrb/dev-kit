@@ -60,6 +60,9 @@ DEFAULT_PORT_BASE = 8931
 DEFAULT_CAPS = ["vision", "pdf", "devtools", "network", "storage", "testing"]
 VENDORS = ("cursor", "claude", "codex")
 ID_CHARS = set("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789._-")
+# Claude Code rejects a glob in the server segment of an allow rule
+# (`mcp__playwright-*__x`), so each instance gets its own literal rules.
+CLAUDE_ALLOWED_TOOLS = ("browser_navigate", "browser_take_screenshot", "browser_set_storage_state")
 
 
 def emit(payload: Any) -> None:
@@ -241,14 +244,15 @@ def build_config(
             "width": int(width),
             "height": int(height),
         }
-    server: dict[str, Any] = {
-        "host": host,
+    server: dict[str, Any] = {"host": host}
+    if port is not None:
+        server["port"] = port
+    config: dict[str, Any] = {
+        "browser": browser,
+        "server": server,
         "capabilities": list(caps if caps is not None else DEFAULT_CAPS),
         "outputDir": str(output_dir),
     }
-    if port is not None:
-        server["port"] = port
-    config: dict[str, Any] = {"browser": browser, "server": server}
     if extension:
         config["extension"] = True
     return config
@@ -426,6 +430,12 @@ def disable_vendors(name: str, vendors: list[str], dry_run: bool) -> list[str]:
         for vendor in vendors:
             print(f"[{vendor}] disable {name}", file=sys.stderr)
             rc = install.unregister_one(catalog, name, [vendor], dry_run)
+            if vendor == "claude":
+                remove_claude_permissions(
+                    install.expand_path(catalog["vendors"][vendor]["claude_config_dir"]) / "settings.json",
+                    name,
+                    dry_run,
+                )
             if rc == 0:
                 touched.append(vendor)
     touched.extend(disable_on_profiles(Path.home(), name, vendors, dry_run))
@@ -443,13 +453,10 @@ def enable_vendors(name: str, url: str, vendors: list[str], dry_run: bool) -> li
             if vendor == "cursor":
                 rc = install.register_cursor(name, spec, dry_run, force=True)
             elif vendor == "claude":
-                rc = install.register_claude(
-                    name,
-                    spec,
-                    install.expand_path(catalog["vendors"][vendor]["claude_config_dir"]),
-                    dry_run,
-                    force=True,
-                )
+                config_dir = install.expand_path(catalog["vendors"][vendor]["claude_config_dir"])
+                rc = install.register_claude(name, spec, config_dir, dry_run, force=True)
+                if rc == 0:
+                    upsert_claude_permissions(config_dir / "settings.json", name, dry_run)
             elif vendor == "codex":
                 rc = install.register_codex(name, spec, catalog, dry_run, force=True)
             else:
@@ -527,6 +534,53 @@ def remove_json_mcp(path: Path, name: str, dry_run: bool) -> None:
     path.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n")
 
 
+def claude_allow_rules(name: str) -> list[str]:
+    server = re.sub(r"[^A-Za-z0-9_-]", "_", name)
+    return [f"mcp__{server}__{tool}" for tool in CLAUDE_ALLOWED_TOOLS]
+
+
+def load_claude_settings(path: Path) -> dict[str, Any] | None:
+    if not path.is_file():
+        return {}
+    try:
+        return json.loads(path.read_text())
+    except json.JSONDecodeError:
+        print(f"  skip permissions: {path} is not valid JSON", file=sys.stderr)
+        return None
+
+
+def upsert_claude_permissions(path: Path, name: str, dry_run: bool) -> None:
+    data = load_claude_settings(path)
+    if data is None:
+        return
+    allow = data.setdefault("permissions", {}).setdefault("allow", [])
+    missing = [rule for rule in claude_allow_rules(name) if rule not in allow]
+    if not missing:
+        return
+    print(f"  permissions: allow {', '.join(missing)} in {path}", file=sys.stderr)
+    if dry_run:
+        return
+    allow.extend(missing)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n")
+
+
+def remove_claude_permissions(path: Path, name: str, dry_run: bool) -> None:
+    if not path.is_file():
+        return
+    data = load_claude_settings(path)
+    allow = ((data or {}).get("permissions") or {}).get("allow") or []
+    rules = set(claude_allow_rules(name))
+    kept = [rule for rule in allow if rule not in rules]
+    if len(kept) == len(allow):
+        return
+    print(f"  permissions: remove {name} rules from {path}", file=sys.stderr)
+    if dry_run:
+        return
+    data["permissions"]["allow"] = kept
+    path.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n")
+
+
 def upsert_toml_url(path: Path, name: str, url: str, dry_run: bool) -> None:
     text = path.read_text() if path.is_file() else ""
     header = f"[mcp_servers.{name}]"
@@ -579,6 +633,8 @@ def enable_on_profiles(home: Path, name: str, url: str, vendors: list[str],
             upsert_toml_url(path, name, url, dry_run)
         else:
             upsert_json_mcp(path, name, spec, dry_run)
+        if vendor == "claude":
+            upsert_claude_permissions(path.parent / "settings.json", name, dry_run)
         touched.append(f"profile:{vendor}")
     return touched
 
@@ -591,6 +647,8 @@ def disable_on_profiles(home: Path, name: str, vendors: list[str],
             remove_toml_section(path, name, dry_run)
         else:
             remove_json_mcp(path, name, dry_run)
+        if vendor == "claude":
+            remove_claude_permissions(path.parent / "settings.json", name, dry_run)
         touched.append(f"profile:{vendor}")
     return touched
 

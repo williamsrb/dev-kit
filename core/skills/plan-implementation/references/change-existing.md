@@ -132,12 +132,15 @@ Write the following in the `Suggested Technical Approach` section:
 
 ## Implementation Steps — content to generate
 
-**Bug fix:**
+**Bug fix** (all on review; never production, see SKILL.md § Environment boundary):
 
-1. Read all affected files to trace the full data flow (XML → `{name}.d.ts` → `processor.ts` → `{name}.tsx`)
-2. Identify the exact line(s) causing the bug — document the root cause as a comment before changing anything (reference FR-N)
-3. Apply the minimal fix
-4. Search for the same pattern in other components — list findings in the spec, do not fix automatically
+1. **Scenario:** find the review content that shows the bug and reuse it. If none exists, create it on review (duplicate or recreate the example). If the only example is on production, ask the analyst to copy it into review.
+2. **Reproduce:** show the bug on that scenario before any change, and record what was observed (URL, content id, the broken output).
+3. Read all affected files to trace the full data flow (XML → `{name}.d.ts` → `processor.ts` → `{name}.tsx`)
+4. Identify the exact line(s) causing the bug — document the root cause as a comment before changing anything (reference FR-N)
+5. Apply the minimal fix
+6. **Test after the fix:** re-run the same review scenario and confirm the expected behaviour
+7. Search for the same pattern in other components — list findings in the spec, do not fix automatically
 
 **Feature addition:**
 
@@ -154,6 +157,7 @@ Write the following in the `Suggested Technical Approach` section:
 
 - [ ] All affected files read before any change was made
 - [ ] Root cause documented in the spec (bug fix) or insertion points identified (feature)
+- [ ] Bug fix: reproduced on the review scenario before the fix, and the same scenario passes after it (no production check)
 - [ ] No existing XML field names removed or renamed
 - [ ] New XML fields appended at end of `<form>` with `snake_case` names and `i18n` labels
 - [ ] `*Data` / `*Props` interfaces extended — no existing properties removed or renamed

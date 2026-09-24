@@ -131,6 +131,7 @@
       "no-git-shell-commands.mdc",
       "orchestrate-cursor-models.mdc",
       "prefer-python-over-shell.mdc",
+      "serena.mdc",
       "session-store-isolation.mdc",
       "user-scope-exclusions.mdc",
       "vendor-vision-image-preview.mdc"
@@ -213,8 +214,7 @@
       "history-log-response.sh",
       "history-log-stop.sh",
       "graft-hooks.cjs",
-      "graft-statusline.cjs",
-      "rtk-codex.py"
+      "graft-statusline.cjs"
     ]
   },
   "mcp": {

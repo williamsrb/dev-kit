@@ -1,0 +1,27 @@
+---
+description: Load Serena's instructions first, then split code work between graft (find) and Serena (read, edit, impact).
+alwaysApply: true
+---
+
+# Code intelligence — graft and Serena
+
+When Serena is available, call `initial_instructions` before exploring the code.
+Where Serena's instructions and the graft rule overlap, this split wins:
+
+- Find with graft: orientation, "how does X work", "where does Y live" →
+  `graft map`, `graft ask --source`; every occurrence of a literal →
+  `graft grep`. Graft output is not a file Read, so Serena's no-Read-for-discovery
+  rule does not apply to it.
+- Read and edit with Serena: once graft names the symbol or file, read with
+  `find_symbol` (include_body) or `get_symbols_overview` instead of
+  `graft skeleton`, and edit with Serena's symbol tools. Do not edit from
+  graft's `--source` spans.
+- Impact: `graft callers --depth N` maps the blast radius; confirm with
+  `find_referencing_symbols` before a signature change, and rename with
+  `rename_symbol`.
+- Freshness: graft follows committed state. For files changed in this session,
+  trust Serena. Run `graft build` after big changes.
+- Memory: graft nodes are the repo's shared knowledge. Keep Serena memories to
+  what graft lacks (build, test, run commands).
+- Fallback: repo without `graft/` → Serena alone. Non-code files or languages
+  Serena cannot parse → graft, then built-in Read/Edit.

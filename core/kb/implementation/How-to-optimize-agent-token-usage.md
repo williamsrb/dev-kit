@@ -11,7 +11,7 @@ prose: caveman-lite
 
 | Layer | What | Where |
 |-------|------|--------|
-| **RTK** | Compact shell tool output (`ls`, `docker ps`, tests, …) | `~/.local/bin/rtk`; Cursor `preToolUse` → `rtk hook cursor`; Claude `PreToolUse` → `~/.local/bin/rtk hook claude`; Codex `PreToolUse` → `hooks/rtk-codex.py`. Native-command wiring (not wrapper scripts) is what `rtk verify` detects |
+| **Headroom proxy (2026-09-24)** | Local compression proxy for everything the model reads (tool output, files, history); originals kept for `headroom_retrieve` (CCR). Replaced RTK hooks | `uv tool install --python 3.13 "headroom-ai[all]"`; systemd user unit `headroom-default.service` on `127.0.0.1:8787` (`headroom install apply --preset persistent-service --scope provider --providers manual --target claude --target codex --code-aware`). Claude CLI: `~/.claude/settings.json` `env.ANTHROPIC_BASE_URL`; Codex: managed block in `~/.codex/config.toml`. Cursor and Claude Desktop sessions are not routed |
 | **Caveman-lite rule** | Terse chat; normal prose for Jira/evidence/PRs/commits; same lite register on owned KB How-tos | `~/.agents/rules/token-efficiency-chat.mdc`; `kb/_shared/How-to-author-ai-howtos.md` |
 | **KB/skill compaction re-runs** | Loaded-path first; do not re-run owned `main()`; never rewrite skill `name` or templates | `kb/_shared/How-to-compact-kb-skills-and-offline-reference.md` |
 | **Round-trips / baseline (2026-08-27)** | Field-list Jira fetch; batched attachment curls; PRD `markdown slice`; Claude Workflows off; plugin Atlassian/Slack removed; Playwright login tiers parked; kb-router slash/notification/`MIN_HITS=3`; shell-batch P7; `agentctl plan resolve` + folder plans | skills, `agentctl`, Claude `settings.json`, four MCP files, `kb-router.py`, constitution trio |
@@ -26,7 +26,7 @@ prose: caveman-lite
 
 | Tool | Why |
 |------|-----|
-| Headroom full wrap/proxy | Invasive; can drop grep/log lines needed for XP/Jira; revisit only with proven Cursor proxy + CCR retrieve |
+| RTK shell-output hooks | Replaced by Headroom 2026-09-24. Binary left at `~/.local/bin/rtk`; `rtk git …` guards stay in `hooks/git-push-policy.sh` and Codex `default.rules` while it exists |
 | pxpipe general proxy | Vision/gist compression; unsafe for exact IDs/paths |
 | pxpipe on PRDs | PRDs are contract docs (comment ids, AC); silent confabulation risk |
 | Stock Caveman full/ultra always-on | Would poison Jira/evidence client prose. Same ban on KB How-tos (fragments make stop-conditions ambiguous). |
@@ -38,21 +38,22 @@ prose: caveman-lite
 
 Meaningful on noisy shell/log turns; small on total monthly bill. Largest levers remain: **fresh sessions per phase**, thin multitask `DECISIONS.md`, and **not** re-attaching full PRD/plan stacks every step (see allowlists).
 
-## RTK recovery
+## Headroom recovery
 
-If a filter hid a needed field:
+If compression hid a needed grep/log line: the model can call `headroom_retrieve` for the original. To exempt a tool entirely, re-apply with `--protect-tool-results Bash,Grep`. Proxy down means every routed Claude CLI / Codex request fails:
 
 ```bash
-RTK_DISABLED=1 <original-command>
-# or, when supported by the filter:
-rtk <command> --no-compact
+headroom install status
+headroom install restart
+headroom doctor
+headroom install remove   # full rollback of service + provider config
 ```
 
-`git push` stays denied for raw and `rtk`-prefixed forms (`hooks/git-push-policy.sh`).
+Known limits (from `headroom doctor`): Claude Code disables `/remote-control` and the 1M context window while `ANTHROPIC_BASE_URL` is custom; Claude Desktop overwrites the base URL, so Desktop sessions bypass the proxy.
 
 ## Verify
 
-1. Shell `ls` / `docker ps` rewrites toward `rtk …` (Cursor/Claude hooks).
+1. `headroom doctor` passes `claude` and `codex`; `headroom savings` shows calls per client.
 2. `git push` and `rtk git push` still denied.
 3. Pipeline skill with only `<TASK-ID>` (Jira key or kebab slug) resolves `prds/` + `plans/` without asking for full paths.
 4. Chat stays terse; Jira evidence comments stay professional prose (`write-analyst-message`).

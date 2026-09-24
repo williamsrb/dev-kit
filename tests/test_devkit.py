@@ -273,10 +273,10 @@ class ProfileCompositionTests(unittest.TestCase):
         for name in ("graft", "slack-workspace-leanon", "playwright", "browser-control"):
             self.assertIn(name, catalog["parked"], name)
         expected = {
-            "core": ["context7"],
-            "php": ["context7"],
-            "enonic": ["context7", "gitlab"],
-            "client": ["context7", "gitlab", "atlassian-rovo-preview"],
+            "core": ["context7", "serena"],
+            "php": ["context7", "serena"],
+            "enonic": ["context7", "serena", "gitlab"],
+            "client": ["context7", "serena", "gitlab", "atlassian-rovo-preview"],
         }
         for name, names in expected.items():
             profile = manifest.load(name)
@@ -291,7 +291,7 @@ class ProfileCompositionTests(unittest.TestCase):
             materialize(load_for_create("dummy", "enonic"),
                         ["cursor", "claude", "codex"],
                         home, Plan(apply=True), force=True)
-            live = ["context7", "gitlab"]
+            live = ["context7", "gitlab", "serena"]
             cursor = json.loads(
                 (home / ".agents-profiles/dummy/cursor/mcp.json").read_text())
             self.assertEqual(sorted(cursor["mcpServers"]), live)
@@ -795,6 +795,11 @@ class BootstrapPlanTests(unittest.TestCase):
         plan = self._plan("dnf", "fedora")
         self.assertNotIn("thirdparty", plan)
         self.assertIn("pkg\tripgrep", plan)
+
+    def test_uv_python_pin_is_its_own_field(self):
+        plan = self._plan("apt", "debian").splitlines()
+        self.assertIn("uv\tserena-agent\t3.13", plan)
+        self.assertIn("uv\truff", plan)
 
     def test_apt_does_not_flag_third_party(self):
         self.assertNotIn("thirdparty", self._plan("apt", "debian"))

@@ -45,7 +45,8 @@ def _emit_installer(spec: dict, provides: list[str]) -> None:
     elif installer == "npm":
         print(f"npm\t{spec['package']}")
     elif installer == "uv":
-        print(f"uv\t{spec['package']}")
+        # A third field, not `pkg@python`: uv already reads `pkg@x` as a version.
+        print(f"uv\t{spec['package']}\t{spec.get('python', '')}".rstrip("\t"))
     elif installer == "binary":
         print(f"binary\t{spec.get('binary', provides[0])}={spec['repo']}")
 

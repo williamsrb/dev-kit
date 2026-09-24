@@ -340,7 +340,14 @@ if [ -n "$UV_PKGS" ]; then
     run sh -c "curl -fsSL https://astral.sh/uv/install.sh | sh"
   fi
   if command -v uv >/dev/null 2>&1 || [ "$APPLY" -eq 0 ]; then
-    for pkg in $UV_PKGS; do try_install "uv:$pkg" uv tool install "$pkg"; done
+    for pkg in $UV_PKGS; do
+      python="$(printf '%s\n' "$PLAN" | awk -F'\t' -v p="$pkg" '$1=="uv" && $2==p {print $3}')"
+      if [ -n "$python" ]; then
+        try_install "uv:$pkg" uv tool install --python "$python" "$pkg"
+      else
+        try_install "uv:$pkg" uv tool install "$pkg"
+      fi
+    done
   else
     warn "uv is not on PATH; skipping: $(printf '%s ' $UV_PKGS)"
   fi

@@ -287,6 +287,12 @@ def fetch_npx(package: str, dry_run: bool) -> int:
     return proc.returncode
 
 
+def fetch_uv_tool(meta: dict, dry_run: bool) -> int:
+    cmd = ["uv", "tool", "install", "-p", meta["python"], meta["uv_tool"]]
+    print(f"  uv tool install: {meta['uv_tool']}")
+    return run(cmd, dry_run=dry_run)
+
+
 def fetch_one(catalog: dict, fetch_key: str | None, dry_run: bool) -> int:
     if not fetch_key:
         print("  nothing to fetch (http / in-tree)")
@@ -298,6 +304,8 @@ def fetch_one(catalog: dict, fetch_key: str | None, dry_run: bool) -> int:
         return fetch_browser_control(meta, dry_run)
     if "npx_package" in meta:
         return fetch_npx(meta["npx_package"], dry_run)
+    if "uv_tool" in meta:
+        return fetch_uv_tool(meta, dry_run)
     raise SystemExit(f"unknown fetch recipe: {fetch_key}")
 
 

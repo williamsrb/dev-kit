@@ -246,6 +246,14 @@
     },
     {
       "provides": [
+        "serena"
+      ],
+      "installer": "uv",
+      "package": "serena-agent",
+      "python": "3.13"
+    },
+    {
+      "provides": [
         "gitleaks"
       ],
       "installer": "binary",
@@ -310,7 +318,8 @@
   "rules": "@allowlist:rules.core",
   "kb": "@allowlist:kb.core",
   "mcp": [
-    "context7"
+    "context7",
+    "serena"
   ],
   "instances": [
     {

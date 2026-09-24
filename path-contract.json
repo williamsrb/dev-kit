@@ -112,6 +112,7 @@
     "**/__pycache__/**",
     "**/*.pyc",
     ".security-local/**",
+    ".claude/settings.local.json",
     ".ruff_cache/**",
     ".cache/**",
     "graft/**",

@@ -143,6 +143,37 @@
         "codex"
       ],
       "fetch": null
+    },
+    "serena": {
+      "transport": "stdio",
+      "command": "${HOME}/.local/bin/serena",
+      "args": [
+        "start-mcp-server",
+        "--project-from-cwd",
+        "--context=ide"
+      ],
+      "vendors": [
+        "cursor",
+        "claude",
+        "codex"
+      ],
+      "vendor_overrides": {
+        "claude": {
+          "args": [
+            "start-mcp-server",
+            "--project-from-cwd",
+            "--context=claude-code"
+          ]
+        },
+        "codex": {
+          "args": [
+            "start-mcp-server",
+            "--project-from-cwd",
+            "--context=codex"
+          ]
+        }
+      },
+      "fetch": "serena-agent"
     }
   },
   "skip": {
@@ -184,6 +215,10 @@
     },
     "filesystem-mcp": {
       "npx_package": "@modelcontextprotocol/server-filesystem"
+    },
+    "serena-agent": {
+      "uv_tool": "serena-agent",
+      "python": "3.13"
     }
   }
 }

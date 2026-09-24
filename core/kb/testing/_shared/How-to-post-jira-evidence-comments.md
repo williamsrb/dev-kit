@@ -77,6 +77,17 @@ Do not delete first. Do not reuse ids across a delete.
   first: [How to gate evidence on the product concept](./How-to-gate-evidence-on-the-product-concept.md).
 - An unstamped PNG is not ready to upload. `agentctl image stamp --check` exit 1
   is a stop, including analyst comments that are not evidence-plan runs.
+- `agentctl jira comment --content-format html` drops `<figure>`/media nodes: the post
+  succeeds as text only and verify reports `has no media nodes` (JOT-266 534132,
+  2026-09-24). Post media bodies with `--content-format adf` (`mediaSingle` with
+  `layout`, `width`, `widthType: pixel`; inner `media` `type: file`, `id` = mediaId from
+  `agentctl jira media-ids`, `collection: ""`, `width`, `height`). Lint the HTML first,
+  convert, then post. If a text-only create already landed today, back it up and edit it
+  with `--comment-id`; do not create a second one.
+  The same HTML conversion also turns the mention into plain `@Name` text, wraps
+  `<pre><code>` content in literal backticks, and splits `1.`/`2.` units around a code
+  block into separate lists that each restart at 1 (JOT-257 534133). Build the whole
+  body in ADF, and use `N. ` paragraph text for evidence units rather than `orderedList`.
 - Two screenshots stacked into one PNG without a banner, black bar, and per-part
   labels look like one empty shot. Flag the merge in the image (PROJ-435 `08-featured-cards`).
 
@@ -126,3 +137,20 @@ cache copy under `~/.npm/_npx/*/node_modules/playwright` works, and browsers are
 
 `waitUntil: 'networkidle'` times out on Jotron pages carrying video or maps (`/maritime`). Use
 `domcontentloaded` plus a fixed settle wait instead.
+
+## Lint false positive: the page under test is the site root
+
+`check-evidence-comment.py` flags every bare env-root URL, including when the front page itself
+is the page under test (JOT-271, 2026-09-24: JSON-LD on `/`). There is no path to link instead.
+Add the Content Studio Admin link for the content the run touched, keep the root link, and post
+only with the operator's explicit go-ahead on that one violation. Every other violation still
+blocks.
+
+## Bounce addendum: address the reviewer, not the reporter
+
+When the evidence answers a review bounce (a reviewer moved the ticket back with numbered items),
+mention the **reviewer who bounced it** and structure the body as a reply to that comment:
+one paragraph or evidence unit per item, in the reviewer's own numbering and terms, including
+any push-back question they asked (answer it as a fact). The reporter/analyst is not the
+audience of that comment. JOT-271 comment 534137 was first posted to the reporter and had to be
+edited to answer Kaio's 532868 (2026-09-24). A plan line naming the reporter does not override this.

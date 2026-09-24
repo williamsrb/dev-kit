@@ -18,6 +18,8 @@ The analyst decides. Give them choices, not a form.
 
 **Not for implicit-requirements posts.** Those are techlead ADF checkboxes after `plan-implementation`. See `~/.agents/kb/implementation/How-to-handle-implicit-requirements.md`. Do not use a/b/c options there.
 
+**Not for obvious answers.** A gap whose recommended option passes the high-confidence test (`~/.agents/skills/plan-implementation/references/classify-and-scope.md` § 3f) is not a question. State it as a decision ("We will …, because …") so the analyst can object without anything being blocked.
+
 ## Procedure
 
 1. Open by name. Never thank, praise, or assess their work — no "thanks for reporting", no "the right call".

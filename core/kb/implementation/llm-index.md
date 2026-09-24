@@ -17,8 +17,9 @@ How-to-debug-xp-server-logs.md	675	debug-xp	debug-xp-app	debug xp server logs de
 How-to-dispatch-linux-vendor-auth-callbacks.md	516	dispatch-linux	run-plan	dispatch linux vendor auth callbacks dispatch-linux linux-vendor vendor-auth auth-callbacks across profiles callbacks-across across-profiles
 How-to-download-atlassian-attachments.md	1748	download-atlassian	download-jira-task	download atlassian attachments download-atlassian atlassian-attachments
 How-to-embed-json-ld-safely-in-an-enonic-xp-page.md	927	embed-json		embed json ld safely enonic xp page embed-json json-ld ld-safely safely-enonic enonic-xp xp-page json-safely enonic-page
-How-to-enable-playwright-mcp.md	1316	playwright-mcp	spawn-playwright-mcp plan-task-evidence run-plan generate-worklogs	enable playwright mcp enable-playwright playwright-mcp demand enable-demand demand-playwright
+How-to-enable-playwright-mcp.md	1391	playwright-mcp	spawn-playwright-mcp plan-task-evidence run-plan generate-worklogs	enable playwright mcp enable-playwright playwright-mcp demand enable-demand demand-playwright
 How-to-execute-an-xp7-to-xp8-app-upgrade-locally.md	2396	execute-xp7	upgrade-xp-app run-plan	execute xp7 xp8 app upgrade locally execute-xp7 xp7-xp8 xp8-app app-upgrade upgrade-locally execute-app
+How-to-execute-xp-server-modules-against-stubs.md	808	execute-xp		execute xp server modules against stubs execute-xp xp-server server-modules modules-against against-stubs execute-server
 How-to-export-cursor-sessions-to-claude.md	875	export-cursor	run-plan	export cursor sessions claude export-cursor cursor-sessions sessions-claude
 How-to-fetch-jira-issue-via-atlassian-mcp.md	989	fetch-jira	download-jira-task	fetch jira issue atlassian mcp fetch-jira jira-issue issue-atlassian atlassian-mcp
 How-to-fill-missing-payment-condition-availability-with-valid-dates.md	576	fill-missing		fill missing payment condition availability valid dates fill-missing missing-payment payment-condition condition-availability availability-valid valid-dates dummy valid-dummy dummy-dates
@@ -41,7 +42,7 @@ How-to-pick-and-verify-font-preloads-before-deploy.md	1253	pick-font		pick verif
 How-to-port-xp8-admin-tool-app-to-xp7-13.md	666	port-xp8	run-plan	port xp8 admin tool app xp7 13 port-xp8 xp8-admin admin-tool tool-app app-xp7 xp7-13 down port-admin app-down
 How-to-render-jira-payloads-to-prd-markdown.md	955	render-jira	download-jira-task run-plan	render jira payloads prd markdown render-jira jira-payloads payloads-prd prd-markdown
 How-to-resolve-task-context.md	2202	task-context	validate-plan validate-impl plan-implementation run-plan download-jira-task plan-task-evidence handoff multitask-same-repo lint-and-draft-enonic-commit-message lint-and-draft-generic-commit-message draft-commit-message	resolve task context resolve-task task-context
-How-to-route-cursor-skills.md	1473	route-cursor		route cursor skills route-cursor cursor-skills skill routing cheat sheet skill-routing routing-cheat cheat-sheet
+How-to-route-cursor-skills.md	1520	route-cursor		route cursor skills route-cursor cursor-skills skill routing cheat sheet skill-routing routing-cheat cheat-sheet
 How-to-run-the-tgrep-serve-pool.md	395	tgrep-serve	run-plan	run tgrep serve pool run-tgrep tgrep-serve serve-pool
 How-to-run-xp8migrator.md	602	xp8migrator	upgrade-xp-app	run xp8migrator run-xp8migrator finish app upgrade xp8migrator-finish finish-app app-upgrade
 How-to-scaffold-a-pnpm-typescript-monorepo.md	1005	scaffold-pnpm		scaffold pnpm typescript monorepo scaffold-pnpm pnpm-typescript typescript-monorepo scaffolding shells out agent clis scaffolding-pnpm monorepo-shells shells-out out-agent agent-clis

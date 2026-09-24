@@ -97,12 +97,32 @@ Record as TBD when any of these are true:
 
 Each harvested gap carries **2-3 options with the recommendation first**.
 
-- **jira:** Do **not** invent product decisions to fill gaps. None of the options is an AC/FR until the analyst confirms one. Phrase TBD with `write-analyst-message`.
+- **jira:** Do **not** invent product decisions to fill gaps. First apply the high-confidence test below; a gap that passes is decided, not asked. Every other option is not an AC/FR until the analyst confirms one. Phrase the remaining TBD with `write-analyst-message`.
+
+#### High-confidence auto-select (jira and local)
+
+Do not ask a question whose answer is obvious. Auto-select the recommended option when **all** of these hold:
+
+1. **Sourced.** The recommendation follows from a source you can cite: the ticket text or AC, a user/chat instruction, the codebase or a sister pattern, a recorded How-to, or platform docs.
+2. **The alternatives lose on the ticket's own terms.** They contradict an AC, a Constraint or the cited source, or plainly fail the stated goal. A difference in taste, priority or cost is not enough.
+3. **Within the Operator Gate.** Reversible within this delivery. No auth or permissions, persisted schema or migration, public contract, irreversible data write or new cost.
+4. **Not an owner's call.** Not copy, brand, legal, pricing, or which content goes live, and it does not widen scope beyond the ticket.
+
+If any test fails, or you cannot cite the source, keep it as TBD (**jira**: ask) or a Local PO decision (**local**).
+
+When it passes:
+
+- Encode the choice as AC/FR/Constraint marked `_(high confidence: <source>)_`.
+- Record it in `tbd.md` under **High-confidence decisions**: the decision, the chosen option, the cited source, and one line on why the alternatives lose.
+- Do not ask it: not in the TBD checklist, not via AskUserQuestion, and not mid-session. It is not a hard-stop.
+- **jira:** state it as a decision in the next analyst-facing comment ("We will …, because …"), not as a question, so the analyst can object without blocking the work.
 - **local:** There is no analyst. After harvesting, **resolve**:
   1. If PRD, codebase, sister parts, recorded How-tos, or surrounding style is enough to pick a best path — **auto-select the recommended option**. Encode it as AC/FR/Constraint with `_(local PO: <choice>)_`. Put a one-line decision under **Local PO decisions** in `tbd.md`. Then `- TBD: none`.
   2. If reasoning is thin — still pick the recommended (least-wrong, smallest reversible) default that unblocks execution. Record the assumption. Do not ask. Do not hard-stop.
   3. Operator Gate still applies (auth, schema, irreversible writes). That is not analyst TBD.
   4. Do not use `write-analyst-message`.
+
+**Not TBD:** anything on production (who publishes there, production verification, production data fixes). Those are Non-Goals; see SKILL.md § Environment boundary.
 
 **Not TBD:** decided user/chat exclusions. Those go in Constraints + Non-Goals only (`~/.agents/kb/validation/How-to-respect-user-scope-exclusions.md`).
 

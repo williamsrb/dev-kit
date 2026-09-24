@@ -53,6 +53,23 @@ grep -oE '<app\.name>:[0-9a-f]+' body.html | sort -u
 
 ## Pitfalls
 
+- **A green `review_deploy` does not mean XP installed the jar.** On the client XP8 helm
+  deploy (`.xp8_helm_deploy_template`) the job can report `Release … upgraded` while the
+  running pod keeps the previous bundle (no pod restart, no install). Prove the install in
+  the XP log, timestamped after the deploy job finished:
+
+```bash
+kubectl -n enonic-review logs acme-group-0 -c xp-app --since=24h --timestamps \
+  | grep -E 'ApplicationRegistryImpl|ApplicationServiceImpl' | grep '<app.name>' | tail -4
+```
+
+  Expect `Installed application <app.name> bundle N` + `Started application …` after the
+  job's `finished_at`. No such line = the precondition fails; stop before any content write.
+  (acme-group, 2026-09-24: pipeline 88472 deploy green 13:31Z, last install bundle 142 at
+  2026-09-23 23:41Z.)
+  An install can also land later with **no** new pipeline (bundles 143/144 on 2026-09-24 15:21Z,
+  source jar not provable from GitLab). Then prove the build by a log line only the new code emits.
+
 - **Multi-line tags defeat line-based greps.** Attributes wrap across lines in served HTML,
   so `grep -oE '<link[^>]*preload[^>]*>'` returns nothing on a page that has all of them.
   Match on a single attribute (`rel="preload"`), or normalise newlines first

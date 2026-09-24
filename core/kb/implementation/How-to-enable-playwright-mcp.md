@@ -49,7 +49,8 @@ Do not put five servers in a session that only needs one. Token cost is ~80 tool
 - `revive` always `--enable` (ports change after a reboot). It reuses `storage_state` from `instance.json` when the file still exists.
 - Bind and register `localhost`, never `127.0.0.1`. `@playwright/mcp` 403s the numeric Host header (`Access is only allowed at localhost:<port>`), and vendors render that as "Needs authentication". The launcher now defaults to `localhost`. Do not set `allowedHosts` / `--allowed-hosts` to include `127.0.0.1` — that 403s every Host, including `localhost`. See `How-to-fix-playwright-mcp-needs-authentication.md` for the diagnose/respawn recipe if an old instance is still on `127.0.0.1`.
 - `browser_set_storage_state` still enforces allowed roots. Prefer `--storage-state` at spawn. If you set state later, copy the file into the instance `output_dir`.
-- Screenshot `filename` must be absolute.
+- Screenshot `filename` must be absolute, and `browser_take_screenshot` refuses paths outside the allowed roots (e.g. `~/.agents/prds/<KEY>/evidence`). `page.screenshot({path, clip})` inside `browser_run_code_unsafe` writes there directly, and it is the clip path anyway.
+- After the run, delete any auth state you copied into `output_dir`.
 - `--headed` / `--extension` are spawn flags only. There are no parked `playwright-headed` / `playwright-extension` servers. New logins: `npx playwright codegen --save-storage=…`.
 - `--shared-browser-context` is never set.
 

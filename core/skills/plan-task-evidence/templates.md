@@ -294,6 +294,19 @@ see on the review URL. Decisions belong in chat or a separate question comment.
   done — re-upload, edit, re-run. If you then delete an older comment that held
   reused ids, run the script again. `check-evidence-comment.py` does not catch this.
 
+### E2b — Problem-found comment (only when the run found one)
+
+**Skip when Mode is `local`** (put the text in the chat report instead), and skip when the run
+found nothing the analyst would not already know.
+
+After the E2 evidence comment is posted and `verify-jira-comment-images.py` exits 0, post one
+short comment from § "Problem-found comment" below: what was wrong, what we did about it, what
+it means for the analyst. Examples: a blocker cleared during the run, a root cause different
+from the plan's, an environment or publishing gap, or fixtures rebuilt because the planned
+approach was impossible. Draft it with `write-analyst-message`. One create, no images, no
+questions. If E2 was blocked by the failure gate, do not post E2b either. Put its draft in the
+chat report.
+
 ### E3 — Testing-KB write-back (when know-how was gained)
 
 After E1 (and E2 when Mode is `jira`), if this run taught reusable how-to knowledge (and it was not already
@@ -470,3 +483,31 @@ Never: questions, a/b/c option lists, “my recommendation”, local folders, at
   env root (`https://review.example/` with no path).
 - If no analyst is named, drop the mention line; otherwise resolve the account with
   `lookupJiraAccountId` so the mention renders as an entity, not plain text.
+
+---
+
+## Problem-found comment
+
+Posted by E2b, after the evidence comment, only when the run found a problem worth telling the
+analyst. It is not evidence (no screenshots) and not a question (an open decision goes in a
+separate TBD comment with options). Write it for the analyst, in product language. Draft with
+`write-analyst-message`.
+
+```markdown
+@<Analyst Name> — update on <TASK-ID> (<the problem in one phrase, as the analyst would see it>).
+
+**What we found**
+<What the visitor or editor saw, and where. Then the cause in plain words: which content, setting or behaviour, not which file or function.>
+<What it was *not* (for example "not caused by this change", "not a content error"), when that removes an obvious worry.>
+
+**What we did** <or **What we will fix**, when the fix is still pending>
+<The action taken or planned and its visible effect. State whether it can be undone, if that matters.>
+
+**What this means for you**
+<Whether they need to do anything (review, production, Content Studio), and what to retest. Point to a release-instructions comment if one exists.>
+```
+
+- Keep it to a few short paragraphs. The labels are bold paragraphs (Jira ADF `strong`), not headings.
+- Never: local paths, HTTP codes, commit SHAs, project/repo internals, tool names, thanks or praise, a/b/c options.
+- Post with a real mention (ADF `mention` node) and one create call. List comments afterwards and delete any duplicate.
+- Reference comments: PROJ-440 533195 (behaviour bug found while testing), PROJ-443 533625 (unpublished page template on the review layer).

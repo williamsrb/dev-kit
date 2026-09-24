@@ -454,11 +454,47 @@ def is_progress_name(name: str) -> bool:
     return name == PROGRESS_FILE or name.endswith(".progress.md")
 
 
-def progress_path(plan: Path) -> Path:
-    """One progress file per plan. A shared plans/ directory cannot use one progress.md."""
+def progress_path(plan: Path, kind: str | None = None) -> Path:
+    """One progress file per plan and kind. A folder holds several plan kinds, and a
+    shared plans/ directory holds several plans, so neither can share one file."""
     if plan.is_dir():
-        return plan / PROGRESS_FILE
+        if kind in (None, "implementation"):
+            return plan / PROGRESS_FILE
+        return plan / f"{kind}.progress.md"
     return plan.with_name(f"{plan.stem}.progress.md")
+
+
+def read_kind_progress(plan: Path, kind: str) -> tuple[dict[str, Any] | None, Path | None]:
+    """Recorded state for this kind, and the file it came from.
+
+    Before per-kind files, every kind of a folder plan wrote progress.md. That file
+    is still read for the kind it records, and ignored for any other kind."""
+    own = progress_path(plan, kind)
+    candidates = [own]
+    legacy = progress_path(plan)
+    if plan.is_dir() and legacy != own:
+        candidates.append(legacy)
+    for path in candidates:
+        state = read_progress_state(path)
+        if state is None:
+            continue
+        recorded_kind = state.get("kind")
+        if recorded_kind and recorded_kind != kind:
+            continue
+        return state, path
+    return None, None
+
+
+def displace_foreign_progress(path: Path, kind: str) -> None:
+    """Move a legacy progress.md that records another kind to that kind's file before
+    this kind overwrites it."""
+    state = read_progress_state(path)
+    other = (state or {}).get("kind")
+    if not other or other == kind or path.name != PROGRESS_FILE:
+        return
+    target = progress_path(path.parent, other)
+    if target != path and not target.exists():
+        path.replace(target)
 
 
 def collect_headings(paths: list[Path]) -> list[dict[str, Any]]:
@@ -833,7 +869,7 @@ def build_progress(directory: Path, kind: str, issue: str,
     fingerprint = steps_fingerprint(section)
     closed = delivered_ids(paths)
 
-    recorded = read_progress_state(progress_path(directory))
+    recorded, _ = read_kind_progress(directory, kind)
     stale = bool(recorded and recorded.get("steps_hash")
                  and recorded["steps_hash"] != fingerprint)
     unstable = any(step["id_source"] == "ordinal" for step in steps)
@@ -903,16 +939,21 @@ def cmd_plan_progress(args: argparse.Namespace) -> int:
         suffix = "-evidence-plan"
         issue = stem[: -len(suffix)] if stem.endswith(suffix) else stem
     issue = resolved.get("task_id") or issue
-    progress_file = progress_path(source)
+    progress_file = progress_path(source, kind)
     artifacts_dir = args.artifacts_dir.resolve() if args.artifacts_dir else (
         evidence_artifacts_dir(issue) if kind == "evidence" else None
     )
 
     if args.reset:
-        existed = progress_file.is_file()
-        if existed:
-            progress_file.unlink()
-        emit({"status": "reset", "file": str(progress_file), "existed": existed})
+        # A legacy progress.md holding this kind's state goes too, or it would be read back.
+        _, legacy_file = read_kind_progress(source, kind)
+        removed = []
+        for path in {progress_file, legacy_file} - {None}:
+            if path.is_file():
+                path.unlink()
+                removed.append(str(path))
+        emit({"status": "reset", "file": str(progress_file), "existed": bool(removed),
+              "removed": removed})
         return 0
 
     built = build_progress(source, kind, issue, artifacts_dir)
@@ -941,6 +982,7 @@ def cmd_plan_progress(args: argparse.Namespace) -> int:
 
     wrote = None
     if args.set or args.write:
+        displace_foreign_progress(progress_file, kind)
         progress_file.write_text(render_progress(issue, kind, state, steps), encoding="utf-8")
         wrote = str(progress_file)
 
@@ -2377,9 +2419,12 @@ def build_parser() -> argparse.ArgumentParser:
             "next. With no progress file the state is INFERRED from the plan's "
             "'Already delivered' ledger, inline [x]/DONE step marks, and (evidence "
             "plans) artifacts already on disk, so plans written before this command "
-            "resume correctly. A folder plan stores progress.md; a single-file plan "
+            "resume correctly. A folder plan stores implementation progress in "
+            "progress.md and every other kind in <kind>.progress.md (evidence: "
+            "evidence.progress.md), so kinds never overwrite each other; a legacy "
+            "progress.md is still read for the kind it records. A single-file plan "
             "stores <stem>.progress.md beside it, so files that share a directory do "
-            "not share state. Both are excluded from validation. next is the first "
+            "not share state. All are excluded from validation. next is the first "
             "step that is not done or skipped, so a blocked step stays next."
         ),
     )

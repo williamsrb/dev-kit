@@ -283,3 +283,15 @@ equally consistent with "this URL is not edit mode", and the evidence proves not
   (`Cannot invoke "java.util.List.stream()" because "contentTypeNameString" is null`).
 - `_path LIKE '/content/…'` and `_path LIKE '/…'` both return 0 hits. `_parentPath = '/content/<parent>'`
   and `_name = '<segment>'` work. Use those to resolve a path to an id.
+
+### Duplicate, publish status and Reset across layers (verified acme review, PROJ-446, 2026-09-23)
+
+- **Duplicate over REST** (the call CS's Duplicate button makes): `POST …/content/content/duplicate`
+  `{"contents":[{"contentId":"<src>","includeChildren":false,"parent":"/site/test/…","name":"<slug>"}]}` → `{taskId}`.
+  `parent` + `name` put the copy straight at the target path, so no separate move/rename. The source is untouched.
+  Set the display name afterwards with `content/update` (in the project that owns the copy).
+- **`page/update` accepts a descriptor the app does not ship** (e.g. an old-site part). Useful to reproduce legacy content.
+- **`compare` `diff` is not a draft-vs-master signal.** It stayed `[]` while an inherited item's draft and master had different page trees; it only listed `inherit` after a Reset. Compare `modifiedTime` on `branch: draft` vs `branch: master` (`content/query` with `queryExpr: "_id = '<id>'"`, `expand: full`) instead.
+- **"Online" hides inherited drift.** When a Base change reaches a layer's draft through inheritance, the layer item keeps the **Online** badge and "Unpublish" as the main action, although master is older. A layer `publish` still pushes it and keeps `inherit`.
+- **Layer drafts follow only marked-ready Base versions** once the item is ready: a Base edit left `IN_PROGRESS` does not reach the layer draft.
+- **Reset in the UI:** editor → "More actions" → **Reset** → dialog **Confirm**. Restores `inherit` to `[CONTENT, PARENT, NAME, SORT]` and the Base draft; master keeps the localized version until the layer is published.

@@ -1,0 +1,174 @@
+{
+  "criteria": [
+    {
+      "id": "other-owner",
+      "patterns": [
+        "\\(frontend\\)",
+        "\\(backend\\)",
+        "prototype",
+        "waiting (for|on) (the )?front",
+        "front-?end (dev|team|task|ticket)",
+        "sibling",
+        "blocked by",
+        "depends on",
+        "same (bug|issue|element) (as|in)",
+        "also affects",
+        "shared component",
+        "library|lib-[a-z]+ (publish|release)"
+      ]
+    },
+    {
+      "id": "external-access",
+      "patterns": [
+        "api[ -]?key",
+        "secret",
+        "(api|access|auth|secret|bearer) token",
+        "credential",
+        "password",
+        "certificate",
+        "client[ -]?id",
+        "test user",
+        "log ?in as",
+        "vpn",
+        "kubectl",
+        "vault",
+        "gtm|tag manager",
+        "hubspot|superoffice|zoho|sendgrid|mailgun|cookiebot|idporten|digdir|zendesk|ticketco|recaptcha|stripe|vipps|klarna",
+        "smtp|mail relay|sender (email|address)",
+        "install (the )?app",
+        "hosting|enonic support"
+      ]
+    },
+    {
+      "id": "owner-decision",
+      "patterns": [
+        "\\bTBD\\b",
+        "to be decided",
+        "open (decision|question)",
+        "decision blocked",
+        "should we",
+        "or should",
+        "either .* or",
+        "not sure (if|whether)",
+        "up to (you|the client)",
+        "price|rating|review count",
+        "resend|re-send|notify (the )?customers"
+      ]
+    },
+    {
+      "id": "unsourceable-content",
+      "patterns": [
+        "legal|terms|privacy (policy|text)|disclaimer|consent (text|wording)",
+        "policy text",
+        "email (copy|text|body|subject)",
+        "subject line",
+        "address(es)?\\b|phone|org(anisation)? ?number|subsidiar",
+        "social (media )?(links|urls)",
+        "copy (to come|tbd|pending)|text (to come|from client)",
+        "translation (to come|from|file)|provide .*translation"
+      ]
+    },
+    {
+      "id": "existing-data",
+      "patterns": [
+        "existing (content|pages|articles|blocks|items|events|jobs|bookings|customers|data)",
+        "already (published|saved|in use)",
+        "in use on live",
+        "remove (the )?(field|option|colou?r)",
+        "make .* (mandatory|required)",
+        "rename (the )?field",
+        "migrat",
+        "backfill",
+        "clean ?up",
+        "legacy",
+        "replace (the )?existing"
+      ]
+    },
+    {
+      "id": "review-reproducible",
+      "patterns": [
+        "production|prod\\b",
+        "live (site|page|content)",
+        "https?://(www\\.)?(?!review\\.|prototype\\.|localhost|git\\.|gitlab\\.|[a-z]+\\.atlassian\\.|figma\\.)[a-z0-9.-]+\\.(no|io|com|se)/",
+        "customer (id|number)|booking (id|ref|number)|order (id|number)",
+        "search console|analytics|logs? (from|on) prod",
+        "only (works|happens) (in|on)",
+        "staging (is )?(down|offline)",
+        "cannot reproduce|can't reproduce"
+      ]
+    },
+    {
+      "id": "clear-spec",
+      "patterns": [
+        "— (fw|fwd|re):",
+        "forwarded",
+        "check (the )?updated description",
+        "not (very )?clear",
+        "unclear",
+        "what do you mean",
+        "more details",
+        "does (not|n't) exist on"
+      ]
+    },
+    {
+      "id": "commercial-gate",
+      "patterns": [
+        "estimat",
+        "(send|give|provide) (a|an) quote|quote (for|request)",
+        "budget",
+        "awaiting approval|approval (of|for) (the )?(estimate|budget|hours)",
+        "approve (the )?(hours|estimate|budget)",
+        "wait (with|on) (this|working)",
+        "customer pending",
+        "waiting for (approval|customer)",
+        "how much (more )?time"
+      ]
+    },
+    {
+      "id": "operator-gate",
+      "patterns": [
+        "permission|user roles?|access control|\\bauth(entication|orization)?\\b",
+        "schema migration|data model change",
+        "public api|endpoint (contract|change)|breaking change",
+        "\\.gitlab-ci|ci variable|pipeline config|helm|chart|dns|vhost",
+        "new (paid )?service|subscription"
+      ]
+    },
+    {
+      "id": "real-money-or-identity",
+      "patterns": [
+        "payment|pay(s|ing)? (for|with)|refund|payout|charge (the )?(card|customer)|invoice",
+        "credit ?card|debit card|card (number|data|details)|cvc|iban|bank account",
+        "deposit|double payment|checkout",
+        "flywire|stripe|vipps|klarna|nets\\b|adyen|paypal|paymentgateway|payment gateway",
+        "passport|national id|identity (document|number|card)|fødselsnummer|personnummer|personal identity|\\bssn\\b",
+        "bankid|idporten|id-porten|\\beid\\b|minid|buypass"
+      ]
+    },
+    {
+      "id": "real-inbox",
+      "patterns": [
+        "\\bsms\\b|text message|twilio|push notification",
+        "send(s|ing)? (an? )?(e-?mail|mail|reminder|notification|newsletter)",
+        "(e-?mail|mail|reminder|notification)s? (to|for) (the )?(customer|client|user|member|recipient|practitioner)s?",
+        "re-?send|resend",
+        "sendgrid|mailgun|mailchimp|mail server|smtp",
+        "inbox|mailbox",
+        "(reminder|confirmation|notification|booking|order|receipt|welcome) (e-?mail|sms|message)s?"
+      ]
+    },
+    {
+      "id": "irreversible-operation",
+      "patterns": [
+        "delete|purge|truncate|wipe|drop (table|index|collection)",
+        "bulk (update|delete|edit)|batch (update|delete)",
+        "overwrite|replace all",
+        "remov(e|ing|al) (it|all|the (data|content|relations?|entries))",
+        "script (to|that) (remove|delete|update|fix|clean)",
+        "migrat(e|ion) (the )?(data|content)|re-?import|import .* (into|over)",
+        "unpublish|archive all",
+        "(crm|erp|booking system|ticketing|komtek|tourplan|superoffice|hubspot) .*(write|update|create|push|sync)"
+      ]
+    }
+  ]
+}

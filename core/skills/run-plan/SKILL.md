@@ -126,8 +126,11 @@ Project slug is usually the Jira project key lowercased (`GK` → `gk`) when a p
 **First, read progress. A re-run must never redo finished work.**
 
 ```bash
-agentctl plan progress <TASK-ID> --json
+agentctl plan progress <TASK-ID> --kind <implementation|evidence> --json
 ```
+
+Always pass the kind from `plan resolve` (`payload.kind`). Without `--kind` a folder plan
+reports its implementation progress, even on an evidence run.
 
 The reply carries `done`, `pending`, `blocked`, `next`, `delivered`, `stale`, `total`,
 and per step a `source`. Act on it:
@@ -156,24 +159,26 @@ and per step a `source`. Act on it:
 **Record each step as it completes**, so an interrupted run resumes where it stopped:
 
 ```bash
-agentctl plan progress <TASK-ID> --set S3=done --note "<optional, short>"
+agentctl plan progress <TASK-ID> --kind <kind> --set S3=done --note "<optional, short>"
 ```
 
 Statuses: `done`, `skipped`, `blocked`, `pending`. Record `blocked` before you stop, with
 the reason in `--note` — that is what tells the next session where it went wrong.
-Progress is run state: `progress.md` in a plan folder, or `<stem>.progress.md` beside a
-single-file plan. Excluded from `agentctl plan validate`; never hand-edit it and
+Progress is run state, one file per kind: in a plan folder `progress.md` (implementation)
+and `evidence.progress.md` (evidence); beside a single-file plan `<stem>.progress.md`. A
+legacy `progress.md` that recorded evidence state is still read for evidence and moved to
+`evidence.progress.md` the first time implementation progress is written. Excluded from `agentctl plan validate`; never hand-edit it and
 never commit it as plan content.
 
 - Follow the plan’s ordered steps/todos. Do not ask to switch modes.
 - Honor plan warnings (auth, reachability, cross-scope frontend↔backend).
-- Honor `implicit.md` / `## Implicit requirements`: implement ticked items (Jira checkbox, local `[x]`, or the user said "include X") and DOs from `How-to-handle-implicit-requirements.md`. Unticked extras are out of scope. Do not implement them to "complete" the ticket. **local:** `[x]` was the planner acting as techlead — implement those. Honor **Local PO decisions** in `tbd.md` as decided requirements, not as open questions.
+- Honor `implicit.md` / `## Implicit requirements`: implement ticked items (Jira checkbox, local `[x]`, or the user said "include X") and DOs from `How-to-handle-implicit-requirements.md`. Unticked extras are out of scope. Do not implement them to "complete" the ticket. **local:** `[x]` was the planner acting as techlead — implement those. Honor **Local PO decisions** and **High-confidence decisions** in `tbd.md` as decided requirements, not as open questions; neither is a TBD hard-stop.
 - If a specialized skill already covers a step (e.g. `validate-impl` for delivery QA), **follow that skill** for those steps instead of reinventing them — still apply this skill’s KB scan + write-back around the whole run.
 - **Testing / evidence plans:** progress is keyed by the planned screenshot filename, and a
   shot already on disk under `~/.agents/prds/<TASK-ID>/evidence/` counts as captured — do
   not re-take it unless the plan changed, the shot failed its consistency gate, or the
   operator asks. Re-taking a good shot burns a browser session and can replace a valid
-  image with a worse one. Follow the plan file’s own **Execution** section (E1–E3). Do **not** re-run `plan-task-evidence` for capture — that skill only writes the plan and **spawns** `playwright-<TASK-ID>`. This `run-plan` session must already see `user-playwright-<TASK-ID>` / `mcp__playwright-<TASK-ID>__*`. If those tools are missing: follow `spawn-playwright-mcp` (`python3 ~/.agents/mcp/playwright.py list`). Process dead → spawn `--enable` (or `revive` after a reboot), then **stop and ask for a new chat** (this session cannot attach). Process alive but no tools → this chat started before enable; new chat. Do not fall back to a vendor-native browser. Before any live/integration step is marked pass, apply the **product concept** gate (`How-to-gate-evidence-on-the-product-concept.md` + plan-task-evidence override 13): expected paint must be in the page; if not, diagnose console/CSP/network/fixture IDs, report to the operator, do not post. If the plan’s **Auth required** is yes, Execution step 1 confirms storage state still authenticates (`npx playwright codegen --save-storage=…` only when no host-matched file exists). A step landing on the login page = expired state = **failed step**, not evidence. After the run (pass or fail), `python3 ~/.agents/mcp/playwright.py stop <TASK-ID>`. Screenshots destined for Jira must pass consistency validation (correct element, zoom, example page) before upload — see `plan-task-evidence` reference / always-apply rule `jira-screenshot-consistency`; storage-only shots skip that gate. **Jira comment post:** skip when `mode` is `local`. When `mode` is `jira`, only if every AC/step passed. Any failure / blocked / inconclusive: **do not post** and **do not ask** whether to post a partial/fail comment — report results in chat (pass/fail list, why, local artifact paths). This overrides always-apply `evidence-post-on-failure-ask` for evidence-plan runs. All-pass may post without asking. Local capture, flatten, and attachment upload may still happen.
+  image with a worse one. Follow the plan file’s own **Execution** section (E1–E3). Do **not** re-run `plan-task-evidence` for capture — that skill only writes the plan and **spawns** `playwright-<TASK-ID>`. This `run-plan` session must already see `user-playwright-<TASK-ID>` / `mcp__playwright-<TASK-ID>__*`. If those tools are missing: follow `spawn-playwright-mcp` (`python3 ~/.agents/mcp/playwright.py list`). Process dead → spawn `--enable` (or `revive` after a reboot), then **stop and ask for a new chat** (this session cannot attach). Process alive but no tools → this chat started before enable; new chat. Do not fall back to a vendor-native browser. Before any live/integration step is marked pass, apply the **product concept** gate (`How-to-gate-evidence-on-the-product-concept.md` + plan-task-evidence override 13): expected paint must be in the page; if not, diagnose console/CSP/network/fixture IDs, report to the operator, do not post. If the plan’s **Auth required** is yes, Execution step 1 confirms storage state still authenticates (`npx playwright codegen --save-storage=…` only when no host-matched file exists). A step landing on the login page = expired state = **failed step**, not evidence. After the run (pass or fail), `python3 ~/.agents/mcp/playwright.py stop <TASK-ID>`. Screenshots destined for Jira must pass consistency validation (correct element, zoom, example page) before upload — see `plan-task-evidence` reference / always-apply rule `jira-screenshot-consistency`; storage-only shots skip that gate. **Jira comment post:** skip when `mode` is `local`. When `mode` is `jira`, only if every AC/step passed. Any failure / blocked / inconclusive: **do not post** and **do not ask** whether to post a partial/fail comment — report results in chat (pass/fail list, why, local artifact paths). This overrides always-apply `evidence-post-on-failure-ask` for evidence-plan runs. All-pass may post without asking. Local capture, flatten, and attachment upload may still happen. **Problem-found comment (E2b):** when the run hit a problem the analyst would not otherwise see (a cleared blocker, a different root cause, an environment or publishing gap, rebuilt fixtures), post one short follow-up comment after the verified evidence post, per `plan-task-evidence` override 16. Skip it when nothing unexpected happened. When the evidence post is blocked, put the draft in chat instead.
 - **Validation plans**: prefer `validate-impl` for delivery QA/review; use staged-validation skills for syntax+commit gates.
 - On blockers: if the blocker is a missing specialized capability, try **Auxiliary skills** (`find-skills`) once before stopping. Otherwise stop, report, do not loop. Capture any partial learnings in step 5 if useful.
 

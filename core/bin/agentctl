@@ -947,6 +947,7 @@ def cmd_plan_progress(args: argparse.Namespace) -> int:
     if args.reset:
         # A legacy progress.md holding this kind's state goes too, or it would be read back.
         _, legacy_file = read_kind_progress(source, kind)
+        displace_foreign_progress(progress_file, kind)
         removed = []
         for path in {progress_file, legacy_file} - {None}:
             if path.is_file():

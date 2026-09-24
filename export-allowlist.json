@@ -219,9 +219,12 @@
   },
   "mcp": {
     "core": [
+      "README.md",
       "catalog.json",
       "install.py",
-      "playwright.py"
+      "playwright.py",
+      "image-to-disk/README.md",
+      "image-to-disk/server.py"
     ]
   },
   "config": {

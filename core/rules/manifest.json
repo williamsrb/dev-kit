@@ -233,6 +233,18 @@
         "from": "mdc",
         "file": "serena.mdc"
       }
+    },
+    {
+      "title": "Response formatting",
+      "source": "`response-formatting.mdc`",
+      "rules": [
+        "response-formatting.mdc"
+      ],
+      "layer": "core",
+      "body": {
+        "from": "mdc",
+        "file": "response-formatting.mdc"
+      }
     }
   ]
 }

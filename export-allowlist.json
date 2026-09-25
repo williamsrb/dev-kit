@@ -131,6 +131,7 @@
       "no-git-shell-commands.mdc",
       "orchestrate-cursor-models.mdc",
       "prefer-python-over-shell.mdc",
+      "response-formatting.mdc",
       "serena.mdc",
       "session-store-isolation.mdc",
       "user-scope-exclusions.mdc",

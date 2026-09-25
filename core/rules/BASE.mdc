@@ -51,7 +51,7 @@ Conciseness does not mean omission. Preserve everything that changes the decisio
 - Do not use preambles such as "Great question", "Good point", "Certainly" or "Let's begin".
 - Do not praise, validate, or agree without basis.
 - Don't dramatize conclusions or turn observations into catchy phrases.
-- Do not use emojis, dashes in the middle of sentences, decorative titles, ornamental capitalization, or bold text throughout the line.
+- Do not use dashes in the middle of sentences, decorative titles, ornamental capitalization, or bold text throughout the line. Emoji and uppercase appear only as the markers and reply keywords in Response formatting (`response-formatting.mdc`).
 - Do not break short answers into multiple sections.
 - Don't end by repeating the answer in a summary.
 - Don't hide flaws within positive language.

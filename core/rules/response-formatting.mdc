@@ -1,0 +1,73 @@
+---
+description: Operator-chat response layout (blocks, markers, lists, spacing) for Claude Code, Codex, and Cursor
+alwaysApply: true
+---
+
+# Response formatting
+
+## Scope
+
+- Applies only to the prose of the chat reply to the operator, in every harness (Claude Code, Codex, Cursor).
+- Never applies to text passed as a tool argument, written to a file, committed, or posted to an external system (Jira, Slack, GitLab/GitHub). Those follow "Client and analyst bodies" in BASE §1.
+- A skill template for a chat reply keeps its sections, fields, and order; its lists, markers, and spacing follow this rule. A skill template for a body that leaves the chat (Jira, Slack, PR, file, commit) stays verbatim.
+- A draft of an external body shown for approval is reproduced verbatim in its destination format, inside a quote or code block. Only the text around it follows this layout.
+- Subagent reports are exempt.
+
+## Blocks
+
+Fixed order. Include a block only when it has content.
+
+1. Answer: first line, no heading.
+2. Blockers
+3. Changes / Evidence
+4. Findings / Options
+5. Not verified
+6. Next: always last.
+
+By reply type: simple question uses 1; small task 1, 3, 5, 6; technical decision 1, 4, 6; complex analysis any, with 2 first.
+Use `##` headings only when the reply has two or more blocks or runs past about 10 lines.
+
+## Markers
+
+Line prefixes. One meaning each.
+
+| Marker | Meaning |
+|---|---|
+| 🚫 | Blocker: stop before proceeding |
+| ⚠️ | Risk, not blocking |
+| ✅ | Verified or passed, with observed evidence |
+| ⛔ | Failed, followed by the deciding error |
+| ❓ | Question the operator must answer |
+| 👉 | Next action |
+| 💡 | Insight that changes a decision. At most one per reply. No unverified numbers |
+| 🔹 | New finding, when no marker above fits |
+| 🔸 | Still pending or undecided, when no marker above fits |
+
+- Follow every emoji marker with `&nbsp;&nbsp;&nbsp;` plus one normal space before the text.
+- Put one spacer paragraph before the 👉 line: a line containing only `&nbsp;`, with a blank line on each side.
+- Never use markers in code blocks, tables, or file content.
+
+## Lists
+
+- No Markdown list syntax (`-`, `*`, `1.`, `1)`): it loses its markers when copied.
+- Levels use `•`, `◦`, `▪`, one item per paragraph (a blank line between items).
+- A level-N bullet line starts with 6 + 8×(N−1) `&nbsp;` (6, 14, 22), then the bullet, then `&nbsp;&nbsp;&nbsp;&nbsp;` plus one normal space, then the text.
+- An emoji list item starts with 4 `&nbsp;`, then the marker, then `&nbsp;&nbsp;&nbsp;` plus one normal space. The narrower bullet gets 2 more before and 1 more after so marker and text line up with emoji items.
+- In a single-level list, a marker from the table replaces the `•`. 🔹 and 🔸 apply only when no other marker fits.
+- Sequential steps use `Step N:` or A-codes, not numbered lists.
+- Never indent with a literal U+00A0 or other Unicode space characters. Never put `&nbsp;` inside code spans, code blocks, commands, or paths; copied indentation becomes U+00A0 and breaks shells and YAML.
+
+## Option lists
+
+- Mutually exclusive options (pick one) use keycaps 1️⃣ to 🔟, in order. The recommended option comes first and says "Recommended".
+- Combinable options (pick any) use circled letters Ⓐ to Ⓩ, in their text form.
+- Keep the BASE §5 code after the marker, chosen by what the item is: actions use A-codes, other options use O-codes (`1️⃣ O1: …`, `Ⓐ A1: …`). The marker shows exclusivity; the code is the reference used later in the conversation.
+- Both follow the emoji-marker spacing: 4 `&nbsp;`, the marker, then `&nbsp;&nbsp;&nbsp;` plus one normal space.
+- A ❓ line states the question before the list. The 👉 line gives the reply format: "1", "A C", or "ALL".
+- More than 10 exclusive options: narrow or split the question instead of extending the list.
+
+## Emphasis
+
+- Bold at most one or two items per block.
+- Reply keywords the operator can send are uppercase and wrapped in double quotes: "GO AHEAD", "KEEP", "REVERT", option codes like "O1". They sit mostly on 👉 and ❓ lines. Other imperative verbs keep normal case and take no quotes.
+- Never uppercase commands, aliases, paths, or code; they stay in backticks with their real case.

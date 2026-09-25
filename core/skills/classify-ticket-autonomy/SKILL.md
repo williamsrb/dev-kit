@@ -128,10 +128,16 @@ Write `~/.agents/prds/<TASK-ID>.autonomy.json`, then run `autonomy.py check` on 
 
 ```markdown
 **<TASK-ID>: Autonomous | Human-in-the-loop**
-- Blockers: <criterion: human action (owner)> — or "none"
-- Auto-resolved: <n> (<one-line list>)
-- Risk flags / review follow-ups: <short>
-- File: ~/.agents/prds/<TASK-ID>.autonomy.json (check: valid)
+
+&nbsp;&nbsp;&nbsp;&nbsp;🚫&nbsp;&nbsp;&nbsp; Blocker: <criterion>: <human action> (<owner>)
+
+&nbsp;&nbsp;&nbsp;&nbsp;✅&nbsp;&nbsp;&nbsp; Auto-resolved: <n> (<one-line list>)
+
+&nbsp;&nbsp;&nbsp;&nbsp;⚠️&nbsp;&nbsp;&nbsp; Risk flag / review follow-up: <short>
+
+&nbsp;&nbsp;&nbsp;&nbsp;✅&nbsp;&nbsp;&nbsp; File: `~/.agents/prds/<TASK-ID>.autonomy.json` (check: valid)
 ```
+
+One 🚫 line per blocker; with none, one ✅ line: Blockers: none. Layout per Response formatting (`response-formatting.mdc`).
 
 Several keys: one line per key, then counts per verdict.

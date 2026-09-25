@@ -129,41 +129,69 @@ Only for a real capability gap (e.g. Figma reader). Follow `find-skills` with `c
 ## Report template
 
 ```markdown
-## Plan validation
+**Verdict:** GO | GO-WITH-FIXES | NO-GO. <kind> plan `<absolute path>`, AC source `<path>` or n/a
 
-**Kind:** implementation | evidence
-**Plan:** <absolute path>
-**PRD / AC source:** <path or n/a>
-**Verdict:** GO | GO-WITH-FIXES | NO-GO
+## Blockers
 
-### Fixes applied
-- <section>: <what changed and why> — or "None"
+&nbsp;&nbsp;&nbsp;&nbsp;🚫&nbsp;&nbsp;&nbsp; TBD: <item> (impl, **jira**): coding hard-stop until the analyst answers or the operator says "IMPLEMENT WITH THESE ASSUMPTIONS"
 
-### Structure (agentctl)
-- valid: true | false — <missing sections / placeholders, and what was fixed>
+&nbsp;&nbsp;&nbsp;&nbsp;🚫&nbsp;&nbsp;&nbsp; Reachability: <missing input> (evidence)
 
-### Exclusions
-- PASS | FAIL | n/a — <element: allowed delta vs plan ACs>
+## Fixes applied
 
-### TBD / blockers
-- TBD: none | <checklist> (impl) — **jira:** coding hard-stop if non-empty. **local:** must be `none` plus Local PO decisions.
-- Implicit: none | <checkbox list> (impl) — not a coding hard-stop; **local:** `[x]` auto-selected in scope
-- Reachability: all core steps reachable | <missing inputs> (evidence)
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;•&nbsp;&nbsp;&nbsp;&nbsp; <section>: <what changed and why>
 
-### Consistency
-- <counts / paths / AC satisfiability / phase overlap> — or "None"
+## Structure (agentctl)
 
-### Is realistic or hallucination?
-- PASS | FAIL — <sourced claims vs leftovers moved to TBD / deleted>
+&nbsp;&nbsp;&nbsp;&nbsp;✅&nbsp;&nbsp;&nbsp; valid: true. <what was fixed>
 
-### Is using the KB properly?
-- PASS | FAIL | n/a — <catalog + cited paths, or why n/a>
+&nbsp;&nbsp;&nbsp;&nbsp;⛔&nbsp;&nbsp;&nbsp; valid: false. <missing sections / placeholders>
 
-### Follow-up
-- Do not implement or execute from this skill.
-- **jira:** non-empty TBD → analyst (or explicit implement-with-assumptions) before `run-plan`.
-- **local:** auto-select leftover TBD; plan is execution-ready. Do not ask an analyst.
-- Evidence not execution-ready → keep the plan file; do not run Execution.
+## Exclusions
+
+&nbsp;&nbsp;&nbsp;&nbsp;✅&nbsp;&nbsp;&nbsp; PASS: <element: allowed delta vs plan ACs>
+
+&nbsp;&nbsp;&nbsp;&nbsp;⛔&nbsp;&nbsp;&nbsp; FAIL: <element: plan AC delta beyond the allowed one>
+
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;•&nbsp;&nbsp;&nbsp;&nbsp; n/a
+
+## TBD / implicit
+
+&nbsp;&nbsp;&nbsp;&nbsp;✅&nbsp;&nbsp;&nbsp; TBD: none (impl). **local:** plus Local PO decisions: <list>
+
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;•&nbsp;&nbsp;&nbsp;&nbsp; Implicit: none | <checkbox list> (impl). Not a coding hard-stop; **local:** `[x]` auto-selected in scope
+
+&nbsp;&nbsp;&nbsp;&nbsp;✅&nbsp;&nbsp;&nbsp; Reachability: all core steps reachable (evidence)
+
+## Consistency
+
+&nbsp;&nbsp;&nbsp;&nbsp;🔹&nbsp;&nbsp;&nbsp; <counts / paths / AC satisfiability / phase overlap>
+
+## Is realistic or hallucination?
+
+&nbsp;&nbsp;&nbsp;&nbsp;✅&nbsp;&nbsp;&nbsp; PASS: <sourced claims vs leftovers moved to TBD / deleted>
+
+&nbsp;&nbsp;&nbsp;&nbsp;⛔&nbsp;&nbsp;&nbsp; FAIL: <unsourced claim still in the plan>
+
+## Is using the KB properly?
+
+&nbsp;&nbsp;&nbsp;&nbsp;✅&nbsp;&nbsp;&nbsp; PASS: <catalog + cited paths>
+
+&nbsp;&nbsp;&nbsp;&nbsp;⛔&nbsp;&nbsp;&nbsp; FAIL: <missing or wrong KB citation>
+
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;•&nbsp;&nbsp;&nbsp;&nbsp; n/a: <why>
+
+## Follow-up
+
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;•&nbsp;&nbsp;&nbsp;&nbsp; Do not implement or execute from this skill.
+
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;•&nbsp;&nbsp;&nbsp;&nbsp; **local:** leftover TBD auto-selected; the plan is execution-ready. Do not ask an analyst.
+
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;•&nbsp;&nbsp;&nbsp;&nbsp; Evidence not execution-ready: keep the plan file; do not run Execution.
+
+&nbsp;
+
+&nbsp;&nbsp;&nbsp;&nbsp;👉&nbsp;&nbsp;&nbsp; <next step: `run-plan`, or the analyst for non-empty **jira** TBD>
 ```
 
-Several files: one block per plan, then a one-line batch verdict.
+Layout per Response formatting (`response-formatting.mdc`): no Markdown list syntax, a blank line between items. Markers: ✅ PASS or clean, ⛔ FAIL, 🚫 hard-stop, 🔹 finding, plain `•` for neutral items. Omit **Blockers** when there is no hard-stop; a section with nothing to report holds the plain line `None`. Several files: one block per plan under a `## <plan path>` heading, then a one-line batch verdict.

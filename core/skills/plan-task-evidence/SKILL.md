@@ -64,11 +64,11 @@ These apply to plans this skill writes and to **evidence execution** of those pl
     Common errors and the exact commands: `~/.agents/kb/testing/_shared/How-to-check-evidence-screenshots-before-jira.md`. Do not send the image to a vendor vision model for OCR or for this gate.
 11. **Media must resolve on the issue before you claim the post is done.** `check-evidence-comment.py` only lints markup. HTML `data-id` nodes can sit in a comment with empty boxes.
     - Every `fileId` in the body must come from `uploadCommand` **in this session**. Do not copy `data-id` from an older comment, a deleted comment, or a previous run.
-    - Replacing a comment, or deleting one that held the media: re-upload **every** PNG. Deleting a comment drops its attachments; reused ids become missing images (PROJ-427/429, 2026-09-05).
+    - Replacing a comment, or deleting one that held the media: re-upload **every** PNG. Deleting a comment drops its attachments; reused ids become missing images.
     - After post, and again after any delete of a related comment, run
       `python3 ~/.agents/skills/plan-task-evidence/scripts/verify-jira-comment-images.py --issue <KEY> --comment-id <ID>`
       Exit 1 = the comment is not done. Re-upload the missing files, edit the same-day comment, re-run until 0. Do not report success while this fails.
-12. **One evidence comment per issue per run.** Worked failures PROJ-427/429 (2026-09-04/05): same body posted twice on 429 (6 seconds apart); replacement comments reused `fileId`s from comments that were then deleted, so most images vanished; `check-evidence-comment.py` still passed.
+12. **One evidence comment per issue per run.** A retried create posts the same body twice, and a replacement that reuses `fileId`s from a deleted comment loses its images; `check-evidence-comment.py` passes both.
     - Call `addOrEditJiraIssueComment` **once** per issue unless you pass `commentId` (same-day edit). Do not retry a successful create.
     - Immediately after a create, list comments. Two same-body evidence comments → delete the extra before anything else.
     - Replace trash comments in this order only: re-upload **every** PNG this session → post or edit with those new ids → `verify-jira-comment-images.py` exit 0 → delete the trash comments → run the verify script again. Do not delete first. Do not copy `data-id` from the trash comment.
@@ -82,17 +82,13 @@ These apply to plans this skill writes and to **evidence execution** of those pl
     How-to does **not** waive this unless the operator excluded paint **in this
     session**. Full procedure:
     `~/.agents/kb/testing/_shared/How-to-gate-evidence-on-the-product-concept.md`.
-    Worked failure: PROJ-427/429 (2026-09-04) posted HubSpot evidence with no form
-    and an unnoticed `js.hsforms.net` CSP block.
 14. **Existing PRD is the task copy (planning).** If `~/.agents/prds/<TASK-ID>.md`
     exists, do **not** fetch that issue from Jira during planning. No
     `download-jira-task`, no `agentctl jira fetch`, no `getJiraIssue(<TASK-ID>)`,
     no JQL whose only job is this key. Related-task Jira search is **not** a
     default — local PRDs / plans / testing KB first. Refresh the PRD only when
     the user explicitly asks. This override applies in both `jira` and `local`
-    mode. Worked failure: PROJ-434 (2026-09-15) planned evidence against an
-    existing PRD, then still called `searchJiraIssuesUsingJql` and
-    `getJiraIssue` on a sibling.
+    mode.
 15. **Figure sizing matches the Jira editor (PROJ-435).** Evidence screenshots use PNG pixel size, not 60% of the comment column. After stamp, `identify` the flattened PNG. Author `data-width-type="pixel"`, figure `data-width` = PNG width, inner media `data-width`/`data-height` = PNG width/height. `data-layout="wide"` when width ≥ 1200 (desktop 1440 captures); `center` for tight clips. `data-width="60"` `data-width-type="percentage"` with no inner height letterboxes a wide shot (empty band around a small image). `check-evidence-comment.py` fails that pattern. Ground truth: PROJ-435 comment 531480 after the 2026-09-15 UI save. If two screenshots are stacked into one PNG, mark the merge in the image (banner, black bar, a short label per part).
 16. **Problem-found comment after the evidence post (E2b).** When the run hit a problem the analyst would otherwise never see, post a short **second** comment after the evidence comment. Examples: a blocker that had to be cleared, a root cause different from the planned one, an environment or content-publishing gap, or fixtures rebuilt because the plan's approach was impossible. The evidence body says what shipped. This comment says what was wrong and what that means for the analyst. Shape: [templates.md](templates.md) § "Problem-found comment". It has three bold-labelled parts (**What we found**, **What we did** or **What we will fix**, **What this means for you**), in product language, a few short paragraphs, no screenshots, no local paths, no questions, no praise. Draft with `write-analyst-message`. Post it only after the evidence comment is posted and `verify-jira-comment-images.py` exits 0, and post it once. When nothing unexpected happened, skip it; do not invent a problem to fill the slot. When the evidence post is blocked by override 1, do not post this either: put the draft in the chat report so the operator can decide. An open decision is still a separate TBD comment with options, not part of this one. Reference: PROJ-440 comment 533195, PROJ-443 comment 533625.
 

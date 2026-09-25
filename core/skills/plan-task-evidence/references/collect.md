@@ -9,7 +9,6 @@
    Forbidden while the PRD exists (unless the user explicitly says refresh / re-download): `download-jira-task`, `agentctl jira fetch`, `getJiraIssue` on `<TASK-ID>`, and any JQL whose only job is to look up `<TASK-ID>`.
    - Missing + `mode` `jira` — nested `download-jira-task` **once** (`called_from: plan-task-evidence`; keeps comment IDs), then stay on the file.
    - Missing + `mode` `local` — do **not** call `download-jira-task`. Prefer impl-plan AC. Nested `handoff` (PRD) only if a PRD is still required. Evidence may proceed from the impl plan alone.
-   Worked failure: PROJ-434 evidence planning (2026-09-15) still called Jira after `~/.agents/prds/PROJ-434.md` already existed.
 3. **Testing KB scan (mandatory).** Before drafting URLs or flows:
    - Open `~/.agents/kb/testing/llm-index.md` (chooser). If a folder row matches the project (`<project>/`) or topic (`_shared/` for Content Studio, Guillotine, Jira evidence), open that folder’s `llm-index.md`. Then open only matching How-tos.
    - For part evidence, open `<project>/How-to-create-persistent-part-evidence-content-on-review.md`; it names where that project's evidence pages live.

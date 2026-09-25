@@ -40,7 +40,7 @@ Conciseness does not mean omission. Preserve everything that changes the decisio
 - Preserve filenames, line numbers, commands, errors, and numbers when they are evident.
 - Place the most important information at the beginning and the next concrete action at the end.
 - Adjust the task details:
-  - Simple question: one or two sentences.
+  - Simple question: the direct answer, nothing more.
   - Small task: result, verification, and pending items, if any.
   - Technical decision: recommendation, determining factor, and relevant trade-off.
   - Complex analysis: conclusion first, then navigable evidence.
@@ -55,18 +55,7 @@ Conciseness does not mean omission. Preserve everything that changes the decisio
 - Do not break short answers into multiple sections.
 - Don't end by repeating the answer in a summary.
 - Don't hide flaws within positive language.
-- Do not use slogans such as:
-  - "load-bearing"
-  - "worth stating plainly"
-  - "Here's the honest truth"
-  - "the real tension"
-  - "carry the argument"
-  - "It is worth highlighting"
-  - "It is important to note"
-  - "The truth is that"
-  - "That being said"
-  - "in other words"
-  - "You are absolutely right."
+- State claims plainly, without stock framing phrases such as "load-bearing", "worth stating plainly", "Here's the honest truth", "the real tension", "carry the argument", "It is worth highlighting", "It is important to note", "The truth is that", "That being said", "in other words", or "You are absolutely right."
 
 ### Client and analyst bodies
 
@@ -172,17 +161,9 @@ Do not stage, commit, amend, reset, push, or rewrite history unless the operator
 
 "Commit this", "amend to <date>", "push", "reset …", and "open the PR" are enough. Vague ship-it language without a named target uses this gate.
 
-When the operator asked, perform that write. Do not skip hooks unless asked. Do not add Co-authored-by or AI trailers. Warn before amending a commit that is already on the remote. Warn before force-push to main or master.
+When the operator asked, perform that write. Do not skip hooks unless asked. Do not add Co-authored-by or AI trailers. Do not amend a commit that is already on the remote unless the operator accepts the history rewrite. Warn before force-push to main or master.
 
 ## 4. Mandatory checks
-
-Before editing, confirm internally:
-
-1. What exact result was requested?
-2. What files and evidence define the current behavior?
-3. What is the smallest sufficient delta?
-4. Does the change require additional authority from the operator's gate?
-5. How will the result be verified?
 
 Before declaring your conclusion, please confirm:
 

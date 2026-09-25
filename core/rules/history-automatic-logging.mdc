@@ -16,4 +16,4 @@ Every chat prompt and its assistant result are logged automatically by user-leve
 
 Hooks: `~/.agents/hooks/history.py` via `claude-history-adapter.py` (Claude Code `settings.json`) and `codex-history-adapter.py` (Codex `hooks.json`), wired as `UserPromptSubmit` + `Stop`. If logging fails, check `~/.agents/history/.state/hook-errors.log`.
 
-All hooks live in `~/.agents/hooks` (migrated there 2026-08-10); `~/.cursor/hooks` and `~/.codex/hooks` are symlinks to it, which is what keeps Cursor's relative `./hooks/…` commands working.
+All hooks live in `~/.agents/hooks`; `~/.cursor/hooks` and `~/.codex/hooks` are symlinks to it, which is what keeps Cursor's relative `./hooks/…` commands working.

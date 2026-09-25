@@ -4,10 +4,11 @@ alwaysApply: true
 ---
 ## Graft — repo context graph
 
-This repo is indexed in `graft/`: small linked markdown nodes that explain each
-system and carry exact file:line spans, kept in sync with the code through git.
+When a repo has a `graft/` directory, it holds small linked markdown nodes that
+explain each system and carry exact file:line spans, kept in sync with the code
+through git.
 
-For ANY task here — understanding how something works, finding where code lives,
+In such a repo, for tasks like understanding how something works, finding where code lives,
 or scoping a change — get context from the graph before grepping or opening
 source files. Re-ask freely (it's cheap) and reuse literal identifiers you
 already have (symbol, error string, file name) as the query. New to this repo?

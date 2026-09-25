@@ -153,24 +153,44 @@ Title of change
 
 ## Response template
 
+The layout follows `response-formatting.mdc`: print the fence content as is, with no Markdown list syntax, and keep the blank line between items. The commit message block stays a plain indented block because it leaves the chat.
+
 ```markdown
 **Delivery scope:** staged | unstaged | branch diff vs main/master
 
 ### Fixes applied
-- <file>: <what changed and why> — or "None"
+
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;•&nbsp;&nbsp;&nbsp;&nbsp; <file>: <what changed and why>, or `None`
 
 ### Syntax & semantic validation
-- <file>: PASS | FAIL (<issue → fixed | remaining>)
+
+&nbsp;&nbsp;&nbsp;&nbsp;✅&nbsp;&nbsp;&nbsp; <file>: PASS
+
+&nbsp;&nbsp;&nbsp;&nbsp;⛔&nbsp;&nbsp;&nbsp; <file>: FAIL. <issue → remaining after fixes>
 
 ### Enonic backend JS (XP 7.16)
-- <file>: PASS | FAIL | SKIPPED (<reason>)
+
+&nbsp;&nbsp;&nbsp;&nbsp;✅&nbsp;&nbsp;&nbsp; <file>: PASS
+
+&nbsp;&nbsp;&nbsp;&nbsp;⛔&nbsp;&nbsp;&nbsp; <file>: FAIL. <issue → remaining after fixes>
+
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;•&nbsp;&nbsp;&nbsp;&nbsp; <file>: SKIPPED (<reason>)
 
 ### React4XP / TypeScript
-- <file or tsc project>: PASS | FAIL | SKIPPED (<reason>)
-- tsc: <command(s) run or skipped> — PASS | FAIL (<summary>)
+
+&nbsp;&nbsp;&nbsp;&nbsp;✅&nbsp;&nbsp;&nbsp; <file or tsc project>: PASS
+
+&nbsp;&nbsp;&nbsp;&nbsp;⛔&nbsp;&nbsp;&nbsp; <file or tsc project>: FAIL. <issue → remaining after fixes>
+
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;•&nbsp;&nbsp;&nbsp;&nbsp; tsc: <command(s) run>, or SKIPPED (<reason>)
 
 ### Linter
-- <status summary after fixes>
+
+&nbsp;&nbsp;&nbsp;&nbsp;✅&nbsp;&nbsp;&nbsp; <check>: passed
+
+&nbsp;&nbsp;&nbsp;&nbsp;⛔&nbsp;&nbsp;&nbsp; <check>: <deciding error after fixes>
+
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;•&nbsp;&nbsp;&nbsp;&nbsp; <check>: skipped or unavailable (<reason>); unavailable is not a pass
 
 ### Commit message suggestion
 

@@ -115,10 +115,10 @@ Do not start `run-plan` from a **NO-GO**. **jira:** do not treat silence as acce
 
 ## Structure gate semantics
 
-The two long-standing validator mismatches are fixed in `agentctl` (2026-08-19), so treat `valid: false` as a plan defect and fix the file:
+Treat `valid: false` as a plan defect and fix the file:
 
 1. **`missing_sections`** — matching strips a trailing heading qualifier, so `## Constraints (user exclusions)` satisfies `constraints`, `## TBD (ask analyst before implement)` satisfies `tbd`, and `## Implicit requirements (techlead tick)` satisfies `implicit-requirements`. Keep the skill wording. `## Validation` is a real required section; add it if missing (build/manual/evidence gates). Add Implicit if missing (`- Implicit: none` when there is nothing to tick).
-2. **`unresolved_placeholders`** — only template tokens flag: `TODO` plus `<ISSUE-KEY>`, `<TASK-ID>`, `<TASK-KEY>`, `<JIRA-KEY>`, `<ENV>`, `<DATE>`, `<FIXME>`, and siblings (see `PLACEHOLDER_TOKENS` in `~/.agents/bin/agentctl`). Ordinary angle brackets — `Promise<void>`, `<ComponentPrototype>`, `/<[^>]*>/g`, `services/<name>/<name>.ts`, `part.<part>.<field>` — no longer flag. Every remaining hit is real: resolve it or delete the line.
+2. **`unresolved_placeholders`** — only template tokens flag: `TODO` plus `<ISSUE-KEY>`, `<TASK-ID>`, `<TASK-KEY>`, `<JIRA-KEY>`, `<ENV>`, `<DATE>`, `<FIXME>`, and siblings (see `PLACEHOLDER_TOKENS` in `~/.agents/bin/agentctl`). Ordinary angle brackets — `Promise<void>`, `<ComponentPrototype>`, `/<[^>]*>/g`, `services/<name>/<name>.ts`, `part.<part>.<field>` — do not flag. Every remaining hit is real: resolve it or delete the line.
 
 Evidence kind requires H2 slugs `auth-required`, `acceptance-criteria`, `evidence-steps`, `artifacts`, `posting-gate`. If the draft uses `## Steps` instead of `## Evidence Steps`, rename (or add the required H2s) so both the skill template contract and the validator hold. Keep **Execution**.
 

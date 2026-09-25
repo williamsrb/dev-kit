@@ -17,7 +17,7 @@ The BASE alias `mult` does **not** activate this rule. `mult` loads the `orchest
 1. **Isolation = `git worktree`**, not full repo copies. Never triplicate `node_modules` / build trees. One parent checkout; one worktree (+ branch) per task key.
 2. **Worktree base = primary checkout's current branch tip** (e.g. `PROJ-295`). Never `review` / `origin/review` — that is a testing/deploy line and may hold non-approved code. Use `set-up-worktree` (or `add_worktrees.py`); do not invent `--base origin/review`.
 3. **Subagents do not share a context window.** Share only via disk: PRDs, plans, and a short `DECISIONS.md` (or equivalent). Spawn briefs must be self-contained and thin — cite those files; forbid re-deriving shared conventions.
-4. **Phase-split into fresh sessions** (new chat / new Agent session). Do **not** keep Opus plan-validation and Sonnet implementation (or QA) in one transcript. `/model` does **not** reset context.
+4. **Phase-split into fresh sessions** (new chat / new Agent session). Do **not** keep plan-validation and implementation (or QA) in one transcript. `/model` does **not** reset context.
 5. **Shared work once, before fan-out.** Helpers, path rules, and cross-cutting ports happen in one pass (optional base commit / cherry-pick). Never “identical port into each worktree” inside parallel agents.
 6. **One implementer per worktree.** Orchestrator stays thin; each Agent/subagent is confined to its path and must assert `git branch --show-current` matches the task key before edits.
 7. **QA / lint / evidence = fresh session(s)**, preferably one per branch — never continue the implementation parent after it is already heavy.

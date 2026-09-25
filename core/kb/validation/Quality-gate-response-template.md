@@ -10,63 +10,98 @@ prose: caveman-lite
 
 # QA response template
 
-Use this structure for chat QA reports. Do not stylistically compress the fence.
+Use this structure for chat QA reports. Do not stylistically compress the fence. The layout follows Response formatting (`response-formatting.mdc`): print the fence content as is, with no Markdown list syntax, and keep the blank line between items.
 
 ```markdown
-## QA validation
+**Verdict:** PASS | PASS WITH NOTES | FAIL. <one-sentence requirement restatement>
 
-**Requirement:** <one-sentence restatement>
+Delivery scope: staged | unstaged | branch diff vs main/master
 
-**Delivery scope:** staged | unstaged | branch diff vs main/master
+## Blockers
 
-**Verdict:** PASS | PASS WITH NOTES | FAIL
+&nbsp;&nbsp;&nbsp;&nbsp;🚫&nbsp;&nbsp;&nbsp; <file:line>: <Blocker that remains after fixes>. <Premise → Path → Verdict>
 
-### Fixes applied
-- <file>: <what changed and why> — or "None"
+## Fixes applied
 
-### Requirement fit
-- <finding>
-- **ACs:** `<AC text>`: PASS | FAIL | n/a — one bullet per plan AC (or "n/a — no plan ACs")
-- **User scope exclusions:** PASS | FAIL (<element>: allowed delta vs actual deltas) — or "n/a"
-- **Implicit requirements:** PASS | FAIL | n/a — unticked extras absent; ticked extras present; DOs shipped — or "n/a — Implicit: none"
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;•&nbsp;&nbsp;&nbsp;&nbsp; <file>: <what changed and why>
 
-### Impact on other features
-- <finding>
+## Requirement fit
 
-### Code quality
-- <finding>
+&nbsp;&nbsp;&nbsp;&nbsp;✅&nbsp;&nbsp;&nbsp; AC `<AC text>`: PASS
 
-### Less-code-is-better
-- <finding — include net diff impact if fixes reduced delivery size>
+&nbsp;&nbsp;&nbsp;&nbsp;⛔&nbsp;&nbsp;&nbsp; AC `<AC text>`: FAIL. <deciding evidence>
 
-### AI slop (deslop)
-- <finding — comments / defensive / any-cast / nesting — or "None">
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;•&nbsp;&nbsp;&nbsp;&nbsp; AC `<AC text>`: n/a
 
-### Performance
-- <finding> — or "None"
+&nbsp;&nbsp;&nbsp;&nbsp;✅&nbsp;&nbsp;&nbsp; User scope exclusions: PASS (<element>: allowed delta vs actual deltas)
 
-### Security
-- <finding> — or "None"
+&nbsp;&nbsp;&nbsp;&nbsp;⛔&nbsp;&nbsp;&nbsp; User scope exclusions: FAIL. <element>: <extra delta>
 
-### Tests
-- <finding> — or "n/a"
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;•&nbsp;&nbsp;&nbsp;&nbsp; User scope exclusions: n/a
 
-### Follow-up
-- Run `enonic-staged-validation-commit-message` (Enonic backend JS) or `generic-staged-validation-commit-message` (other stacks) next — both validate **and fix** syntax/semantics/lint, then draft the commit message. For message-only, use `staged-commit-message`.
-- Review artifact path (review mode): `.tasks/<KEY>-review.md` or `tasks/<KEY>-review.md` — or "n/a"
-- Escalate to Bugbot / Security Review built-ins only if requested or clearly needed
-- <optional action items if FAIL or PASS WITH NOTES>
+&nbsp;&nbsp;&nbsp;&nbsp;✅&nbsp;&nbsp;&nbsp; Implicit requirements: PASS (unticked extras absent; ticked extras present; DOs shipped)
+
+&nbsp;&nbsp;&nbsp;&nbsp;⛔&nbsp;&nbsp;&nbsp; Implicit requirements: FAIL. <deciding evidence>
+
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;•&nbsp;&nbsp;&nbsp;&nbsp; Implicit requirements: n/a
+
+&nbsp;&nbsp;&nbsp;&nbsp;🔹&nbsp;&nbsp;&nbsp; <other requirement finding>
+
+## Impact on other features
+
+&nbsp;&nbsp;&nbsp;&nbsp;⚠️&nbsp;&nbsp;&nbsp; <finding>
+
+## Code quality
+
+&nbsp;&nbsp;&nbsp;&nbsp;🔹&nbsp;&nbsp;&nbsp; <finding>
+
+## Less-code-is-better
+
+&nbsp;&nbsp;&nbsp;&nbsp;🔹&nbsp;&nbsp;&nbsp; <finding, with net diff impact if fixes reduced delivery size>
+
+## AI slop (deslop)
+
+&nbsp;&nbsp;&nbsp;&nbsp;🔹&nbsp;&nbsp;&nbsp; <finding: comments / defensive / any-cast / nesting>
+
+## Performance
+
+&nbsp;&nbsp;&nbsp;&nbsp;⚠️&nbsp;&nbsp;&nbsp; <finding>
+
+## Security
+
+&nbsp;&nbsp;&nbsp;&nbsp;✅&nbsp;&nbsp;&nbsp; <check>: <result>
+
+## Tests
+
+&nbsp;&nbsp;&nbsp;&nbsp;✅&nbsp;&nbsp;&nbsp; <suite or command>: <result>
+
+## Not verified
+
+&nbsp;&nbsp;&nbsp;&nbsp;🔸&nbsp;&nbsp;&nbsp; <what was not run or not observable, and why>
+
+## Follow-up
+
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;•&nbsp;&nbsp;&nbsp;&nbsp; Next skill: `lint-and-draft-enonic-commit-message` (Enonic backend JS) or `lint-and-draft-generic-commit-message` (other stacks). Both validate **and fix** syntax/semantics/lint, then draft the commit message. For message-only, use `draft-commit-message`.
+
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;•&nbsp;&nbsp;&nbsp;&nbsp; Review artifact (review mode): `.tasks/<KEY>-review.md` or `tasks/<KEY>-review.md`, or n/a
+
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;•&nbsp;&nbsp;&nbsp;&nbsp; <action item if FAIL or PASS WITH NOTES>
+
+&nbsp;
+
+&nbsp;&nbsp;&nbsp;&nbsp;👉&nbsp;&nbsp;&nbsp; <the one next action, with the reply keyword uppercase in double quotes when the operator must answer>
 ```
 
 ## Reporting rules
 
-- Be concise. Bullets over long prose.
+- Be concise. One item per line.
+- Markers: ✅ PASS or verified, ⛔ FAIL, plain `•` for n/a and neutral items. Findings by class: 🚫 Blocker, ⚠️ Concern, 🔹 Note.
+- Omit **Blockers** when none remain, and **Not verified** when everything ran. Every other section stays; a section with nothing to report holds the plain line `None`.
 - Separate confirmed facts from assumptions.
-- List every source edit under **Fixes applied** (file + brief reason).
-- If validation is incomplete, say so.
-- If no fixes were needed, say `None` under **Fixes applied**.
+- List every source edit under **Fixes applied** (file + brief reason). If no fixes were needed, write `None`.
 - Re-run delivery diff commands after fixes so the report reflects final state.
 - Verdict is **post-fix**: **FAIL** only if a Blocker remains; unfixed Concerns → **PASS WITH NOTES**; Notes / less-code nits / AI slop / Impeccable polish never **FAIL**.
-- Blocker/Concern bullets include the one-line evidence certificate (`Premise → Path → Verdict`). Notes use `Premise → Improvement → Fix`.
+- Blocker/Concern items include the one-line evidence certificate (`Premise → Path → Verdict`). Notes use `Premise → Improvement → Fix`.
 - One finding per root cause; extra sites as `also applies: path:line`.
+- Escalate to Bugbot / Security Review built-ins only if requested or clearly needed.
 - Do not report linter-owned, formatter-owned, pre-existing untouched debt, speculative, unread-code, or generated/vendor candidates.

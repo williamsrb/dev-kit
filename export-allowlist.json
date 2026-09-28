@@ -187,7 +187,14 @@
   "bin": {
     "core": [
       "agentctl",
+      "agentctl_common.py",
+      "agentctl_docs.py",
+      "agentctl_image.py",
       "agentctl_jira.py",
+      "agentctl_kb.py",
+      "agentctl_plan.py",
+      "agentctl_security.py",
+      "agentctl_skills.py",
       "generate-agents-md.py",
       "merge-claude-config.py",
       "sync-bin-projections.sh",

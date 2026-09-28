@@ -1,6 +1,6 @@
 ---
 name: diff-image
-description: "Pixel-diff two local images: changed-pixel count/ratio, visible diff, optional mask. Use for screenshot regression or before/after evidence. Same dimensions required; not a semantic pass/fail gate. | recommendedRole: deterministic."
+description: "Pixel-diff two local images: changed-pixel count/ratio, visible diff, optional mask. Crop localized before/after sidecars and optional labeled compose. Same dimensions required; not a semantic pass/fail gate. | recommendedRole: deterministic."
 metadata:
   recommendedRole: deterministic
   cliDependencies:
@@ -70,6 +70,53 @@ Run exact image comparison locally. Keep both source images on disk and expose o
 - Large ratios can come from viewport, font, antialiasing, animation, or capture-timing drift. Fix capture comparability before judging implementation.
 - Transparent inputs produce an exact count, but the visible RGB diff can underrepresent alpha-only changes; heed the wrapper warning and inspect alpha-sensitive cases separately.
 - Never use the local result alone to approve Jira evidence, security-sensitive output, or a destructive action. Apply the evidence plan and human/vendor-model judgment after deterministic comparison.
+
+## Crop changed regions (before/after callout)
+
+Use when the change is a localized blob and a crop (or labeled strip) is
+cheaper than sending full pages to vendor vision. The command runs
+`compare.py` itself; do not run `image diff` first unless you also need the
+full-page diff PNG. Capture-time Playwright clip remains the default way to
+isolate a part.
+
+```bash
+agentctl image crop-changed \
+  /absolute/path/before.png \
+  /absolute/path/after.png
+agentctl image crop-changed \
+  /absolute/path/before.png \
+  /absolute/path/after.png \
+  --compose
+```
+
+Equivalent direct call:
+
+```bash
+python3 <skill-dir>/scripts/crop_changed.py \
+  /absolute/path/before.png \
+  /absolute/path/after.png \
+  --compose
+```
+
+The command reuses `compare.py` (temp diff + mask, then deleted), closes the
+mask with `Square:2`, and keeps connected components whose area is at least
+`max(256 px², 0.1% of canvas)`. On success it writes
+`<after-stem>.before-crop.png` and `<after-stem>.after-crop.png` beside the
+after image (`--output-dir` redirects). `--compose` also writes
+`<after-stem>.before-after.png`: labeled `Before` | `After`, 8 px black
+divider, 4 px red rectangle on the before half and green on the after half.
+Inputs are never overwritten.
+
+**Localization abort** (`status: not-localized`, exit `3`): remaining blob
+count is 0 (including an identical pair), remaining blob count is greater
+than 3, or the padded union bbox covers more than 50% of the canvas. No
+crops and no compose in that case. Dimension mismatch is exit `2`.
+
+OCR the **unannotated after** shot (`agentctl evidence inspect --ocr`). If
+the composite goes to Jira, stamp it separately with `agentctl image stamp`.
+`crop-changed` does not stamp, flatten, or send pixels to vendor vision. The
+composite is a callout, not the live-UI proof and not a semantic pass/fail
+gate.
 
 ## Direct CLI fallback
 

@@ -164,6 +164,18 @@ def cmd_image_diff(args: argparse.Namespace) -> int:
     return run_skill_script(script, script_args, timeout=60)
 
 
+def cmd_image_crop_changed(args: argparse.Namespace) -> int:
+    script = agents_home() / "skills" / "diff-image" / "scripts" / "crop_changed.py"
+    before = args.before.expanduser().resolve()
+    after = args.after.expanduser().resolve()
+    script_args = [str(before), str(after)]
+    if args.compose:
+        script_args.append("--compose")
+    if args.output_dir:
+        script_args += ["--output-dir", str(args.output_dir.expanduser().resolve())]
+    return run_skill_script(script, script_args, timeout=90)
+
+
 def cmd_image_palette_create(args: argparse.Namespace) -> int:
     script = agents_home() / "skills" / "color-palette" / "scripts" / "palette_create.py"
     script_args = [str(args.image.expanduser().resolve()), "--colors", str(args.colors),
@@ -306,6 +318,31 @@ def add_image_parsers(group) -> None:
     diff.add_argument("--max-diff-ratio", type=float, help="Maximum allowed changed-pixel ratio (0-1).")
     diff.add_argument("--json", action="store_true", help=argparse.SUPPRESS)
     diff.set_defaults(func=cmd_image_diff)
+    crop_changed = group.add_parser(
+        "crop-changed",
+        help="Crop localized before/after changes; optional labeled compose strip.",
+        description=(
+            "Delegate to the diff-image skill: pixel-diff an aligned pair, close the "
+            "mask, abort when the change is not localized, and write crop sidecars. "
+            "--compose adds a labeled Before|After PNG with red/green rectangles. "
+            "No vendor vision. Does not stamp. Does not overwrite inputs. "
+            "Deterministic; not a semantic pass/fail gate."
+        ),
+    )
+    crop_changed.add_argument("before", type=Path, help="Baseline screenshot (before).")
+    crop_changed.add_argument("after", type=Path, help="Candidate screenshot (after).")
+    crop_changed.add_argument(
+        "--compose",
+        action="store_true",
+        help="Write a labeled Before|After PNG with red/green rectangles.",
+    )
+    crop_changed.add_argument(
+        "--output-dir",
+        type=Path,
+        help="Directory for sidecars. Defaults beside the after image.",
+    )
+    crop_changed.add_argument("--json", action="store_true", help=argparse.SUPPRESS)
+    crop_changed.set_defaults(func=cmd_image_crop_changed)
     palette_create = group.add_parser(
         "palette-create",
         help="Extract a deterministic N-color palette from an image.",

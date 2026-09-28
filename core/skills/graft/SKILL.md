@@ -150,6 +150,9 @@ total is parsed from.
   `graft/INDEX.md` indexes the nodes), but the tools above are faster and
   exhaustive where it matters, so reach for them first.
 
-Graft MCP is removed. Use the `graft` CLI only (`graft ask`, `graft grep`,
-`graft callers`, `graft skeleton`, `graft map`, `graft build`). Do not register
-or call `graft mcp` / `graft_find_code` tools.
+Prefer the Graft CLI (`graft ask`, `graft grep`, `graft callers`, `graft skeleton`,
+`graft map`, `graft build`). `mcp/catalog.json` lists graft as removed (2026-09-27);
+do not register a graft MCP server. If a host already exposes `graft_find_code`,
+`graft_find_all`, `graft_file_api`, `graft_trace_calls` (`direction` / `depth`),
+`graft_repo_map`, or `graft_check_freshness`, those names map 1:1 to the CLI
+commands above. Do not call `graft mcp`.

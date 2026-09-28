@@ -98,3 +98,14 @@ is `Al policy`. Same for `llms.txt` → `Ilms.txt` and `AI crawler guide` → `A
 Choose a token with no capital-I/lowercase-l ambiguity (`policy page`, `policy -> /ai-policy`,
 `Attribute the source`), or check the returned `ocr_text` before concluding the capture is wrong.
 A "NO MATCH" on an I-bearing token is an OCR artifact, not evidence of a bad screenshot.
+
+## Localized before/after strip
+
+Clip at capture first (Playwright locator clip).
+`agentctl image crop-changed --compose` is only for a localized mask (exit 0).
+Exit 3 (`not-localized`) means do not invent a strip from the full
+viewports.
+
+The composite is a callout, not the live-UI proof. Run OCR on the
+**unannotated after** shot. If the composite itself goes to Jira, stamp it
+with `agentctl image stamp` after `crop-changed`. That command does not stamp.

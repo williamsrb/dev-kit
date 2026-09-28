@@ -1,9 +1,10 @@
 # LLM_INDEX|machine|v2|path<TAB>tokens<TAB>topic<TAB>skills<TAB>keywords
 # Chooser rows end in llm-index.md — open that folder index, not sibling files.
 
+How-to-apply-linkedin-profile-edits-with-playwright-cli.md	1522	apply-linkedin	run-plan playwright-cli	apply linkedin profile edits playwright cli apply-linkedin linkedin-profile profile-edits edits-playwright playwright-cli
 How-to-capture-a-gitlab-commit-diff-as-evidence.md	305	gitlab-commit		capture gitlab commit diff evidence capture-gitlab gitlab-commit commit-diff diff-evidence
 How-to-capture-schema-labels-in-another-locale.md	1910	schema-labels	plan-task-evidence run-plan	capture schema labels another locale capture-schema schema-labels labels-another another-locale content studio enonic capture-content content-studio studio-schema locale-enonic
-How-to-check-evidence-screenshots-before-jira.md	1613	evidence-screenshots	plan-task-evidence run-plan	check evidence screenshots before jira check-evidence evidence-screenshots screenshots-before before-jira
+How-to-check-evidence-screenshots-before-jira.md	1729	evidence-screenshots	plan-task-evidence run-plan	check evidence screenshots before jira check-evidence evidence-screenshots screenshots-before before-jira crop-changed localized strip before-after compose
 How-to-fix-playwright-mcp-needs-authentication.md	1079	playwright-mcp		fix playwright mcp needs authentication fix-playwright playwright-mcp mcp-needs needs-authentication instance stuck mcp-instance instance-stuck stuck-needs
 How-to-gate-evidence-on-the-product-concept.md	1100	evidence-product	plan-task-evidence run-plan	gate evidence product concept gate-evidence evidence-product product-concept
 How-to-instrument-live-pages-with-cdp.md	1937	instrument-live		instrument live pages cdp instrument-live live-pages pages-cdp evidence cdp-evidence

@@ -10,4 +10,4 @@ How-to-validate-a-plan-document-for-internal-consistency.md	709	validate-plan	va
 How-to-verify-structured-data-with-the-rich-results-test.md	2174	structured-data		verify structured data rich results test verify-structured structured-data data-rich rich-results results-test google data-google google-rich
 Quality-gate-delivery-scope.md	475	quality-delivery	validate-impl lint-and-draft-enonic-commit-message lint-and-draft-generic-commit-message draft-commit-message	quality gate delivery scope quality-gate gate-delivery delivery-scope
 Quality-gate-delivery-standards.md	2368	quality-delivery	validate-impl	quality gate delivery standards quality-gate gate-delivery delivery-standards
-Quality-gate-response-template.md	662	quality-response	validate-impl	quality gate response template quality-gate gate-response response-template
+Quality-gate-response-template.md	1122	quality-response	validate-impl	quality gate response template quality-gate gate-response response-template

@@ -10,7 +10,7 @@ prose: caveman-lite
 
 # Stop graft writing repo ignore files
 
-Every `graft build` (CLI, hook, or the MCP server's refresh before a query) appends a `/graft/` block to the repo's `.gitignore` and creates a root `.ignore` that re-admits `graft/` to ripgrep. Source: `dist/context/node-file.js`, `ensureGitignored` and `ensureSearchable`. The patterns belong in the global git ignore instead.
+Every `graft build` (CLI or a hook refresh) appends a `/graft/` block to the repo's `.gitignore` and creates a root `.ignore` that re-admits `graft/` to ripgrep. Source: `dist/context/node-file.js`, `ensureGitignored` and `ensureSearchable`. The patterns belong in the global git ignore instead. Do not run `graft mcp`.
 
 ## Procedure
 
@@ -23,7 +23,7 @@ Every `graft build` (CLI, hook, or the MCP server's refresh before a query) appe
 
 ## Pitfalls
 
-- A graft MCP server started before the variables existed keeps its old environment and writes the block again on its next refresh. The re-write shows up staged if you `git add -A`.
+- Do not run `graft mcp`. A leftover MCP process started before `GRAFT_NO_*` was set keeps its old environment and can rewrite the ignore block on refresh. Kill it: `pkill -f '/bin/graft mcp'`.
 - `systemctl --user show-environment` listing the variables proves nothing about GUI apps. On XFCE/lightdm they come from `/etc/X11/Xsession`; on GNOME they come from the systemd user environment. Check the app's own `/proc/<pid>/environ`.
 - In the global ignore, `!**/skills/graft` and `!**/hooks/graft` only work after the `graft` line. Write the whole block in order. Appending only the missing lines can re-ignore the kit's `skills/graft/`.
 - Without `.ignore`, ripgrep and the Grep tool skip `graft/` cards, because the global ignore hides them. Use `graft grep` or `rg -uu` to search cards.

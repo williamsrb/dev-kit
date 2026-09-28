@@ -11,8 +11,8 @@ Moved from `upgrade-xp-app/references/`. Skill owns Detect → Plan → Execute 
 
 | File | Content |
 |------|---------|
-| [xp7-to-xp8-changes.md](xp7-to-xp8-changes.md) | Breaking changes — matching heading only |
-| [manual-schemes-migration.md](manual-schemes-migration.md) | Descriptor / YAML `kind:` transforms — matching descriptor kind only |
+| [xp7-to-xp8-changes.md](xp7-to-xp8-changes.md) | Breaking-changes chooser — then one `changes-*.md` |
+| [manual-schemes-migration.md](manual-schemes-migration.md) | Descriptor-transform chooser — then one `schemes-*.md` |
 | [examples.md](examples.md) | `xplibs.*`, build.gradle, TypeScript examples — matching snippet only |
 
 Orchestration How: [../How-to-run-xp8migrator.md](../How-to-run-xp8migrator.md)

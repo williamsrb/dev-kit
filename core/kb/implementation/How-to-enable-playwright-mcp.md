@@ -67,9 +67,9 @@ Parked MCP: `slack-workspace-leanon`. Parked plugins: Cursor marketplace Slack (
 
 Do not leave Slack live after the worklog run.
 
-## graft MCP (optional)
+## graft MCP (removed)
 
-Default is the `graft` CLI plus `graft.mdc`. The `graft` MCP server is parked. Merge it only when the operator wants host-native graft tools. Remove it after. `graft build` stays CLI-only.
+Do not register `graft mcp`. Use the `graft` CLI plus `graft.mdc`. `graft build` stays CLI-only.
 
 ## Other parked snippets
 

@@ -150,7 +150,6 @@ total is parsed from.
   `graft/INDEX.md` indexes the nodes), but the tools above are faster and
   exhaustive where it matters, so reach for them first.
 
-When the graft MCP server is connected, these are exposed as tools too:
-`graft_find_code`, `graft_find_all`, `graft_file_api`, `graft_trace_calls` (with
-`direction` / `depth`), `graft_repo_map`, `graft_check_freshness`. Use whichever surface is
-available; the guidance is identical.
+Graft MCP is removed. Use the `graft` CLI only (`graft ask`, `graft grep`,
+`graft callers`, `graft skeleton`, `graft map`, `graft build`). Do not register
+or call `graft mcp` / `graft_find_code` tools.

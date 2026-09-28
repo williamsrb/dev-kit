@@ -131,19 +131,6 @@
       ],
       "fetch": "filesystem-mcp"
     },
-    "graft": {
-      "transport": "stdio",
-      "command": "graft",
-      "args": [
-        "mcp"
-      ],
-      "vendors": [
-        "cursor",
-        "claude",
-        "codex"
-      ],
-      "fetch": null
-    },
     "serena": {
       "transport": "stdio",
       "command": "${HOME}/.local/bin/serena",
@@ -177,11 +164,11 @@
     }
   },
   "skip": {
-    "node_repl": "Codex Desktop bundled binary under /opt/codex-desktop; not a user-installable MCP."
+    "node_repl": "Codex Desktop bundled binary under /opt/codex-desktop; not a user-installable MCP.",
+    "graft": "removed 2026-09-27; Graft CLI only; do not register MCP"
   },
   "parked": {
     "slack-workspace-leanon": "generate-worklogs only; snippets in ${HOME}/.agents/.auth/mcp-on-demand/",
-    "graft": "CLI + graft.mdc are the default; MCP is optional",
     "playwright": "on-demand HTTP via mcp/playwright.py; one process and output-dir per id. Do not register this stub.",
     "browser-control": "on-demand; snippets in ${HOME}/.agents/.auth/mcp-on-demand/"
   },

@@ -35,3 +35,4 @@ Harness tests fake `HOME` with a temp dir. Two leaks survive that: git's global 
 - `chown -R` is also what stops git's "dubious ownership" refusal when the checkout belongs to another uid.
 - A test that passes locally and fails only in CI with "refusing to … as root" is this, not a regression. Do not weaken the root guard to green it.
 - `unittest` prints its summary to stderr. Output printed to stdout during tests is flushed at exit, so `| tail` shows that output, not the result. Filter with `grep -E '^(Ran|OK|FAILED)'`.
+- `agentctl kb` reads `$AGENTS_HOME/kb` unless `--root` is set. Tests must set `AGENTS_HOME` to a temp dir and/or pass `--root`. A fixture that only fakes `HOME` still writes the live KB.

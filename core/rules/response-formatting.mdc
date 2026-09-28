@@ -44,7 +44,8 @@ Line prefixes. One meaning each.
 | 🔸 | Still pending or undecided, when no marker above fits |
 
 - Every marker line starts with 4 `&nbsp;`, then the marker, then `&nbsp;&nbsp;&nbsp;` plus one normal space before the text.
-- Write the `&nbsp;` entity text. Plain spaces collapse to one when rendered.
+- Write the `&nbsp;` entity text as raw characters in the live reply (`&`, `n`, `b`, `s`, `p`, `;`). Plain spaces collapse to one when rendered. In this rule file, backticks around `&nbsp;` only name the entity; they are documentation, not a pattern to copy into chat.
+- Never wrap spacer `&nbsp;` entities in backticks in a live reply. Backticks are only for real code, paths, commands, and identifiers. Wrapping a spacer turns it into visible highlighted text (e.g. wrong: `` • `&nbsp;`CLI: `path` ``; right: raw spacer entities, then `•`, then text with real code in backticks only).
 - Put one spacer paragraph before the 👉 line: a line containing only `&nbsp;`, with a blank line on each side.
 - Never use markers in code blocks or tables. Exception: a chat-reply template stored in a skill or KB file may sit in a fenced block with its markers and `&nbsp;`.
 
@@ -56,7 +57,7 @@ Line prefixes. One meaning each.
 - An emoji list item starts with 4 `&nbsp;`, then the marker, then `&nbsp;&nbsp;&nbsp;` plus one normal space. The narrower bullet gets 2 more before and 1 more after so marker and text line up with emoji items.
 - In a single-level list, a marker from the table replaces the `•`. 🔹 and 🔸 apply only when no other marker fits.
 - Sequential steps use `Step N:` or A-codes, not numbered lists.
-- Never indent with a literal U+00A0 or other Unicode space characters. Never put `&nbsp;` inside code spans, commands, paths, or code blocks other than the stored chat-reply template allowed under Markers; copied indentation becomes U+00A0 and breaks shells and YAML.
+- Never indent with a literal U+00A0 or other Unicode space characters. Never put spacer `&nbsp;` inside code spans, commands, paths, or code blocks (same rule as Markers); the stored chat-reply template exception under Markers still applies. Copied U+00A0 indentation breaks shells and YAML.
 
 ## Option lists
 

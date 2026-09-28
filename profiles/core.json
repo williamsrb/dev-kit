@@ -11,7 +11,7 @@
     "container matrix is their acceptance test.",
     "needs_repo is keyed by distribution FAMILY, not package manager: Fedora and RHEL both use dnf, but EPEL is Fedora's packages backported to RHEL, so on Fedora these are in the base repos and epel-release does not exist. Measured on rockylinux:9 and fedora:41.",
     "",
-    "graft MCP is parked (CLI + graft.mdc stay). Do not put it on the default mcp list."
+    "graft MCP is removed (CLI + graft.mdc stay). Do not register graft mcp."
   ],
   "name": "core",
   "extends": null,

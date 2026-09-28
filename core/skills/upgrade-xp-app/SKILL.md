@@ -47,12 +47,12 @@ Operational How for CLI install, non-interactive flags, and migrator catalogs:
 | Topic | Path |
 |-------|------|
 | CLI install + non-interactive rules + migrator | `~/.agents/kb/implementation/How-to-run-xp8migrator.md` |
-| Breaking changes | `~/.agents/kb/implementation/xp7-to-xp8-upgrade/xp7-to-xp8-changes.md` |
-| Descriptor transforms | `~/.agents/kb/implementation/xp7-to-xp8-upgrade/manual-schemes-migration.md` |
+| Breaking changes | `~/.agents/kb/implementation/xp7-to-xp8-upgrade/xp7-to-xp8-changes.md` chooser, then one `changes-*.md` family |
+| Descriptor transforms | `~/.agents/kb/implementation/xp7-to-xp8-upgrade/manual-schemes-migration.md` chooser, then one `schemes-*.md` step |
 | build.gradle / xplibs examples | `~/.agents/kb/implementation/xp7-to-xp8-upgrade/examples.md` |
 | Enonic CLI critical rules + command catalogs | `use-enonic-cli` + `~/.agents/kb/implementation/enonic-cli/` |
 
-**REQUIRED:** invoke `use-enonic-cli` before any `enonic` command. Prefer `enonic project build` / `deploy` over raw `./gradlew` (except `./gradlew wrapper --gradle-version …`). Do not install the CLI until the Plan is approved; never uninstall it during cleanup. Open **one** of `xp7-to-xp8-changes.md` / `manual-schemes-migration.md` / `examples.md` per need. Never load all three catalogs in one pass.
+**REQUIRED:** invoke `use-enonic-cli` before any `enonic` command. Prefer `enonic project build` / `deploy` over raw `./gradlew` (except `./gradlew wrapper --gradle-version …`). Do not install the CLI until the Plan is approved; never uninstall it during cleanup. Open **one** chooser (`xp7-to-xp8-changes.md` / `manual-schemes-migration.md` / `examples.md`) per need, then only the matching family/step file. Never load all three catalogs in one pass.
 
 ## Workflow (must follow in order)
 

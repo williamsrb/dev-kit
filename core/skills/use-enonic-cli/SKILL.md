@@ -23,7 +23,7 @@ Before remote ops or unfamiliar commands, read:
 | Topic | Path |
 |-------|------|
 | Index + patterns | `~/.agents/kb/implementation/enonic-cli/README.md` |
-| Command/flag tables | `~/.agents/kb/implementation/enonic-cli/commands.md` — grep the matching `### enonic …` heading. Do not read the whole file. |
+| Command/flag tables | `~/.agents/kb/implementation/enonic-cli/commands.md` chooser, then only the matching family file (`project.md`, `sandbox.md`, …). Do not read every family. |
 | Auth, env, ports, CI | `~/.agents/kb/implementation/enonic-cli/auth-and-env.md` |
 | Multi-step recipes | `~/.agents/kb/implementation/enonic-cli/workflows.md` |
 
@@ -49,6 +49,6 @@ This skill owns the **critical rules** below. The KB owns catalogs and recipes �
 
 ## When to load more
 
-- Need exact flags → `commands.md`
+- Need exact flags → `commands.md` chooser, then the matching family file
 - CI / service-account auth → `auth-and-env.md`
 - Export/import/dump/sandbox recipes → `workflows.md`

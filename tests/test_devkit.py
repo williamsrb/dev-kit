@@ -154,6 +154,27 @@ class ExportBoundaryTests(unittest.TestCase):
         self.assertTrue(core.is_dir(), "core/ is missing; run devkit export --apply")
         self.assertGreater(len(list((core / "skills").iterdir())), 20)
 
+    def test_agentctl_group_modules_are_exported(self):
+        """Listing only the entrypoint after a split exports a broken CLI."""
+        entry = (REPO / "core" / "bin" / "agentctl").read_text(encoding="utf-8")
+        needed = sorted(set(re.findall(r"^(?:import|from) (agentctl_\w+)", entry, re.M)))
+        self.assertTrue(needed, "agentctl must import agentctl_* group modules")
+        allowlist = json.loads((REPO / "export-allowlist.json").read_text())
+        listed = set(allowlist["bin"]["core"])
+        missing_allow = [f"{name}.py" for name in needed if f"{name}.py" not in listed]
+        missing_core = [
+            name for name in needed
+            if not (REPO / "core" / "bin" / f"{name}.py").is_file()
+        ]
+        self.assertEqual(missing_allow, [])
+        self.assertEqual(missing_core, [])
+
+    def test_agentctl_entrypoint_imports(self):
+        result = subprocess.run(
+            [sys.executable, str(REPO / "core" / "bin" / "agentctl"), "--help"],
+            capture_output=True, text=True, check=False)
+        self.assertEqual(result.returncode, 0, result.stderr)
+
     def test_no_client_identifier_in_a_core_skill(self):
         allowlist = json.loads((REPO / "export-allowlist.json").read_text())
         offenders = []

@@ -170,6 +170,18 @@ class ExportBoundaryTests(unittest.TestCase):
         self.assertEqual(on_disk - listed, set(), "unclassified mcp entries would ship or vanish silently")
 
     @NEEDS_SOURCE
+    def test_every_vendor_on_disk_is_classified(self):
+        allowlist = json.loads((REPO / "export-allowlist.json").read_text())
+        block = allowlist.get("vendor") or {}
+        listed = set(block.get("core") or []) | (set(block.get("excluded") or {}) - {"_comment"})
+        source = export_source()
+        root = source / "vendor"
+        if not root.is_dir():
+            return
+        on_disk = {p.name for p in root.iterdir() if p.name != "__pycache__"}
+        self.assertEqual(on_disk - listed, set(), "unclassified vendor trees would ship or vanish silently")
+
+    @NEEDS_SOURCE
     def test_export_is_in_sync(self):
         self.assertEqual(run("export", "--check").returncode, 0)
 

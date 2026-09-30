@@ -1,0 +1,113 @@
+From b1df7ab79d3651bcfefe6f0944b18a5753a76b75 Mon Sep 17 00:00:00 2001
+From: Williams Ramos <williamsramosbarboza@gmail.com>
+Date: Fri, 11 Sep 2026 20:04:05 -0300
+Subject: [PATCH 1/4] Persist include_hidden and no_require_git on IndexMeta.
+
+Old indexes omit the fields and keep walking on --hidden.
+---
+ tgrep-core/src/builder.rs | 10 ++++++++-
+ tgrep-core/src/meta.rs    | 43 +++++++++++++++++++++++++++++++++++++++
+ 2 files changed, 52 insertions(+), 1 deletion(-)
+
+diff --git a/tgrep-core/src/builder.rs b/tgrep-core/src/builder.rs
+index 748e218..3a38dd2 100644
+--- a/tgrep-core/src/builder.rs
++++ b/tgrep-core/src/builder.rs
+@@ -812,7 +812,10 @@ pub fn build_index_with_options_and_ignorecase(
+     path_index::write_extra_paths(&index_dir, &extra_paths)?;
+     meta::write_file_evidence(&evidence, &index_dir)?;
+     // `meta.json` remains the final publication marker for in-place builds.
+-    IndexMeta::load(&index_dir)?.save(&index_dir)?;
++    let mut meta = IndexMeta::load(&index_dir)?;
++    meta.include_hidden = opts.include_hidden;
++    meta.no_require_git = opts.no_require_git;
++    meta.save(&index_dir)?;
+ 
+     eprintln!("Index built successfully at {}", index_dir.display());
+     Ok(BuildOutcome {
+@@ -1130,6 +1133,11 @@ fn write_files_and_meta<'a>(
+     if let Some(c) = complete {
+         meta.complete = c;
+     }
++    if let Ok(existing) = IndexMeta::load(index_dir) {
++        meta.include_hidden = existing.include_hidden;
++        meta.no_require_git = existing.no_require_git;
++        meta.created_at = existing.created_at;
++    }
+     meta.save(index_dir)?;
+ 
+     Ok(())
+diff --git a/tgrep-core/src/meta.rs b/tgrep-core/src/meta.rs
+index 6a59f9b..b8928ad 100644
+--- a/tgrep-core/src/meta.rs
++++ b/tgrep-core/src/meta.rs
+@@ -22,6 +22,14 @@ pub struct IndexMeta {
+     /// stopped during background indexing and the index is partial.
+     #[serde(default = "default_complete")]
+     pub complete: bool,
++    /// Whether the walk that built this index included hidden paths (`--hidden`).
++    /// Old indexes omit the field; treat that as `false` so `--hidden` still walks.
++    #[serde(default)]
++    pub include_hidden: bool,
++    /// Whether the walk that built this index used `--no-require-git`.
++    /// Old indexes omit the field; treat that as `false` so the flag still walks.
++    #[serde(default)]
++    pub no_require_git: bool,
+ }
+ 
+ fn default_complete() -> bool {
+@@ -42,9 +50,23 @@ impl IndexMeta {
+             updated_at: now,
+             root_path: root_path.to_string(),
+             complete: true,
++            include_hidden: false,
++            no_require_git: false,
+         }
+     }
+ 
++    /// Persist the walk flags that later searches must match to use this index.
++    pub fn apply_discovery_flags(
++        index_dir: &Path,
++        include_hidden: bool,
++        no_require_git: bool,
++    ) -> Result<()> {
++        let mut meta = Self::load(index_dir)?;
++        meta.include_hidden = include_hidden;
++        meta.no_require_git = no_require_git;
++        meta.save(index_dir)
++    }
++
+     pub fn save(&self, index_dir: &Path) -> Result<()> {
+         let path = index_dir.join(META_FILENAME);
+         let json = serde_json::to_string_pretty(self)?;
+@@ -528,6 +550,27 @@ pub fn collect_filestamps(root: &Path, paths: &[String]) -> HashMap<String, File
+ mod tests {
+     use super::*;
+ 
++    #[test]
++    fn old_meta_json_defaults_discovery_flags_to_false() {
++        let dir = tempfile::tempdir().unwrap();
++        std::fs::write(
++            dir.path().join(META_FILENAME),
++            r#"{
++                "version": 2,
++                "num_files": 1,
++                "num_trigrams": 1,
++                "created_at": 1,
++                "updated_at": 1,
++                "root_path": "/tmp",
++                "complete": true
++            }"#,
++        )
++        .unwrap();
++        let meta = IndexMeta::load(dir.path()).unwrap();
++        assert!(!meta.include_hidden);
++        assert!(!meta.no_require_git);
++    }
++
+     #[test]
+     fn file_evidence_is_legacy_compatible_and_roundtrips_ids() {
+         let dir = tempfile::tempdir().unwrap();
+-- 
+2.53.0
+

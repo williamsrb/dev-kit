@@ -86,7 +86,7 @@ def selected_files(source: Path, allowlist: dict, layers: set[str]) -> dict[str,
 
     for section, prefix in (("skills", "skills"), ("rules", "rules"), ("bin", "bin"),
                             ("hooks", "hooks"), ("mcp", "mcp"), ("config", "config"),
-                            ("agents", "agents"), ("kb", "kb")):
+                            ("agents", "agents"), ("kb", "kb"), ("vendor", "vendor")):
         block = allowlist.get(section) or {}
         for layer in layers:
             entries = block.get(layer)

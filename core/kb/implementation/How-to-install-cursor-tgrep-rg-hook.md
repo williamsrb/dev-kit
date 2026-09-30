@@ -38,7 +38,7 @@ python3 ~/.agents/bin/cursor-tgrep-rg-apply.py compare-json \
 ```
 
 Need `begin`/`match`/`end`/`summary` and matching path/line keys. Kill the one-off serve after. Second `apply` on an already-wrapped `rg` must not copy the wrapper onto `rg.stock`.
-3. Root once: `pkexec ${HOME}/.agents/bin/install-cursor-tgrep-rg.sh`. Re-run overwrites the same `/etc` files and `/usr/local/bin/cursor-tgrep-rg-apply` and exits 0.
+3. Root once: `pkexec "$HOME/.agents/bin/install-cursor-tgrep-rg.sh"`. Re-run overwrites the same `/etc` files and `/usr/local/bin/cursor-tgrep-rg-apply` and exits 0.
 4. After a Cursor deb upgrade the hook runs `cursor-tgrep-rg-apply apply` with `|| true`. ELF `rg` is copied to `rg.stock`, then the wrapper is installed as `rg`. Marker: `rg.wrapper-id`. Detect wrapper vs stock with `--tgrep-wrapper-version` or a non-ELF shebang. Never skip refreshing `rg.stock` when apt restored an ELF `rg`.
 
 ## Pitfalls

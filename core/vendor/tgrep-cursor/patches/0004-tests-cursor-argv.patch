@@ -1,0 +1,229 @@
+From a681a2053e4d570b21ae7eb431bf8c33921f1dc5 Mon Sep 17 00:00:00 2001
+From: Williams Ramos <williamsramosbarboza@gmail.com>
+Date: Fri, 11 Sep 2026 20:05:06 -0300
+Subject: [PATCH 4/4] Add Cursor argv tests for hidden serve search and
+ --files.
+
+Serve without --hidden still omits .github paths.
+---
+ tgrep-cli/tests/cursor_hidden_argv.rs | 208 ++++++++++++++++++++++++++
+ 1 file changed, 208 insertions(+)
+ create mode 100644 tgrep-cli/tests/cursor_hidden_argv.rs
+
+diff --git a/tgrep-cli/tests/cursor_hidden_argv.rs b/tgrep-cli/tests/cursor_hidden_argv.rs
+new file mode 100644
+index 0000000..d534fb4
+--- /dev/null
++++ b/tgrep-cli/tests/cursor_hidden_argv.rs
+@@ -0,0 +1,208 @@
++//! Cursor ExtHostSearch argv: `--hidden --json --no-require-git` against a
++//! hidden-capable serve index, plus `--files` path-line listing.
++
++use assert_cmd::Command;
++use serde_json::Value;
++use std::fs;
++use std::net::TcpStream;
++use std::path::{Path, PathBuf};
++use std::process::{Child, Stdio};
++use std::thread;
++use std::time::{Duration, Instant};
++use tempfile::TempDir;
++
++fn tgrep() -> Command {
++    Command::cargo_bin("tgrep").unwrap()
++}
++
++fn tgrep_bin() -> PathBuf {
++    assert_cmd::cargo::cargo_bin("tgrep")
++}
++
++struct ServerGuard(Child);
++
++impl Drop for ServerGuard {
++    fn drop(&mut self) {
++        let _ = self.0.kill();
++        let _ = self.0.wait();
++    }
++}
++
++fn start_server(root: &Path, index: &Path, hidden: bool) -> ServerGuard {
++    let mut args = vec![
++        "serve".to_string(),
++        "--no-watch".to_string(),
++        "--no-require-git".to_string(),
++        "--index-path".to_string(),
++        index.to_str().unwrap().to_string(),
++        root.to_str().unwrap().to_string(),
++    ];
++    if hidden {
++        args.insert(1, "--hidden".to_string());
++    }
++    let mut child = std::process::Command::new(tgrep_bin())
++        .args(&args)
++        .stdout(Stdio::null())
++        .stderr(Stdio::null())
++        .spawn()
++        .unwrap();
++    let serve_json = index.join("serve.json");
++    let started = Instant::now();
++    loop {
++        assert!(
++            started.elapsed() < Duration::from_secs(30),
++            "server did not start"
++        );
++        assert!(
++            child.try_wait().unwrap().is_none(),
++            "server exited before accepting connections"
++        );
++        if let Ok(data) = fs::read_to_string(&serve_json)
++            && let Ok(info) = serde_json::from_str::<Value>(&data)
++            && let Some(port) = info.get("port").and_then(Value::as_u64)
++            && TcpStream::connect(("127.0.0.1", port as u16)).is_ok()
++        {
++            break;
++        }
++        thread::sleep(Duration::from_millis(50));
++    }
++    ServerGuard(child)
++}
++
++fn wait_for_complete_meta(index_dir: &Path) -> Value {
++    let meta_path = index_dir.join("meta.json");
++    let start = Instant::now();
++    loop {
++        assert!(
++            start.elapsed() <= Duration::from_secs(60),
++            "index never reached complete=true"
++        );
++        if let Ok(data) = fs::read_to_string(&meta_path)
++            && let Ok(v) = serde_json::from_str::<Value>(&data)
++            && v.get("complete").and_then(Value::as_bool) == Some(true)
++        {
++            return v;
++        }
++        thread::sleep(Duration::from_millis(50));
++    }
++}
++
++fn hidden_fixture() -> (TempDir, PathBuf, PathBuf) {
++    let temp = TempDir::new().unwrap();
++    let root = temp.path().join("repo");
++    let index = temp.path().join("index");
++    fs::create_dir_all(root.join("src")).unwrap();
++    fs::create_dir_all(root.join(".github")).unwrap();
++    fs::write(root.join("src").join("main.rs"), "fn visible() {}\n").unwrap();
++    fs::write(
++        root.join(".github").join("foo.yml"),
++        "name: cursor-hidden-needle\n",
++    )
++    .unwrap();
++    (temp, root, index)
++}
++
++fn json_types(stdout: &str) -> Vec<String> {
++    stdout
++        .lines()
++        .filter_map(|line| serde_json::from_str::<Value>(line).ok())
++        .filter_map(|v| v.get("type").and_then(Value::as_str).map(str::to_string))
++        .collect()
++}
++
++#[test]
++fn hidden_file_matches_via_serve_json_and_files() {
++    let (_temp, root, index) = hidden_fixture();
++    let _server = start_server(&root, &index, true);
++    let meta = wait_for_complete_meta(&index);
++    assert_eq!(
++        meta.get("include_hidden").and_then(Value::as_bool),
++        Some(true)
++    );
++    assert_eq!(
++        meta.get("no_require_git").and_then(Value::as_bool),
++        Some(true)
++    );
++
++    let output = tgrep()
++        .current_dir(&root)
++        .args([
++            "--hidden",
++            "--json",
++            "--no-require-git",
++            "--index-path",
++            index.to_str().unwrap(),
++            "cursor-hidden-needle",
++            ".",
++        ])
++        .assert()
++        .success()
++        .get_output()
++        .stdout
++        .clone();
++    let stdout = String::from_utf8(output).unwrap();
++    let types = json_types(&stdout);
++    assert!(
++        types.iter().any(|t| t == "match"),
++        "expected a JSON match event: {stdout}"
++    );
++    assert!(
++        stdout.contains(".github/foo.yml") || stdout.contains(".github\\foo.yml"),
++        "match path missing: {stdout}"
++    );
++
++    let files = tgrep()
++        .current_dir(&root)
++        .args([
++            "--files",
++            "--hidden",
++            "--no-require-git",
++            "--index-path",
++            index.to_str().unwrap(),
++        ])
++        .assert()
++        .success()
++        .get_output()
++        .stdout
++        .clone();
++    let listed = String::from_utf8(files).unwrap().replace('\\', "/");
++    assert!(
++        listed.lines().any(|line| line.ends_with(".github/foo.yml")),
++        "--files should list the hidden path as a path line, not JSON: {listed}"
++    );
++    assert!(
++        !listed.trim_start().starts_with('{'),
++        "--files must not emit JSON: {listed}"
++    );
++}
++
++#[test]
++fn serve_without_hidden_does_not_index_dot_github() {
++    let (_temp, root, index) = hidden_fixture();
++    let _server = start_server(&root, &index, false);
++    let meta = wait_for_complete_meta(&index);
++    assert_eq!(
++        meta.get("include_hidden")
++            .and_then(Value::as_bool)
++            .unwrap_or(false),
++        false
++    );
++
++    let files = tgrep()
++        .current_dir(&root)
++        .args(["--files", "--index-path", index.to_str().unwrap()])
++        .assert()
++        .success()
++        .get_output()
++        .stdout
++        .clone();
++    let listed = String::from_utf8(files).unwrap().replace('\\', "/");
++    assert!(
++        !listed.lines().any(|line| line.contains(".github/foo.yml")),
++        "non-hidden serve indexed a hidden path: {listed}"
++    );
++    assert!(
++        listed.lines().any(|line| line.ends_with("src/main.rs")),
++        "visible file missing from --files: {listed}"
++    );
++}
+-- 
+2.53.0
+

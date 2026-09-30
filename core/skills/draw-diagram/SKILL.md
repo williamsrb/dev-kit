@@ -6,7 +6,7 @@ metadata:
   aliases: excalidraw, excalidraw-diagrams, flowchart-diagram, architecture-diagram
   source: rbrown101010/codex-marketing-skills@excalidraw-diagrams
   cliDependencies:
-    required: [github@ahmadawais/excalidraw-cli]
+    required: [excalidraw-cli]
     optional: [playwright-cli, qlmanage]
 ---
 
@@ -27,7 +27,7 @@ Load this file first, then only the matching references. Do not preload later fi
 
 ## Prerequisites
 
-- `excalidraw-cli` must be on `PATH`.
+- `excalidraw-cli` must be on `PATH` (`npm install -g excalidraw-cli`).
 - Preview PNG: `qlmanage` on macOS, otherwise `playwright-cli` (headless) for `scripts/render_preview.py`.
 - When you need exact field names or supported element properties, run `excalidraw-cli reference` or `excalidraw-cli ref --raw`.
 

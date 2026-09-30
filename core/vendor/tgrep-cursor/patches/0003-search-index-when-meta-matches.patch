@@ -1,0 +1,75 @@
+From 3b2a616cb345c3ed4f57bbd1afd236a29acda553 Mon Sep 17 00:00:00 2001
+From: Williams Ramos <williamsramosbarboza@gmail.com>
+Date: Fri, 11 Sep 2026 20:05:06 -0300
+Subject: [PATCH 3/4] Use the index for --hidden and --no-require-git when meta
+ matches.
+
+Widening flags still walk. Do not strip --hidden from argv.
+---
+ tgrep-cli/src/search.rs | 21 +++++++++++++--------
+ 1 file changed, 13 insertions(+), 8 deletions(-)
+
+diff --git a/tgrep-cli/src/search.rs b/tgrep-cli/src/search.rs
+index 12bd276..2fe250d 100644
+--- a/tgrep-cli/src/search.rs
++++ b/tgrep-cli/src/search.rs
+@@ -466,7 +466,7 @@ pub fn list_files(root: &Path, index_path: Option<&Path>, opts: &SearchOptions)
+         .map(Path::to_path_buf)
+         .unwrap_or_else(|| builder::default_index_dir(&root));
+ 
+-    if filename_index_compatible(opts) {
++    if filename_index_compatible(opts, IndexMeta::load(&index_dir).ok().as_ref()) {
+         if let Ok(info) = ServerInfo::load(&index_dir)
+             && let Some((index_root, scope)) = resolve_scope(&index_dir, &root)
+             && let Ok(paths) = list_files_via_server(&info)
+@@ -525,16 +525,18 @@ pub fn list_files(root: &Path, index_path: Option<&Path>, opts: &SearchOptions)
+ 
+ /// Whether an existing index was built under traversal rules that can answer
+ /// this invocation without silently omitting files.
+-fn filename_index_compatible(opts: &SearchOptions) -> bool {
++fn filename_index_compatible(opts: &SearchOptions, meta: Option<&IndexMeta>) -> bool {
++    let hidden_ok = !opts.hidden || meta.is_some_and(|m| m.include_hidden);
++    let no_require_git_ok = !opts.no_require_git || meta.is_some_and(|m| m.no_require_git);
+     !opts.no_index
+-        && !opts.hidden
++        && hidden_ok
+         && !opts.no_ignore
+         && !opts.no_ignore_dot
+         && !opts.no_ignore_exclude
+         && !opts.no_ignore_global
+         && !opts.no_ignore_parent
+         && !opts.no_ignore_vcs
+-        && !opts.no_require_git
++        && no_require_git_ok
+         && !opts.follow
+         && !opts.one_file_system
+         && opts.ignore_files.is_empty()
+@@ -661,18 +663,21 @@ pub fn run(
+     // nothing but NUL-interleaved bytes) is absent from the index entirely, so
+     // even a full-scan plan cannot reach it. The only way `-E` means the same
+     // thing with and without an index is to walk the tree. `-a`/`--binary` are
+-    // the same story, as is anything that widens the walk: the index was built
+-    // skipping hidden and ignored files, so `--hidden`/`--no-ignore` can only
+-    // find them by walking.
++    // the same story, as is anything that widens the walk beyond what the
++    // index recorded: `--no-ignore*` can only find ignored files by walking.
++    // `--hidden` walks unless `meta.json` says this index included hidden
++    // paths; `--no-require-git` walks unless the index recorded that flag.
+     //
+     // A single named file is bypassed too. The index deliberately omits binary
+     // and ignored files, but naming one explicitly is exactly how ripgrep asks
+     // for it — and reading one file directly is cheaper than loading an index.
++    let meta = IndexMeta::load(&index_dir).ok();
++    let hidden_mismatches_index = opts.hidden && !meta.as_ref().is_some_and(|m| m.include_hidden);
+     let bypass_index = root.is_file()
+         || opts.encoding.may_differ_from_index()
+         || opts.text
+         || opts.binary
+-        || opts.hidden
++        || hidden_mismatches_index
+         || opts.no_ignore
+         || opts.no_ignore_dot
+         || opts.no_ignore_exclude
+-- 
+2.53.0
+

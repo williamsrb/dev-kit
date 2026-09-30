@@ -61,11 +61,16 @@ Line prefixes. One meaning each.
 
 ## Option lists
 
-- Mutually exclusive options (pick one) use keycaps 1️⃣ to 🔟, in order. The recommended option comes first and says "Recommended".
-- Combinable options (pick any) use circled letters Ⓐ to Ⓩ, in their text form.
-- Keep the BASE §5 code after the marker, chosen by what the item is: actions use A-codes, other options use O-codes (`1️⃣ O1: …`, `Ⓐ A1: …`). The marker shows exclusivity; the code is the reference used later in the conversation.
+Classify exclusive vs combinable **before** choosing the glyph. The glyph is the exclusivity signal. Every option-list item is an O-code. A-codes are for actions (BASE §5, sequential steps), not items on this list.
+
+- Mutually exclusive (choosing one **forbids** the others): keycaps 1️⃣ to 🔟, in order. The recommended option comes first and says "Recommended". Pair as `1️⃣ O1: …`.
+- Combinable (the operator may take more than one, including `ALL`): circled letters Ⓐ to Ⓩ, in their text form. Default to this when both readings are possible. Pair as `Ⓐ O1: …`.
+- `ALL` on the 👉 line, or a reply format that allows several items (`A C`), makes the list combinable. Keycaps 1️⃣–🔟 are then forbidden. Do not write `"1"` and `"ALL"` on the same list.
+- "Recommended" does not make a list exclusive.
+- The numeral inside `O1` is not a keycap and does not make the list exclusive.
+- Do not write `1️⃣ A1` or `Ⓐ A1` on an option list.
 - Both follow the emoji-marker spacing: 4 `&nbsp;`, the marker, then `&nbsp;&nbsp;&nbsp;` plus one normal space.
-- A ❓ line states the question before the list. The 👉 line gives the reply format: "1", "A C", or "ALL".
+- A ❓ line states the question before the list. Exclusive 👉 reply format: `"1"` or `"O2"`. Combinable 👉 reply format: `"A C"` or `"ALL"`.
 - More than 10 exclusive options: narrow or split the question instead of extending the list.
 
 ## Emphasis

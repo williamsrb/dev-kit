@@ -61,11 +61,11 @@ This skill runs entirely in the current agent session — no external Codex/CLI 
 
 Do **not** validate or rewrite plan documents (`agentctl plan resolve` targets) — that is `validate-plan`.
 
-Do **not** duplicate work covered by follow-up skills `lint-and-draft-enonic-commit-message` or `lint-and-draft-generic-commit-message`:
+Do **not** duplicate work covered by follow-up skill `lint-and-draft-commit-message`:
 
 - No commit message generation
-- No full syntax/semantic pass (semicolons, brace balance, parse checks, unresolved imports) — those skills validate **and fix** those issues
-- No Enonic XP CommonJS/ES5.1 rule pass — use the Enonic skill for that
+- No full syntax/semantic pass (semicolons, brace balance, parse checks, unresolved imports) — that skill validates **and fixes** those issues
+- No Enonic XP CommonJS/ES5.1 rule pass, no Python ruff/`py_compile` pass, and no PHP `php -l` pass — that skill lazy-loads those stacks
 
 You **may** fix obvious delivery bugs found during QA (undefined variables, broken braces, wrong format strings) when they block requirement fit or code quality.
 

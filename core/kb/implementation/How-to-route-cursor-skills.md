@@ -22,15 +22,14 @@ Shared by Cursor, Claude Code, and Codex. Historical filename `How-to-route-curs
 | Validate/fix an impl or evidence/test plan | `validate-plan` | `validate-impl` (delivery); `run-plan` / `run-validation-plan` (execute) |
 | Run an existing plan file | `run-plan` / `run-implementation-plan` / `run-test-plan` / `run-validation-plan` | inventing a plan |
 | Implement from `.tasks/<KEY>.md` | `task-implementer` (+ `enonic-react4xp-best-practices`) | ad-hoc coding without spec |
-| Delivery QA / “is this good enough?” / review artifact | `validate-impl` (aliases: `impl-validate`, `review-task`, `validate-implementation`) | syntax staged-validation; Bugbot built-ins; `ponytail-review` |
+| Delivery QA / “is this good enough?” / review artifact | `validate-impl` (aliases: `impl-validate`, `review-task`, `validate-implementation`) | syntax lint+commit; Bugbot built-ins; `ponytail-review` |
 | Over-engineering delete-list (report only) | `ponytail-review` | `validate-impl` (deslop + fix); Bugbot |
-| Syntax + commit message (Enonic backend JS) | `enonic-staged-validation-commit-message` | `validate-impl` |
-| Syntax + commit message (other stacks) | `generic-staged-validation-commit-message` | enonic-staged |
+| Syntax + commit message (python, PHP, Enonic, or generic) | `lint-and-draft-commit-message` | `validate-impl` |
 | Commit message only | `staged-commit-message` | full validation skills |
 | Evidence / screenshots / optional tracker comment | `task-evidence-plan` or `run-test-plan` | unnamed browser loops |
 | Playwright MCP after reboot / ad-hoc (not an evidence plan) | `spawn-playwright-mcp` | `plan-task-evidence` (plans then spawns); `playwright-cli` (no MCP) |
 | Analyst-facing copy (evidence body, TBD questions; Jira/Slack/paste) | `write-analyst-message` | caveman-lite chat; engineer jargon in the analyst body |
-| XP server.log / Gradle fail | `xp-app-debugger` | staged-validation |
+| XP server.log / Gradle fail | `xp-app-debugger` | `lint-and-draft-commit-message` |
 | Sandbox / deploy CLI | `enonic-cli` | raw `enonic` from memory |
 | XP7 → XP8 upgrade | `xp-app-upgrader` | minor 7.x bumps |
 
@@ -38,11 +37,11 @@ Shared by Cursor, Claude Code, and Codex. Historical filename `How-to-route-curs
 
 ```text
 Jira:  download-jira-task → plan-implementation (posts implicit tick list) → validate-plan (impl)
-         → run-plan (impl) → validate-impl → lint-and-draft-enonic|generic-commit-message
+         → run-plan (impl) → validate-impl → lint-and-draft-commit-message
          → plan-task-evidence → validate-plan (evidence) → run-plan (evidence)
 
 Local: handoff (PRD) → plan-implementation (auto-select TBD + auto-tick implicit) → validate-plan (impl)
-         → run-plan (impl) → validate-impl → lint-and-draft-enonic|generic-commit-message
+         → run-plan (impl) → validate-impl → lint-and-draft-commit-message
          → plan-task-evidence → validate-plan (evidence) → run-plan (evidence)
 ```
 
@@ -53,7 +52,7 @@ Not an automation instruction. User may pass **only** `<TASK-ID>` (Jira key or k
 - **validate-plan** — rewrite the resolved plan folder or legacy file; GO / GO-WITH-FIXES / NO-GO; no code, no evidence execute.
 - **validate-impl** (alias `impl-validate`) — requirements, quality, security, less-code, AI slop (deslop); may fix delivery; optional `.tasks/<KEY>-review.md`. Standards: `~/.agents/kb/validation/Quality-gate-*.md`.
 - **ponytail-review** — over-engineering delete-list on the delivery diff; report only. Does not replace `validate-impl`.
-- **staged-validation-*** — parse/syntax/lint + commit message draft (no commit ask). Shared How: `Quality-gate-delivery-scope.md`.
+- **lint-and-draft-commit-message** — parse/syntax/lint + commit message draft (no commit ask). Lazy-loads python / PHP / Enonic / generic from the delivery. Shared How: `Quality-gate-delivery-scope.md`.
 - **staged-commit-message** — message draft only (no commit ask).
 - **Bugbot / security review** — Cursor built-ins; escalate from QA when needed.
 
@@ -69,7 +68,7 @@ Not an automation instruction. User may pass **only** `<TASK-ID>` (Jira key or k
 
 ## Pitfalls
 
-- Saying “validate” without context can hit `validate-plan` (plan file), `validate-impl` (delivery), or staged-validation — pick from the table. “Validate/fix the plan” is always `validate-plan`.
+- Saying “validate” without context can hit `validate-plan` (plan file), `validate-impl` (delivery), or `lint-and-draft-commit-message` — pick from the table. “Validate/fix the plan” is always `validate-plan`.
 - `run-validation-plan` is an alias of `run-plan` (execute). Plan-document QA is `validate-plan`.
 - `review-task` / review mode is the same `validate-impl` skill (chat report vs optional `.tasks/<KEY>-review.md` artifact). No separate Codex reviewer path.
 - `ponytail-review` is a report-only delete-list. It does not fix code and does not replace `validate-impl`.

@@ -52,7 +52,7 @@ LOG_START_RE = re.compile(
 TIMESTAMP_RE = re.compile(r"^\d{4}-\d{2}-\d{2}[T ][0-9:.+\-Z]+")
 
 RECOMMENDED_TOOLS = (
-    "rg", "jq", "git", "python3", "xmllint", "xmlstarlet", "yq",
+    "rg", "jq", "git", "python3", "php", "xmllint", "xmlstarlet", "yq",
     "shellcheck", "shfmt", "ruff", "markdownlint-cli2", "lychee",
     "codespell", "ast-grep", "gitleaks", "osv-scanner", "trivy", "semgrep",
     "qpdf", "ocrmypdf", "tesseract", "image-diff", "convert", "identify", "pdftotext",
@@ -197,6 +197,7 @@ def cmd_delivery_scope(args: argparse.Namespace) -> int:
 PROJECT_MARKERS = {
     "node": ("package.json",),
     "python": ("pyproject.toml", "requirements.txt", "setup.py"),
+    "php": ("composer.json", "composer.lock"),
     "gradle": ("build.gradle", "build.gradle.kts", "gradlew"),
     "godot": ("project.godot",),
     "enonic": ("app/src/main/resources/application.xml", "src/main/resources/application.xml"),
@@ -368,6 +369,11 @@ def cmd_tools_audit(args: argparse.Namespace) -> int:
 
 def scoped_files(cwd: Path, scope: str) -> tuple[Path, list[Path]]:
     root = repo_root(cwd) or cwd.resolve()
+    excluded = {".git", "node_modules", "vendor", "build", "dist", ".gradle", ".venv", "venv"}
+
+    def keep(path: Path) -> bool:
+        return path.is_file() and not any(part in excluded for part in path.relative_to(root).parts)
+
     if scope == "changed" and repo_root(cwd):
         names: set[str] = set()
         for command in (
@@ -377,13 +383,9 @@ def scoped_files(cwd: Path, scope: str) -> tuple[Path, list[Path]]:
         ):
             result = git(root, *command)
             names.update(line for line in result.stdout.splitlines() if line)
-        paths = [root / name for name in sorted(names) if (root / name).is_file()]
+        paths = [root / name for name in sorted(names) if keep(root / name)]
     else:
-        excluded = {".git", "node_modules", "build", "dist", ".gradle", ".venv", "venv"}
-        paths = [
-            path for path in root.rglob("*")
-            if path.is_file() and not any(part in excluded for part in path.relative_to(root).parts)
-        ]
+        paths = [path for path in root.rglob("*") if keep(path)]
     return root, paths[:500]
 
 
@@ -391,21 +393,24 @@ def cmd_checks_run(args: argparse.Namespace) -> int:
     root, paths = scoped_files(args.cwd.resolve(), args.scope)
     groups: dict[str, list[Path]] = {
         "python": [path for path in paths if path.suffix == ".py"],
+        "php": [path for path in paths if path.suffix.lower() in {".php", ".phtml"}],
         "shell": [path for path in paths if path.suffix in {".sh", ".bash"}],
         "markdown": [path for path in paths if path.suffix.lower() in {".md", ".mdx"}],
         "xml": [path for path in paths if path.suffix.lower() == ".xml"],
         "yaml": [path for path in paths if path.suffix.lower() in {".yaml", ".yml"}],
     }
-    specs: list[tuple[str, str, list[str], list[Path]]] = [
-        ("ruff", "ruff", ["check", "--output-format=json"], groups["python"]),
-        ("shellcheck", "shellcheck", ["--format=json1"], groups["shell"]),
-        ("markdownlint", "markdownlint-cli2", [], groups["markdown"]),
-        ("xmllint", "xmllint", ["--noout"], groups["xml"]),
-        ("yq", "yq", ["."], groups["yaml"]),
-        ("codespell", "codespell", ["--quiet-level=2"], groups["python"] + groups["markdown"]),
+    # per_file: True when the CLI lints one path at a time (`php -l`).
+    specs: list[tuple[str, str, list[str], list[Path], bool]] = [
+        ("ruff", "ruff", ["check", "--output-format=json"], groups["python"], False),
+        ("php", "php", ["-l"], groups["php"], True),
+        ("shellcheck", "shellcheck", ["--format=json1"], groups["shell"], False),
+        ("markdownlint", "markdownlint-cli2", [], groups["markdown"], False),
+        ("xmllint", "xmllint", ["--noout"], groups["xml"], False),
+        ("yq", "yq", ["."], groups["yaml"], False),
+        ("codespell", "codespell", ["--quiet-level=2"], groups["python"] + groups["markdown"], False),
     ]
     checks: list[dict[str, Any]] = []
-    for label, executable, prefix, selected in specs:
+    for label, executable, prefix, selected, per_file in specs:
         path = shutil.which(executable)
         if not selected:
             checks.append({"check": label, "status": "skipped", "reason": "no matching files"})
@@ -413,14 +418,27 @@ def cmd_checks_run(args: argparse.Namespace) -> int:
         if not path:
             checks.append({"check": label, "status": "unavailable", "executable": executable})
             continue
-        command = [path, *prefix, *[str(item.relative_to(root)) for item in selected[:200]]]
-        result = run(command, cwd=root)
-        output = (result.stdout + ("\n" if result.stdout and result.stderr else "") + result.stderr).strip()
+        rels = [str(item.relative_to(root)) for item in selected[:200]]
+        if per_file:
+            chunks: list[str] = []
+            exit_code = 0
+            for rel in rels:
+                result = run([path, *prefix, rel], cwd=root)
+                chunk = (result.stdout + ("\n" if result.stdout and result.stderr else "") + result.stderr).strip()
+                if chunk:
+                    chunks.append(chunk)
+                if result.returncode != 0:
+                    exit_code = result.returncode
+            output = "\n".join(chunks)
+        else:
+            result = run([path, *prefix, *rels], cwd=root)
+            exit_code = result.returncode
+            output = (result.stdout + ("\n" if result.stdout and result.stderr else "") + result.stderr).strip()
         checks.append({
             "check": label,
-            "status": "passed" if result.returncode == 0 else "failed",
-            "exit_code": result.returncode,
-            "files": len(selected[:200]),
+            "status": "passed" if exit_code == 0 else "failed",
+            "exit_code": exit_code,
+            "files": len(rels),
             "output": output[: argsafe_limit(args.max_output_chars)],
             "truncated": len(output) > args.max_output_chars,
         })

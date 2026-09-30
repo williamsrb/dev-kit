@@ -21,8 +21,8 @@ Untrack + ignore (keep on disk):
 | Repo | Ignored bloat |
 |------|----------------|
 | `~/.codex` | `backups/` (session archives), `history.jsonl`, `installation_id`, `version.json`, `hooks.premigration/`, `skills/.system/`, `vendor_imports/skills-curated-cache.json`, `chrome-native-hosts-v2.json` |
-| `~/.agents` | `bin/actionlint`, ppt-master `references/ai-image-comparison/`, `templates/sounds/`, `templates/icons/`, archify `examples/` + `test/`, `skills/render-diff-patch/diff2html-ui.min.js`. Already ignored: `prds/`, `plans/` (files and `{TASK-ID}/` folders), `history/`, `.packages/`, `.auth/`, caches, tmp |
-| `~/.claude` | `.claude.json`, `.claude.json.backup`, `claude_settings_backup/`, `agents.premigration/`, `settings.json.premigration`, `settings.json.bak-*`, `history.jsonl`, `remote-settings.json`, `stats-cache.json`, `policy-limits.json` (`backups/` already ignored) |
+| `~/.agents` | `bin/actionlint`, ppt-master `references/ai-image-comparison/`, `templates/sounds/`, `templates/icons/`, archify `examples/` + `test/`, `skills/render-diff-patch/diff2html-ui.min.js`. Already ignored: `prds/`, `plans/` (files and `{TASK-ID}/` folders), `history/`, `deliverables/`, `diagrams/` (ticket scratch, not kit content), `.packages/`, `.auth/`, caches, tmp |
+| `~/.claude` | `.claude.json`, `.claude.json.backup`, `claude_settings_backup/`, `agents.premigration/`, `settings.json.premigration`, `settings.json.bak-*`, `history.jsonl`, `remote-settings.json`, `stats-cache.json`, `policy-limits.json`, `skills/synced/`, `plugins/synced/` (`backups/` already ignored) |
 | `~/.cursor` | `cli-config.json` |
 
 `.claude.json` is disk-only after untrack. Live MCP server config and account metadata live there. Restore is the file on disk, not git. `settings.json` stays tracked.

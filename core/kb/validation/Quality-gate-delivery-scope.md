@@ -1,6 +1,6 @@
 ---
 id: quality-gate-delivery-scope
-when_skills: [validate-impl, lint-and-draft-enonic-commit-message, lint-and-draft-generic-commit-message, draft-commit-message]
+when_skills: [validate-impl, lint-and-draft-commit-message, draft-commit-message]
 inputs: [git status, staged/unstaged/branch diffs]
 outputs: [active delivery tier]
 stop_if: [empty delivery]

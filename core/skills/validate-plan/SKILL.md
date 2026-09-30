@@ -33,7 +33,7 @@ Follow `~/.agents/kb/implementation/How-to-resolve-task-context.md`. Allowlist i
 | Draft a new impl spec | `plan-implementation` |
 | Draft a new evidence plan | `plan-task-evidence` |
 | Delivery fit / deslop / security on a diff | `validate-impl` |
-| Syntax + commit message | `lint-and-draft-*` |
+| Syntax + commit message | `lint-and-draft-commit-message` |
 | Execute a written plan | `run-plan` |
 
 ## Knowledge base (mandatory)

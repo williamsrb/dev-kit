@@ -40,9 +40,9 @@ and a visible name in the status line and the dock.
 | Profile | Extends | Skills | Rules | Vendors | Required tools |
 |---------|---------|--------|-------|---------|----------------|
 | `client` | `enonic` | 46 | 31 | claude, codex, cursor | 38 |
-| `core` | `—` | 34 | 24 | claude, codex, cursor | 36 |
+| `core` | `—` | 35 | 24 | claude, codex, cursor | 36 |
 | `enonic` | `core` | 46 | 26 | claude, codex, cursor | 38 |
-| `php` | `core` | 34 | 24 | claude, codex | 38 |
+| `php` | `core` | 35 | 24 | claude, codex | 38 |
 
 <!-- /devkit:generated:profile-table -->
 

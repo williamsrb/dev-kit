@@ -74,6 +74,7 @@ the model/effort.
 | `describe-image` | `explore` | Local vision description |
 | `read-figma` | `explore` | Local `.fig` decode/inspect |
 | `download-jira-task` | `follow` | Defined Jira → `prds/` fetch |
+| `excalidraw-diagrams` | `follow` | Defined `excalidraw-cli` diagram procedure |
 | `find-skills` | `follow` | Defined `npx skills` install flow |
 | `generate-worklogs` | `follow` | Defined daily worklog procedure |
 | `playwright-cli` | `follow` | External package skill; not edited |
@@ -90,8 +91,7 @@ the model/effort.
 | `handoff` | `implement` | Conversation compact with judgment |
 | `humanize-text` | `implement` | Prose rewrite with judgment |
 | `impeccable` | `implement` | UI design/implementation (audit mode can bump to `quality-gate`) |
-| `lint-and-draft-enonic-commit-message` | `implement` | Lint/fix + commit message |
-| `lint-and-draft-generic-commit-message` | `implement` | Lint/fix + commit message |
+| `lint-and-draft-commit-message` | `implement` | Lint/fix + commit message (python / PHP / Enonic / generic, lazy-loaded) |
 | `plan-implementation` | `implement` | One-ticket spec |
 | `plan-task-evidence` | `implement` | Authors `*-evidence-plan.md` (Jira evidence plan, not `explore`) |
 | `run-plan` | `implement` | Execute one plan |

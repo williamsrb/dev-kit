@@ -26,7 +26,7 @@ Start with `agentctl repo detect --cwd <repo> --json` when available. Use `rg` a
 ## When not to use
 
 - Staged/unstaged delivery QA, deslop, or requirement fit — use [validate-impl](../validate-impl/SKILL.md).
-- Syntax + commit message — use `lint-and-draft-*`.
+- Syntax + commit message — use `lint-and-draft-commit-message`.
 - Skill supply-chain scan — use [skillspector](../skillspector/SKILL.md).
 - Inventing findings without code. If a category does not apply to the stack, say so; do not force hits.
 

@@ -1,6 +1,6 @@
 ---
 id: how-to-choose-validation-skills
-when_skills: [validate-plan, validate-impl, lint-and-draft-enonic-commit-message, lint-and-draft-generic-commit-message, draft-commit-message]
+when_skills: [validate-plan, validate-impl, lint-and-draft-commit-message, draft-commit-message]
 inputs: [user intent]
 outputs: [skill name]
 stop_if: []
@@ -14,10 +14,8 @@ prose: caveman-lite
 
 1. Implementation spec or evidence/test plan document (`Validate/fix the plan`) → `validate-plan`. Not delivery code.
 2. Requirements / quality / security / less-code / AI slop (deslop) on a **delivery diff** → `validate-impl` (alias `impl-validate`; review artifact: `qa-review` / `review-task`). Standards live under `~/.agents/kb/validation/Quality-gate-*.md`.
-3. Enonic backend JS syntax + commit message → `enonic-staged-validation-commit-message`.
-4. Other stacks syntax + commit message → `generic-staged-validation-commit-message`.
-5. Commit message only (no validate) → `staged-commit-message`.
-6. Full merge of enonic+generic into one skill is deferred. Keep dual skills.
+3. Syntax + lint + commit message → `lint-and-draft-commit-message`. It detects python / PHP / Enonic / generic from delivery files and lazy-loads only matching stack rules.
+4. Commit message only (no validate) → `staged-commit-message`.
 
 ## Shared quality-gate KB
 
@@ -34,6 +32,6 @@ Reuse these from any skill that validates or drafts a delivery commit message. D
 ## Pitfalls
 
 - Do not run `validate-impl` on a plan Markdown file. That is `validate-plan`.
-- Do not run staged-validation expecting requirement-fit review. That is `validate-impl`.
-- Do not skip `validate-impl` before staged-validation when the user asked for both quality and commit.
+- Do not run `lint-and-draft-commit-message` expecting requirement-fit review. That is `validate-impl`.
+- Do not skip `validate-impl` before `lint-and-draft-commit-message` when the user asked for both quality and commit.
 - Do not install a separate deslop skill for delivery cleanup. AI slop is a mandatory `validate-impl` check on the delivery diff.

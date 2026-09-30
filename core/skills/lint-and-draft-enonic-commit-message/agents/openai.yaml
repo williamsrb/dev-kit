@@ -1,6 +1,0 @@
-interface:
-  display_name: "Validate Enonic Commit"
-  short_description: "Validate Enonic code and draft its commit message"
-  default_prompt: "Use $lint-and-draft-enonic-commit-message to validate this Enonic delivery and draft its commit message."
-policy:
-  allow_implicit_invocation: false

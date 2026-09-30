@@ -658,8 +658,8 @@ def remove_stale_fork_export(
     previous: Optional[dict],
     merge_dest: Path,
     dry_run: bool,
-    projects_roots: Tuple[Path, ...] = (DEFAULT_CLAUDE_PROJECTS,),
-    index_roots: Tuple[Path, ...] = (DEFAULT_CLAUDE_INDEX_ROOT,),
+    projects_roots: tuple[Path, ...] = (DEFAULT_CLAUDE_PROJECTS,),
+    index_roots: tuple[Path, ...] = (DEFAULT_CLAUDE_INDEX_ROOT,),
 ) -> None:
     if not previous or previous.get("kind") != "fork":
         return
@@ -702,7 +702,7 @@ def write_merge(
     index_roots: Iterable[Path],
     dry_run: bool,
     previous: Optional[dict],
-    projects_roots: Tuple[Path, ...] = (DEFAULT_CLAUDE_PROJECTS,),
+    projects_roots: tuple[Path, ...] = (DEFAULT_CLAUDE_PROJECTS,),
 ) -> Tuple[str, Path, Optional[Path], str, int]:
     source = import_source_path(import_rec)
     if not source.is_file():

@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import os
 import sys
-from datetime import date
+from datetime import date, datetime, timezone
 from pathlib import Path
 
 SERVER = Path.home() / ".local" / "bin" / "gitlab-mcp-server"
@@ -82,7 +82,7 @@ def warn_on_expiry(expires_at: str) -> None:
         expiry = date.fromisoformat(expires_at)
     except ValueError:
         return
-    remaining = (expiry - date.today()).days
+    remaining = (expiry - datetime.now(timezone.utc).date()).days
     if remaining < 0:
         print(f"gitlab-mcp: token EXPIRED on {expires_at}; calls will fail", file=sys.stderr)
     elif remaining <= 30:

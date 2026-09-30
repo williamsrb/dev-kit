@@ -5,7 +5,7 @@
 # of per-skill symlinks.
 #
 #   ~/.cursor/skills            <- shared + skills-vendor/cursor
-#   ~/.claude/skills            <- shared + skills-vendor/claude
+#   ~/.claude/skills            <- shared + skills-vendor/claude (preserves synced)
 #   ~/.codex/skills             <- shared + skills-vendor/codex (preserves .system)
 #
 # Idempotent. Run it after adding, renaming, or removing any skill.
@@ -60,6 +60,16 @@ canonical_of() {
   local p="$1" r
   r="$(readlink -f "$p" 2>/dev/null || true)"
   [[ -n "$r" && -d "$r" ]] && printf '%s\n' "$r"
+}
+
+# Vendor-owned real dirs inside a projection root. Not pool skills.
+# Claude: skills/synced (Anthropic/org library cache).
+# Codex:  skills/.system (bundled system skills).
+vendor_owned_skill_dir() {
+  local root="$1" name="$2"
+  [[ "$root" == "$HOME_DIR/.claude/skills" && "$name" == "synced" ]] && return 0
+  [[ "$root" == "$HOME_DIR/.codex/skills" && "$name" == ".system" ]] && return 0
+  return 1
 }
 
 link_to() {  # $1 = desired target, $2 = link path
@@ -134,8 +144,7 @@ for spec in "${TARGETS[@]}"; do
   done < <(find "$root" -mindepth 1 -maxdepth 1 -type l -print0)
 
   while IFS= read -r -d '' d; do
-    # Codex owns this real system-skill directory; it is not a projected skill.
-    [[ "$root" == "$HOME_DIR/.codex/skills" && "$(basename "$d")" == ".system" ]] && continue
+    vendor_owned_skill_dir "$root" "$(basename "$d")" && continue
     bad "$d is a real directory inside a projection root — it shadows the pool"
   done < <(find "$root" -mindepth 1 -maxdepth 1 -type d -print0)
 

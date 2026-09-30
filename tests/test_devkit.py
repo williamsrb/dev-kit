@@ -145,6 +145,31 @@ class ExportBoundaryTests(unittest.TestCase):
         self.assertEqual(on_disk - listed, set(), "unclassified skills would ship or vanish silently")
 
     @NEEDS_SOURCE
+    def test_every_bin_on_disk_is_classified(self):
+        allowlist = json.loads((REPO / "export-allowlist.json").read_text())
+        block = allowlist["bin"]
+        listed = set(block["core"]) | (set(block.get("excluded") or {}) - {"_comment"})
+        source = export_source()
+        on_disk = {
+            p.name for p in (source / "bin").iterdir()
+            if p.name != "__pycache__" and (p.is_file() or p.is_dir())
+        }
+        self.assertEqual(on_disk - listed, set(), "unclassified bin entries would ship or vanish silently")
+
+    @NEEDS_SOURCE
+    def test_every_mcp_on_disk_is_classified(self):
+        allowlist = json.loads((REPO / "export-allowlist.json").read_text())
+        block = allowlist["mcp"]
+        listed = {e.split("/")[0] for e in block["core"]}
+        listed |= set(block.get("excluded") or {}) - {"_comment"}
+        source = export_source()
+        on_disk = {
+            p.name for p in (source / "mcp").iterdir()
+            if p.name != "__pycache__"
+        }
+        self.assertEqual(on_disk - listed, set(), "unclassified mcp entries would ship or vanish silently")
+
+    @NEEDS_SOURCE
     def test_export_is_in_sync(self):
         self.assertEqual(run("export", "--check").returncode, 0)
 

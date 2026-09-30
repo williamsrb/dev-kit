@@ -29,7 +29,7 @@ python3 ~/.agents/mcp/install.py install gitlab --vendors cursor,claude
 python3 ~/.agents/mcp/install.py register --dry-run
 python3 ~/.agents/mcp/install.py register --force   # replace existing entries
 
-python3 ~/.agents/mcp/playwright.py spawn JOT-101 JOT-102 --enable
+python3 ~/.agents/mcp/playwright.py spawn TASK-101 TASK-102 --enable
 python3 ~/.agents/mcp/playwright.py revive
 python3 ~/.agents/mcp/playwright.py list
 python3 ~/.agents/mcp/playwright.py stop --all
@@ -48,14 +48,14 @@ This directory has **no tokens**. Register reads:
 
 | File / env | Used by |
 |------------|---------|
-| `~/.gitlab-mcp-server.env` | `gitlab` (`GITLAB_URL`, `GITLAB_TOKEN`) |
+| `$AGENTS_HOME/.auth/gitlab-access-token.yaml` | `gitlab` via `bin/gitlab-mcp` (`access_token`, `gitlab_url`) |
 | `~/.browser-control-mcp.env` | `browser-control` (`EXTENSION_SECRET`, `EXTENSION_PORT`) |
 | `SLACK_MCP_CLIENT_ID` | Cursor Slack OAuth client id |
 | `SLACK_MCP_TOKEN` | Claude/Codex Slack bearer (`codex` uses `--bearer-token-env-var`) |
 
-If an env file is missing, register reuses whatever is already in that vendor's
-config (so a re-run does not blank a working token). Copy `env.example` to those
-paths on a new machine.
+If a browser-control env file is missing, register reuses whatever is already in that vendor's
+config (so a re-run does not blank a working token). GitLab tokens stay in the auth yaml;
+`gitlab-mcp` injects them at launch.
 
 OAuth HTTP servers (`context7`, `atlassian-rovo-preview`) need a one-time login
 in the vendor after register (`claude mcp login <name>`, `codex mcp login <name>`,

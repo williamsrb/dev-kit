@@ -81,7 +81,7 @@ Delivery scope: staged | unstaged | branch diff vs main/master
 
 ## Follow-up
 
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;•&nbsp;&nbsp;&nbsp;&nbsp; Next skill: `lint-and-draft-enonic-commit-message` (Enonic backend JS) or `lint-and-draft-generic-commit-message` (other stacks). Both validate **and fix** syntax/semantics/lint, then draft the commit message. For message-only, use `draft-commit-message`.
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;•&nbsp;&nbsp;&nbsp;&nbsp; Next skill: `lint-and-draft-commit-message` (detects python / PHP / Enonic / generic; validates **and fixes** syntax/semantics/lint, then drafts the commit message). For message-only, use `draft-commit-message`.
 
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;•&nbsp;&nbsp;&nbsp;&nbsp; Review artifact (review mode): `.tasks/<KEY>-review.md` or `tasks/<KEY>-review.md`, or n/a
 

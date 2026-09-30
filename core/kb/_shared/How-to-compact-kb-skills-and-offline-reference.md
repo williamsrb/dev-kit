@@ -24,6 +24,7 @@ The win is **loaded tokens per task**, not corpus size. Slices and indexes can g
 | Offline-reference | Sphinx/Godot chrome and wrapper sentences stripped; each catalog `llm-index.md` is `path<TAB>tokens<TAB>keywords` |
 | Skills | Routing, not a corpus rewrite. `run-plan` uses testing/implementation `llm-index.md`. `apply-react4xp-practices` load table only. Descriptions lost install-provenance suffixes only |
 | Lazy-load split (2026-09-28) | Fat `SKILL.md` routers (`graphify`, `humanize-text`, `plan-task-evidence`, `run-plan`). Catalog How-tos split by family (`enonic-cli/*.md`, `xp7-to-xp8-upgrade/changes-*.md`, `schemes-*.md`). `agentctl` groups extracted to siblings + `agentctl_common.py`. Sequential QA How-tos and autonomy criteria left whole |
+| Lint merge (2026-09-30) | `lint-and-draft-commit-message` router + `references/{python,php,enonic,generic}.md`. Old enonic/generic skill dirs removed; names kept as aliases |
 
 Do **not** re-run `compact_owned_kb.py` `main()`. It splits worklog and adds frontmatter to files that lack `---`. A second run is messy even when it skips files that already have frontmatter.
 

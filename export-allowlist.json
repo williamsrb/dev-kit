@@ -47,6 +47,7 @@
       "diff-image",
       "download-jira-task",
       "draft-commit-message",
+      "draw-diagram",
       "find-skills",
       "generate-worklogs",
       "google-translate",
@@ -55,7 +56,7 @@
       "grilling",
       "handoff",
       "humanize-text",
-      "lint-and-draft-generic-commit-message",
+      "lint-and-draft-commit-message",
       "multitask-same-repo",
       "plan-implementation",
       "plan-task-evidence",
@@ -81,7 +82,6 @@
       "develop-react4xp-v7",
       "develop-xp7-backend",
       "develop-xp8",
-      "lint-and-draft-enonic-commit-message",
       "set-up-enonic-react4xp",
       "test-xp-apps",
       "upgrade-xp-app",
@@ -195,7 +195,13 @@
       "agentctl_plan.py",
       "agentctl_security.py",
       "agentctl_skills.py",
+      "backfill-claude-jsonl-ai-titles.py",
+      "backup-claude-mcp.py",
+      "export-canvas-html",
+      "export-codex-sessions-to-claude.py",
+      "export-cursor-sessions-to-claude.py",
       "generate-agents-md.py",
+      "gitlab-mcp",
       "merge-claude-config.py",
       "sync-bin-projections.sh",
       "sync-skill-projections.sh",
@@ -203,8 +209,20 @@
     ],
     "excluded": {
       "actionlint": "vendored binary, gitignored",
+      "claude-personal": "hardcodes this host's Claude Personal config dir; kit profile create is the reusable form",
+      "claude-work": "hardcodes this host's work Claude config dir; kit wrappers are vendor-<profile>",
+      "cursor-recolor-apply.sh": "optional host pack; mutates /usr/share/cursor; profile forks recolor via install.py",
+      "cursor-tgrep-rg-apply.py": "optional host pack; mutates stock Cursor ripgrep",
+      "docker-prune-keep-home-volumes.py": "hardcodes /home/volumes; machine layout, not harness",
+      "fix-claude-desktop-personal-perms.sh": "companion to the Personal desktop fork; kit appfork owns profile dest trees",
+      "install-cursor-recolor.sh": "optional host pack; apt hook for stock Cursor recolor",
+      "install-cursor-tgrep-rg.sh": "optional host pack; apt hook; pkexec path is host-specific",
+      "recolor-white-black-icons.sh": "generalized into install.py",
       "review-auth": "reads the harness .auth/<user>.passwd; client credential flow",
-      "recolor-white-black-icons.sh": "generalized into install.py"
+      "scheduled-push-branches.py": "one-shot client cron; hardcodes acme-group keys",
+      "sync-claude-desktop-personal.py": "Personal desktop fork worker; kit appfork rebuilds per-profile GUI forks",
+      "tgrep-cursor-apply.py": "optional host pack; needs a local tgrep checkout",
+      "tgrep-serve-pool.py": "optional host pack; needs patched tgrep on PATH"
     }
   },
   "hooks": {
@@ -231,9 +249,14 @@
       "catalog.json",
       "install.py",
       "playwright.py",
+      "test_playwright.py",
       "image-to-disk/README.md",
       "image-to-disk/server.py"
-    ]
+    ],
+    "excluded": {
+      "env.example": "contains a client GitLab host; catalog and README already list the keys",
+      "graft": "removed from catalog 2026-09-27; directory is .cache, do not re-admit"
+    }
   },
   "config": {
     "core": [

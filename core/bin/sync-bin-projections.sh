@@ -44,7 +44,6 @@ TARGETS=(
 # Basenames in ~/.agents/bin that are used on PATH today.
 PATH_SHIMS=(
   agentctl
-  claude-work
   export-canvas-html
   recolor-white-black-icons.sh
   review-auth

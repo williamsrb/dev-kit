@@ -6,7 +6,7 @@ How-to-add-an-agentctl-command-group.md	442	agentctl-command	run-plan plan-imple
 How-to-add-an-editor-facing-input-to-an-xp7-schema.md	1096	editor-facing	run-plan plan-implementation validate-impl	add editor facing input xp7 schema add-editor editor-facing facing-input input-xp7 xp7-schema input-schema
 How-to-add-application-level-caching-in-enonic-xp7.md	2672	application-level		add application level caching enonic xp7 add-application application-level level-caching caching-enonic enonic-xp7 site lookup third party page renders mappings enonic-site site-lookup lookup-third third-party party-page page-renders
 How-to-align-NIFS-matches-and-table-form-endpoints.md	546	align-nifs		align nifs matches table form endpoints align-nifs nifs-matches matches-table table-form form-endpoints ntb endpoints-ntb
-How-to-apply-skill-portfolio-redesign.md	319	apply-skill		apply skill portfolio redesign apply-skill skill-portfolio portfolio-redesign phases redesign-phases
+How-to-apply-skill-portfolio-redesign.md	338	apply-skill		apply skill portfolio redesign apply-skill skill-portfolio portfolio-redesign phases redesign-phases
 How-to-apply-tgrep-cursor-patches.md	481	apply-tgrep	run-plan	apply tgrep cursor patches apply-tgrep tgrep-cursor cursor-patches
 How-to-avoid-xp8-runtime-traps-in-migrated-js-controllers.md	1477	avoid-xp8	upgrade-xp-app run-plan	avoid xp8 runtime traps migrated js controllers avoid-xp8 xp8-runtime runtime-traps traps-migrated migrated-js js-controllers avoid-runtime migrated-controllers
 How-to-backfill-claude-jsonl-ai-titles.md	402	backfill-claude	run-plan	backfill claude jsonl ai titles backfill-claude claude-jsonl jsonl-ai ai-titles title cursor import jsonl-title title-cursor cursor-import
@@ -30,8 +30,9 @@ How-to-give-an-argparse-cli-the-bare-equals-help-contract.md	543	give-argparse	r
 How-to-handle-implicit-requirements-examples.md	554	implicit-requirements	plan-implementation validate-plan run-plan validate-impl	handle implicit requirements examples handle-implicit implicit-requirements requirements-examples jot 270 review extras called bugs jot-270 270-review review-extras extras-called called-bugs
 How-to-handle-implicit-requirements.md	1767	implicit-requirements	plan-implementation validate-plan run-plan validate-impl	handle implicit requirements handle-implicit implicit-requirements
 How-to-install-cursor-tgrep-rg-hook.md	674	install-cursor	run-plan	install cursor tgrep rg hook install-cursor cursor-tgrep tgrep-rg rg-hook tgrep-hook
+How-to-inventory-xp7-descriptors-from-disk.md	389	inventory-xp7	run-plan plan-implementation develop-xp7-backend	inventory xp7 descriptors disk inventory-xp7 xp7-descriptors descriptors-disk
 How-to-isolate-harness-tests-from-the-host-home.md	592	isolate-harness	validate-impl run-plan	isolate harness tests host home isolate-harness harness-tests tests-host host-home
-How-to-keep-harness-git-lean.md	1150	keep-harness	run-plan	keep harness git lean keep-harness harness-git git-lean
+How-to-keep-harness-git-lean.md	1159	keep-harness	run-plan	keep harness git lean keep-harness harness-git git-lean
 How-to-keep-harness-scripts-in-bin-and-bin-vendor.md	574	keep-harness		keep harness scripts bin vendor keep-harness harness-scripts scripts-bin bin-bin bin-vendor
 How-to-make-a-hand-maintained-instruction-file-generated.md	871	make-hand	run-plan plan-implementation	make hand maintained instruction file generated make-hand hand-maintained maintained-instruction instruction-file file-generated
 How-to-mirror-a-devkit-core-change-into-the-harness.md	504	mirror-devkit	run-plan validate-impl	mirror devkit core change harness mirror-devkit devkit-core core-change change-harness
@@ -42,11 +43,12 @@ How-to-parameterize-client-identifiers-out-of-a-core-skill.md	774	parameterize-c
 How-to-pick-and-verify-font-preloads-before-deploy.md	1253	pick-font		pick verify font preloads before deploy pick-verify verify-font font-preloads preloads-before before-deploy
 How-to-port-xp8-admin-tool-app-to-xp7-13.md	666	port-xp8	run-plan	port xp8 admin tool app xp7 13 port-xp8 xp8-admin admin-tool tool-app app-xp7 xp7-13 down port-admin app-down
 How-to-render-jira-payloads-to-prd-markdown.md	955	render-jira	download-jira-task run-plan	render jira payloads prd markdown render-jira jira-payloads payloads-prd prd-markdown
-How-to-resolve-task-context.md	2202	task-context	validate-plan validate-impl plan-implementation run-plan download-jira-task plan-task-evidence handoff multitask-same-repo lint-and-draft-enonic-commit-message lint-and-draft-generic-commit-message draft-commit-message	resolve task context resolve-task task-context
-How-to-route-cursor-skills.md	1520	route-cursor		route cursor skills route-cursor cursor-skills skill routing cheat sheet skill-routing routing-cheat cheat-sheet
+How-to-resolve-task-context.md	2194	task-context	validate-plan validate-impl plan-implementation run-plan download-jira-task plan-task-evidence handoff multitask-same-repo lint-and-draft-commit-message draft-commit-message	resolve task context resolve-task task-context
+How-to-route-cursor-skills.md	1509	route-cursor		route cursor skills route-cursor cursor-skills skill routing cheat sheet skill-routing routing-cheat cheat-sheet
 How-to-run-the-tgrep-serve-pool.md	395	tgrep-serve	run-plan	run tgrep serve pool run-tgrep tgrep-serve serve-pool
 How-to-run-xp8migrator.md	602	xp8migrator	upgrade-xp-app	run xp8migrator run-xp8migrator finish app upgrade xp8migrator-finish finish-app app-upgrade
 How-to-scaffold-a-pnpm-typescript-monorepo.md	1005	scaffold-pnpm		scaffold pnpm typescript monorepo scaffold-pnpm pnpm-typescript typescript-monorepo scaffolding shells out agent clis scaffolding-pnpm monorepo-shells shells-out out-agent agent-clis
+How-to-self-ignore-a-sidecar-extract-tree.md	325	self-ignore	run-plan plan-implementation	self ignore sidecar extract tree self-ignore ignore-sidecar sidecar-extract extract-tree
 How-to-serve-a-root-file-from-an-xp7-site-mapping.md	1234	serve-root		serve root file xp7 site mapping serve-root root-file file-xp7 xp7-site site-mapping llms txt ads enonic file-llms llms-txt txt-ads ads-txt txt-enonic enonic-site
 How-to-ship-a-photo-dedupe-cli-pack.md	654	ship-photo	run-plan	ship photo dedupe cli pack ship-photo photo-dedupe dedupe-cli cli-pack grok bot pack-grok grok-bot
 How-to-split-plans-into-lazy-loaded-folders.md	400	split-plans	plan-implementation plan-task-evidence run-plan validate-plan	split plans lazy loaded folders split-plans plans-lazy lazy-loaded loaded-folders

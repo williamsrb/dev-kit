@@ -23,7 +23,7 @@ Follow `~/.agents/kb/implementation/How-to-resolve-task-context.md` when a TASK-
 
 Produce a commit message from the **current solution delivery**. Do **not** validate, lint, fix code, or run git commit/merge.
 
-For validation + commit message, use `lint-and-draft-generic-commit-message` (or `lint-and-draft-enonic-commit-message` for Enonic XP / React4XP).
+For validation + commit message, use `lint-and-draft-commit-message` (python / PHP / Enonic / generic; detects from the delivery).
 
 ## Knowledge base (mandatory)
 

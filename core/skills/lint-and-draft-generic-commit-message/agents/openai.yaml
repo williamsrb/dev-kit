@@ -1,6 +1,0 @@
-interface:
-  display_name: "Validate Generic Commit"
-  short_description: "Validate code and draft its commit message"
-  default_prompt: "Use $lint-and-draft-generic-commit-message to validate this delivery and draft its commit message."
-policy:
-  allow_implicit_invocation: false

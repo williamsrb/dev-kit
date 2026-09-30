@@ -1,6 +1,6 @@
 ---
 id: how-to-resolve-task-context
-when_skills: [validate-plan, validate-impl, plan-implementation, run-plan, download-jira-task, plan-task-evidence, handoff, multitask-same-repo, lint-and-draft-enonic-commit-message, lint-and-draft-generic-commit-message, draft-commit-message]
+when_skills: [validate-plan, validate-impl, plan-implementation, run-plan, download-jira-task, plan-task-evidence, handoff, multitask-same-repo, lint-and-draft-commit-message, draft-commit-message]
 inputs: [user message, git branch, cwd]
 outputs: [TASK-ID, mode, allowlist]
 stop_if: [jira TASK-ID and branch != TASK-ID before code edits]
@@ -57,7 +57,7 @@ Pipeline skills follow this list. Do not copy it into SKILL.md. Keep only the sk
 | Validate/fix plan | `validate-plan` (impl) / `multitask-same-repo` Phase 1 | Draft from `agentctl plan resolve <TASK-ID>` + sectioned PRD + user/chat exclusions; apply `How-to-respect-user-scope-exclusions.md` and `How-to-handle-implicit-requirements.md` | Evidence plan; delivery diff; other keys' full plans |
 | Run impl | `run-plan` | Resolve then load `entry` (`plan.md`) plus Constraints/Non-Goals/Implicit companions; `DECISIONS.md` if multitask; worktree `CLAUDE.md` if present. Do not load `validation.md` unless validating | Full PRD unless the plan says see PRD §…; evidence plan; other worktrees |
 | QA gate | `validate-impl` | Delivery **diff** + resolved implementation plan (AC / GO / **Constraints** / Non-Goals / Implicit) + chat exclusions; apply `How-to-respect-user-scope-exclusions.md` and `How-to-handle-implicit-requirements.md` | Full PRD comments; evidence plan |
-| Lint + commit msg | `lint-and-draft-*` / `draft-commit-message` | Delivery diff only; TASK-ID from branch when Jira | `~/.agents/prds/`; `~/.agents/plans/` |
+| Lint + commit msg | `lint-and-draft-commit-message` / `draft-commit-message` | Delivery diff only; TASK-ID from branch when Jira | `~/.agents/prds/`; `~/.agents/plans/` |
 | Draft evidence plan | `plan-task-evidence` | AC from resolved impl plan first; PRD sectioned only for tips/URLs/comment ids when the plan lacks them | Full impl narrative; full PRD comments; siblings; Jira MCP / `download-jira-task` / `getJiraIssue` for `<TASK-ID>` when the PRD exists; implementation worktrees / `<TASK-ID>` branches / local source trees |
 | Validate evidence plan | `validate-plan` (evidence) | `agentctl plan resolve <TASK-ID> --kind evidence` + AC source used in the draft | Full impl plan; full PRD; implementation worktrees / local source |
 | Run evidence | `run-plan` / `run-test-plan` | Resolved evidence entry only | PRD; impl plan unless a step cites a path |

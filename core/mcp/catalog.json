@@ -13,7 +13,6 @@
     }
   },
   "env_files": {
-    "gitlab": "${HOME}/.gitlab-mcp-server.env",
     "browser_control": "${HOME}/.browser-control-mcp.env"
   },
   "servers": {
@@ -41,19 +40,15 @@
     },
     "gitlab": {
       "transport": "stdio",
-      "command": "${HOME}/.local/bin/gitlab-mcp-server",
+      "command": "${HOME}/.agents/bin/gitlab-mcp",
       "args": [],
-      "env_file": "gitlab",
-      "env_keys": [
-        "GITLAB_URL",
-        "GITLAB_TOKEN"
-      ],
       "vendors": [
         "cursor",
         "claude",
         "codex"
       ],
-      "fetch": "gitlab-mcp-server"
+      "fetch": "gitlab-mcp-server",
+      "comment": "Wrapper injects GITLAB_TOKEN/URL from AGENTS_HOME/.auth; do not put the PAT in mcp.json."
     },
     "browser-control": {
       "transport": "stdio",

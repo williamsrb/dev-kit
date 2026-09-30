@@ -42,6 +42,11 @@ segment; XP 7 uses the classic `/tool/` path.
    target site (XP 8 commonly uses `english`; XP 7 commonly uses `en`).
 3. Use the Guillotine widget's schema/query controls to search the relevant
    component collection (`part`, `layout`, or `page`) by descriptor.
+   On XP 7 / Content Studio 5.2.4 the widget GraphQL endpoint is
+   `POST /admin/site/preview/<project>/<branch>` (JSON `{ "query": "..." }`),
+   not `/_/service/com.enonic.app.guillotine/graphql` (404). `pageAsJson` on
+   `guillotine.get(key:)` is the component tree. `Component.descriptor` is
+   undefined in that schema. Draft vs master is the Query Playground toggle.
 4. Inspect the returned content paths and identify a page that is published in
    the branch required by the test.
 5. Open the matching page in Content Studio or its public preview and verify
@@ -59,6 +64,8 @@ segment; XP 7 uses the classic `/tool/` path.
   branch and publish state before selecting an evidence page.
 - If Guillotine is unavailable, use Data Toolbox as a documented fallback and
   record that fallback in the test report.
+- Query Playground schema explorer can fail with
+  `Enum values cannot be named: false` while POST queries still return data.
 
 ## Sample data (minimal)
 

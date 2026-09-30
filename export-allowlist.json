@@ -246,7 +246,10 @@
       "history-log-stop.sh",
       "graft-hooks.cjs",
       "graft-statusline.cjs"
-    ]
+    ],
+    "excluded": {
+      "graft": "duplicate of the listed graft-hooks.cjs; host-expanded BAKED path. Listed wrappers at hooks/*.cjs ship instead"
+    }
   },
   "mcp": {
     "core": [

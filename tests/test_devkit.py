@@ -182,6 +182,59 @@ class ExportBoundaryTests(unittest.TestCase):
         self.assertEqual(on_disk - listed, set(), "unclassified vendor trees would ship or vanish silently")
 
     @NEEDS_SOURCE
+    def test_every_rules_on_disk_is_classified(self):
+        self._assert_top_level_classified(
+            "rules", "rules", ("core", "enonic", "client"),
+        )
+
+    @NEEDS_SOURCE
+    def test_every_hooks_on_disk_is_classified(self):
+        self._assert_top_level_classified("hooks", "hooks", ("core",))
+
+    @NEEDS_SOURCE
+    def test_every_config_on_disk_is_classified(self):
+        self._assert_top_level_classified("config", "config", ("core",))
+
+    @NEEDS_SOURCE
+    def test_every_skills_vendor_on_disk_is_classified(self):
+        self._assert_top_level_classified(
+            "skills_vendor", "skills-vendor", ("core", "files"),
+        )
+
+    @NEEDS_SOURCE
+    def test_every_kb_on_disk_is_classified(self):
+        self._assert_top_level_classified(
+            "kb", "kb", ("core", "enonic", "client"),
+        )
+
+    def _assert_top_level_classified(
+        self, section: str, rel: str, layers: tuple[str, ...],
+    ) -> None:
+        allowlist = json.loads((REPO / "export-allowlist.json").read_text())
+        block = allowlist.get(section) or {}
+        listed: set[str] = set()
+        for layer in layers:
+            for entry in block.get(layer) or []:
+                listed.add(str(entry).split("/")[0].rstrip("/"))
+        for key in block.get("excluded") or {}:
+            if key == "_comment":
+                continue
+            listed.add(str(key).split("/")[0].rstrip("/"))
+        source = export_source()
+        root = source / rel
+        if not root.is_dir():
+            return
+        on_disk = {
+            p.name for p in root.iterdir()
+            if p.name != "__pycache__" and not p.name.startswith(".")
+        }
+        self.assertEqual(
+            on_disk - listed,
+            set(),
+            f"unclassified {rel} entries would ship or vanish silently",
+        )
+
+    @NEEDS_SOURCE
     def test_export_is_in_sync(self):
         self.assertEqual(run("export", "--check").returncode, 0)
 

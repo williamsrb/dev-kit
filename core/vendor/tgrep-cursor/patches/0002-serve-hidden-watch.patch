@@ -1,0 +1,456 @@
+From 2ac641ede88a4280018d48d7c3fb48674184b0be Mon Sep 17 00:00:00 2001
+From: Williams Ramos <williamsramosbarboza@gmail.com>
+Date: Fri, 11 Sep 2026 20:05:06 -0300
+Subject: [PATCH 2/4] Accept --hidden on serve and watch admitted hidden paths.
+
+Keep skipping .git internals, ignored dirs, and --exclude names.
+---
+ tgrep-cli/src/main.rs             |   9 +-
+ tgrep-cli/src/serve.rs            | 133 ++++++++++++++++++++++++++----
+ tgrep-cli/src/serve/poll_tests.rs |   1 +
+ tgrep-core/src/walker.rs          |  14 ++--
+ 4 files changed, 130 insertions(+), 27 deletions(-)
+
+diff --git a/tgrep-cli/src/main.rs b/tgrep-cli/src/main.rs
+index a079589..ca8a1f5 100644
+--- a/tgrep-cli/src/main.rs
++++ b/tgrep-cli/src/main.rs
+@@ -982,9 +982,9 @@ impl Cli {
+     /// `tgrep search` over the same tree. That is indistinguishable from a
+     /// corpus with no matches, so the only safe answer is to refuse.
+     ///
+-    /// `--hidden` is honoured by `index` but not by `serve`, hence the
+-    /// parameter. `--threads` is excluded deliberately: it is documented as
+-    /// accepted-for-compatibility and ignored everywhere, not just here.
++    /// `--hidden` is honoured by `index` and `serve`. `--threads` is excluded
++    /// deliberately: it is documented as accepted-for-compatibility and ignored
++    /// everywhere, not just here.
+     fn unsupported_discovery_flags(&self, hidden_supported: bool) -> Vec<&'static str> {
+         let mut out = Vec::new();
+         if self.hidden && !hidden_supported {
+@@ -1109,7 +1109,7 @@ fn run_cli() {
+     // before the match so the arms keep consuming `cli.command` by value.
+     match &cli.command {
+         Some(Command::Index { .. }) => reject_unsupported_discovery_flags(&cli, "index", true),
+-        Some(Command::Serve { .. }) => reject_unsupported_discovery_flags(&cli, "serve", false),
++        Some(Command::Serve { .. }) => reject_unsupported_discovery_flags(&cli, "serve", true),
+         _ => {}
+     }
+ 
+@@ -1164,6 +1164,7 @@ fn run_cli() {
+                     index_threads,
+                     no_ignore,
+                     no_require_git: cli.no_require_git,
++                    include_hidden: cli.hidden,
+                     // Same resolved value the search path uses, so the index
+                     // and the queries against it agree on what exists.
+                     max_file_size: max_filesize,
+diff --git a/tgrep-cli/src/serve.rs b/tgrep-cli/src/serve.rs
+index 8df0152..27091d7 100644
+--- a/tgrep-cli/src/serve.rs
++++ b/tgrep-cli/src/serve.rs
+@@ -582,6 +582,8 @@ struct ServerState {
+     /// startup metadata walk and the watcher's rescan, or those disagree about
+     /// which files belong in the index.
+     no_require_git: bool,
++    /// Index and watch hidden paths. Same consistency rule as `no_require_git`.
++    include_hidden: bool,
+     /// Size cap for indexable files, shared by the index build and the startup
+     /// metadata walk. They must agree: a file the index holds but the metadata
+     /// walk skips looks *deleted* to the stale check and is evicted.
+@@ -771,6 +773,9 @@ pub struct ServeOptions<'a> {
+     pub no_ignore: bool,
+     /// `--no-require-git`: respect `.gitignore` outside a git repository.
+     pub no_require_git: bool,
++    /// `--hidden`: index and watch hidden paths. Must match the walk and the
++    /// watcher skip rules, or hidden files go stale immediately.
++    pub include_hidden: bool,
+     /// `--max-filesize`: skip files larger than this when building and when
+     /// checking for stale files. `None` means no limit.
+     pub max_file_size: Option<u64>,
+@@ -790,6 +795,7 @@ pub fn run(root: &Path, index_path: Option<&Path>, options: ServeOptions<'_>) ->
+         index_threads,
+         no_ignore,
+         no_require_git,
++        include_hidden,
+         max_file_size,
+         auto_save_mutations,
+         watcher_queue_cap,
+@@ -812,6 +818,11 @@ pub fn run(root: &Path, index_path: Option<&Path>, options: ServeOptions<'_>) ->
+     if !has_index {
+         // Create an empty on-disk index so HybridIndex can open it.
+         create_empty_index(&index_dir)?;
++        tgrep_core::meta::IndexMeta::apply_discovery_flags(
++            &index_dir,
++            include_hidden,
++            no_require_git,
++        )?;
+         eprintln!("[trace] no existing index found, will build in background");
+     }
+ 
+@@ -822,6 +833,11 @@ pub fn run(root: &Path, index_path: Option<&Path>, options: ServeOptions<'_>) ->
+         Err(e) if has_index => {
+             eprintln!("[trace] existing index failed to load ({e}); rebuilding in background");
+             create_empty_index(&index_dir)?;
++            tgrep_core::meta::IndexMeta::apply_discovery_flags(
++                &index_dir,
++                include_hidden,
++                no_require_git,
++            )?;
+             needs_build = true;
+             HybridIndex::open(&index_dir, &root)?
+         }
+@@ -899,6 +915,7 @@ pub fn run(root: &Path, index_path: Option<&Path>, options: ServeOptions<'_>) ->
+         exclude_dirs: exclude_dirs.to_vec(),
+         no_ignore,
+         no_require_git,
++        include_hidden,
+         max_file_size,
+         index_dir: index_dir.clone(),
+         publish_lock: Mutex::new(()),
+@@ -2753,12 +2770,13 @@ fn run_stale_refresh_hook(state: &ServerState, phase: StaleRefreshPhase) {
+ ///
+ /// `rel_path` must be a forward-slash relative path (as produced by
+ /// `handle_fs_event`).
++#[cfg(test)]
+ fn should_skip_watcher_path(
+     rel_path: &str,
+     exclude_dirs: &[String],
+     gitignore: Option<&tgrep_core::gitignore::IgnoreMatcher>,
+ ) -> bool {
+-    should_skip_watcher_entry(rel_path, exclude_dirs, gitignore, false)
++    should_skip_watcher_entry(rel_path, exclude_dirs, gitignore, false, false)
+ }
+ 
+ /// [`should_skip_watcher_path`] for a path known to be a directory.
+@@ -2768,12 +2786,28 @@ fn should_skip_watcher_path(
+ /// entry it is looking at *is* the excluded directory. And the gitignore
+ /// matcher is told it is matching a directory, so a directory-only rule like
+ /// `build/` matches — as a file path, `build` does not.
++#[cfg(test)]
+ fn should_skip_watcher_dir(
+     rel_path: &str,
+     exclude_dirs: &[String],
+     gitignore: Option<&tgrep_core::gitignore::IgnoreMatcher>,
+ ) -> bool {
+-    should_skip_watcher_entry(rel_path, exclude_dirs, gitignore, true)
++    should_skip_watcher_entry(rel_path, exclude_dirs, gitignore, true, false)
++}
++
++fn should_skip_watched(
++    state: &ServerState,
++    rel_path: &str,
++    gitignore: Option<&tgrep_core::gitignore::IgnoreMatcher>,
++    is_dir: bool,
++) -> bool {
++    should_skip_watcher_entry(
++        rel_path,
++        &state.exclude_dirs,
++        gitignore,
++        is_dir,
++        state.include_hidden,
++    )
+ }
+ 
+ fn should_skip_watcher_entry(
+@@ -2781,6 +2815,7 @@ fn should_skip_watcher_entry(
+     exclude_dirs: &[String],
+     gitignore: Option<&tgrep_core::gitignore::IgnoreMatcher>,
+     is_dir: bool,
++    include_hidden: bool,
+ ) -> bool {
+     // Single streaming pass over path components — no Vec allocation
+     // on the hot watcher path. The hidden-component check applies to
+@@ -2793,7 +2828,12 @@ fn should_skip_watcher_entry(
+         .peekable();
+ 
+     while let Some(seg) = segments.next() {
+-        if seg.starts_with('.') {
++        if include_hidden {
++            // Hidden indexes still must not watch git object storage.
++            if seg == ".git" {
++                return true;
++            }
++        } else if seg.starts_with('.') {
+             return true;
+         }
+         // An ancestor is always a directory; the final segment is one only
+@@ -3217,6 +3257,7 @@ fn watchable_dirs(
+     start: &Path,
+     exclude_dirs: &[String],
+     gitignore: Option<&tgrep_core::gitignore::IgnoreMatcher>,
++    include_hidden: bool,
+ ) -> WatchableDirs {
+     let mut found = std::collections::HashSet::new();
+     let mut completeness = TraversalCompleteness::Complete;
+@@ -3248,7 +3289,7 @@ fn watchable_dirs(
+                 continue;
+             };
+             let rel = rel.to_string_lossy().replace('\\', "/");
+-            if should_skip_watcher_dir(&rel, exclude_dirs, gitignore) {
++            if should_skip_watcher_entry(&rel, exclude_dirs, gitignore, true, include_hidden) {
+                 continue;
+             }
+             stack.push(path.clone());
+@@ -3337,7 +3378,13 @@ fn sync_watch_registrations(state: &ServerState, root: &Path) -> (Vec<PathBuf>,
+     let start = Instant::now();
+     let mut desired = {
+         let gitignore = state.gitignore.read().unwrap();
+-        watchable_dirs(root, root, &state.exclude_dirs, gitignore.as_ref())
++        watchable_dirs(
++            root,
++            root,
++            &state.exclude_dirs,
++            gitignore.as_ref(),
++            state.include_hidden,
++        )
+     };
+     if !state.no_ignore {
+         let sources = state.ignore_sources.read().unwrap();
+@@ -3642,7 +3689,7 @@ fn reindex_files_in(state: &Arc<ServerState>, root: &Path, dirs: &[PathBuf], sin
+ 
+             let skip = {
+                 let gitignore = state.gitignore.read().unwrap();
+-                should_skip_watcher_path(&rel, &state.exclude_dirs, gitignore.as_ref())
++                should_skip_watched(state, &rel, gitignore.as_ref(), false)
+             };
+             if !skip {
+                 reindex_file(state, &path, &rel, false);
+@@ -3896,7 +3943,7 @@ fn watch_new_subtree(state: &Arc<ServerState>, root: &Path, dir: &Path) {
+     // applied to this path yet. Re-check before subscribing to it.
+     if !rel_dir.is_empty() {
+         let gitignore = state.gitignore.read().unwrap();
+-        if should_skip_watcher_dir(&rel_dir, &state.exclude_dirs, gitignore.as_ref()) {
++        if should_skip_watched(state, &rel_dir, gitignore.as_ref(), true) {
+             return;
+         }
+     }
+@@ -3990,7 +4037,7 @@ fn watch_new_subtree(state: &Arc<ServerState>, root: &Path, dir: &Path) {
+                 if file_type.is_dir() {
+                     let skip = {
+                         let gitignore = state.gitignore.read().unwrap();
+-                        should_skip_watcher_dir(&rel, &state.exclude_dirs, gitignore.as_ref())
++                        should_skip_watched(state, &rel, gitignore.as_ref(), true)
+                     };
+                     if !skip {
+                         next.push(path);
+@@ -3998,7 +4045,7 @@ fn watch_new_subtree(state: &Arc<ServerState>, root: &Path, dir: &Path) {
+                 } else if file_type.is_file() {
+                     let skip = {
+                         let gitignore = state.gitignore.read().unwrap();
+-                        should_skip_watcher_path(&rel, &state.exclude_dirs, gitignore.as_ref())
++                        should_skip_watched(state, &rel, gitignore.as_ref(), false)
+                     };
+                     if !skip {
+                         files.push((path, rel));
+@@ -4442,7 +4489,7 @@ fn handle_fs_event(state: &Arc<ServerState>, root: &Path, event: &Event) {
+         // `index.lock`/HEAD/refs writes during normal git operations.
+         let should_skip = {
+             let gitignore = state.gitignore.read().unwrap();
+-            should_skip_watcher_path(&rel_path, &state.exclude_dirs, gitignore.as_ref())
++            should_skip_watched(state, &rel_path, gitignore.as_ref(), false)
+         };
+         if should_skip {
+             continue;
+@@ -5989,6 +6036,13 @@ fn stream_merge_stale_changes(
+         }
+ 
+         builder::merge_index_with_delta(root, &staging_dir, &reader, &delta, &removed, true)?;
++        if let Ok(live) = tgrep_core::meta::IndexMeta::load(&state.index_dir) {
++            tgrep_core::meta::IndexMeta::apply_discovery_flags(
++                &staging_dir,
++                live.include_hidden,
++                live.no_require_git,
++            )?;
++        }
+         tgrep_core::meta::write_file_evidence(&published_evidence, &staging_dir)?;
+         let removed_reader_files = reader
+             .all_paths()
+@@ -6338,6 +6392,7 @@ fn refresh_stale_locked(
+             exclude_dirs: state.exclude_dirs.clone(),
+             no_ignore: state.no_ignore,
+             no_require_git: state.no_require_git,
++            include_hidden: state.include_hidden,
+             max_file_size: state.max_file_size,
+         },
+         ignorecase.clone(),
+@@ -6599,15 +6654,15 @@ fn bootstrap_index_build(state: &Arc<ServerState>, root: &Path, index_dir: &Path
+         root,
+         Some(index_dir),
+         &builder::BuildOptions {
+-            include_hidden: false,
++            include_hidden: state.include_hidden,
+             no_ignore: state.no_ignore,
+             no_require_git: state.no_require_git,
+             max_file_size: state.max_file_size,
+             exclude_dirs: state.exclude_dirs.clone(),
+             // Match the walk `background_index_build` would have run, and the
+-            // dot-prefix rule `should_skip_watcher_path` applies, so the
+-            // watcher can maintain every file this build indexes. Also makes
+-            // the walk hand back the .gitignore paths for the matcher below.
++            // watcher skip rules for hidden paths, so the watcher can maintain
++            // every file this build indexes. Also makes the walk hand back the
++            // .gitignore paths for the matcher below.
+             collect_gitignore_files: true,
+             strategy: builder::IndexStrategy::External,
+             buffer_bytes: builder::DEFAULT_INDEX_BUFFER_BYTES,
+@@ -6873,7 +6928,7 @@ fn background_index_build(state: &Arc<ServerState>, root: &Path, index_dir: &Pat
+     let walk = walker::walk_dir_with_ignorecase(
+         root,
+         &WalkOptions {
+-            include_hidden: false,
++            include_hidden: state.include_hidden,
+             no_ignore: state.no_ignore,
+             no_require_git: state.no_require_git,
+             max_file_size: state.max_file_size,
+@@ -7114,6 +7169,7 @@ fn background_index_build(state: &Arc<ServerState>, root: &Path, index_dir: &Pat
+             exclude_dirs: state.exclude_dirs.clone(),
+             no_ignore: state.no_ignore,
+             no_require_git: state.no_require_git,
++            include_hidden: state.include_hidden,
+             max_file_size: state.max_file_size,
+         },
+     );
+@@ -8458,6 +8514,7 @@ mod tests {
+             exclude_dirs: Vec::new(),
+             no_ignore: false,
+             no_require_git: false,
++            include_hidden: false,
+             max_file_size: None,
+             index_dir: index_dir.to_path_buf(),
+             publish_lock: Mutex::new(()),
+@@ -8846,6 +8903,46 @@ mod tests {
+         ));
+     }
+ 
++    #[test]
++    fn skip_watcher_path_keeps_hidden_when_index_included_them() {
++        let no_exclude: Vec<String> = Vec::new();
++        assert!(!should_skip_watcher_entry(
++            ".github/foo.yml",
++            &no_exclude,
++            None,
++            false,
++            true,
++        ));
++        assert!(!should_skip_watcher_entry(
++            ".env",
++            &no_exclude,
++            None,
++            false,
++            true,
++        ));
++        assert!(should_skip_watcher_entry(
++            ".git/objects/pack/foo",
++            &no_exclude,
++            None,
++            false,
++            true,
++        ));
++        assert!(should_skip_watcher_entry(
++            ".git/HEAD",
++            &no_exclude,
++            None,
++            false,
++            true,
++        ));
++        assert!(should_skip_watcher_entry(
++            ".github/foo.yml",
++            &no_exclude,
++            None,
++            false,
++            false,
++        ));
++    }
++
+     #[test]
+     fn skip_watcher_path_keeps_non_hidden_paths() {
+         let no_exclude: Vec<String> = Vec::new();
+@@ -9119,7 +9216,7 @@ mod tests {
+ 
+         let gi = tgrep_core::gitignore::build_matcher(root).expect("matcher should build");
+         let exclude = vec!["vendor".to_string()];
+-        let dirs = watchable_dirs(root, root, &exclude, Some(&gi));
++        let dirs = watchable_dirs(root, root, &exclude, Some(&gi), false);
+ 
+         let rel: std::collections::HashSet<String> = dirs
+             .dirs
+@@ -9165,7 +9262,7 @@ mod tests {
+         std::fs::create_dir_all(root.join("build/a")).unwrap();
+         std::fs::create_dir_all(root.join(".hidden")).unwrap();
+ 
+-        let dirs = watchable_dirs(root, root, &[], None);
++        let dirs = watchable_dirs(root, root, &[], None, false);
+         let rel: std::collections::HashSet<String> = dirs
+             .dirs
+             .iter()
+@@ -9198,7 +9295,7 @@ mod tests {
+         }
+ 
+         let gi = tgrep_core::gitignore::build_matcher(root).expect("matcher should build");
+-        let dirs = watchable_dirs(root, &root.join("src/fresh"), &[], Some(&gi));
++        let dirs = watchable_dirs(root, &root.join("src/fresh"), &[], Some(&gi), false);
+         let rel: std::collections::HashSet<String> = dirs
+             .dirs
+             .iter()
+diff --git a/tgrep-cli/src/serve/poll_tests.rs b/tgrep-cli/src/serve/poll_tests.rs
+index 8509276..56d8c40 100644
+--- a/tgrep-cli/src/serve/poll_tests.rs
++++ b/tgrep-cli/src/serve/poll_tests.rs
+@@ -104,6 +104,7 @@ impl Fixture {
+             &self.root,
+             &self.state.exclude_dirs,
+             matcher.as_ref(),
++            self.state.include_hidden,
+         )
+     }
+ }
+diff --git a/tgrep-core/src/walker.rs b/tgrep-core/src/walker.rs
+index 3ad2bc2..c971712 100644
+--- a/tgrep-core/src/walker.rs
++++ b/tgrep-core/src/walker.rs
+@@ -508,6 +508,8 @@ pub struct MetaWalkOptions {
+     /// stale-file detection compares a file set built under one rule against an
+     /// index built under the other, and every extra file looks new.
+     pub no_require_git: bool,
++    /// `--hidden`: include hidden paths. Same consistency rule as `no_require_git`.
++    pub include_hidden: bool,
+     /// Skip files larger than this. `None` means no limit.
+     ///
+     /// Must track [`WalkOptions::max_file_size`] for the same reason as
+@@ -527,6 +529,7 @@ impl Default for MetaWalkOptions {
+             exclude_dirs: Vec::new(),
+             no_ignore: false,
+             no_require_git: false,
++            include_hidden: false,
+             max_file_size: DEFAULT_MAX_FILE_SIZE,
+         }
+     }
+@@ -536,10 +539,11 @@ impl Default for MetaWalkOptions {
+ /// `.gitignore` / `.ignore` files encountered. No file content is read — this
+ /// is used for stale file detection on startup.
+ ///
+-/// Hidden entries are skipped, matching the indexing walk. Ignore files are
+-/// still found because every directory the walk descends into is probed
+-/// explicitly via [`crate::gitignore::ignore_files_in`], which also catches
+-/// ignore files that their own rules would have filtered out of the walk.
++/// Hidden entries are skipped unless [`MetaWalkOptions::include_hidden`] is
++/// set, matching the indexing walk. Ignore files are still found because
++/// every directory the walk descends into is probed explicitly via
++/// [`crate::gitignore::ignore_files_in`], which also catches ignore files
++/// that their own rules would have filtered out of the walk.
+ pub fn walk_file_metadata(root: &Path, opts: &MetaWalkOptions) -> MetaWalkResult {
+     let ignorecase = git_ignorecase_filter(root, opts.no_ignore, false, false, false);
+     walk_file_metadata_with_ignorecase(root, opts, ignorecase)
+@@ -568,7 +572,7 @@ pub fn walk_file_metadata_with_ignorecase(
+     let root = root.to_path_buf();
+ 
+     let walker = WalkBuilder::new(&root)
+-        .hidden(true)
++        .hidden(!opts.include_hidden)
+         .require_git(!opts.no_require_git)
+         .git_ignore(!no_ignore)
+         .git_global(!no_ignore)
+-- 
+2.53.0
+

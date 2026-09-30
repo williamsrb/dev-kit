@@ -312,6 +312,15 @@
       "installer": "uv",
       "package": "skillspector",
       "optional": true
+    },
+    {
+      "provides": [
+        "excalidraw-cli"
+      ],
+      "installer": "npm",
+      "package": "excalidraw-cli",
+      "optional": true,
+      "note": "draw-diagram. Same binary as github:ahmadawais/excalidraw-cli."
     }
   ],
   "skills": "@allowlist:skills.core",

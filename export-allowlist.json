@@ -20,7 +20,6 @@
     "history/",
     "deliverables/",
     "kb/worklog/",
-    "kb/calibration/",
     ".cache/",
     ".packages/",
     "tmp/",
@@ -149,7 +148,8 @@
       "token-efficiency-chat.mdc"
     ],
     "excluded": {
-      "graphify.mdc": "graphify skill is not exported"
+      "graphify.mdc": "graphify skill is not exported",
+      "AGENTS.md": "generated at install from manifest.json plus agents.d; do not export a snapshot"
     }
   },
   "kb": {
@@ -157,7 +157,9 @@
       "_shared/**",
       "validation/**",
       "implementation/**",
-      "offline-reference/scripts/**"
+      "offline-reference/scripts/**",
+      "calibration/classify-ticket-autonomy/How-to-calibrate-classify-ticket-autonomy.md",
+      "calibration/classify-ticket-autonomy/Calibration-runs-of-classify-ticket-autonomy-anonymized.md"
     ],
     "core_excludes": [
       "implementation/enonic-cli/**",
@@ -181,7 +183,10 @@
     "excluded": {
       "offline-reference/godot-2d/**": "personal",
       "offline-reference/godot-3d/**": "personal",
-      "worklog/**": "personal, already a hard exclude"
+      "worklog/**": "personal, already a hard exclude",
+      "calibration/classify-ticket-autonomy/Calibration-runs-of-classify-ticket-autonomy.md": "specific Jira keys; host-local run log",
+      "calibration/classify-ticket-autonomy/Corpus-precedents-for-classify-ticket-autonomy.md": "specific Jira keys; host-local precedent map",
+      "calibration/llm-index.md": "indexes the host-local corpus files"
     }
   },
   "bin": {
@@ -197,32 +202,32 @@
       "agentctl_skills.py",
       "backfill-claude-jsonl-ai-titles.py",
       "backup-claude-mcp.py",
+      "cursor-recolor-apply.sh",
+      "cursor-tgrep-rg-apply.py",
       "export-canvas-html",
       "export-codex-sessions-to-claude.py",
       "export-cursor-sessions-to-claude.py",
       "generate-agents-md.py",
       "gitlab-mcp",
+      "install-cursor-recolor.sh",
+      "install-cursor-tgrep-rg.sh",
       "merge-claude-config.py",
       "sync-bin-projections.sh",
       "sync-skill-projections.sh",
+      "tgrep-cursor-apply.py",
+      "tgrep-serve-pool.py",
       "verify-links.sh"
     ],
     "excluded": {
       "actionlint": "vendored binary, gitignored",
       "claude-personal": "hardcodes this host's Claude Personal config dir; kit profile create is the reusable form",
       "claude-work": "hardcodes this host's work Claude config dir; kit wrappers are vendor-<profile>",
-      "cursor-recolor-apply.sh": "optional host pack; mutates /usr/share/cursor; profile forks recolor via install.py",
-      "cursor-tgrep-rg-apply.py": "optional host pack; mutates stock Cursor ripgrep",
       "docker-prune-keep-home-volumes.py": "hardcodes /home/volumes; machine layout, not harness",
       "fix-claude-desktop-personal-perms.sh": "companion to the Personal desktop fork; kit appfork owns profile dest trees",
-      "install-cursor-recolor.sh": "optional host pack; apt hook for stock Cursor recolor",
-      "install-cursor-tgrep-rg.sh": "optional host pack; apt hook; pkexec path is host-specific",
       "recolor-white-black-icons.sh": "generalized into install.py",
       "review-auth": "reads the harness .auth/<user>.passwd; client credential flow",
       "scheduled-push-branches.py": "one-shot client cron; hardcodes acme-group keys",
-      "sync-claude-desktop-personal.py": "Personal desktop fork worker; kit appfork rebuilds per-profile GUI forks",
-      "tgrep-cursor-apply.py": "optional host pack; needs a local tgrep checkout",
-      "tgrep-serve-pool.py": "optional host pack; needs patched tgrep on PATH"
+      "sync-claude-desktop-personal.py": "Personal desktop fork worker; kit appfork rebuilds per-profile GUI forks"
     }
   },
   "hooks": {
@@ -247,6 +252,7 @@
     "core": [
       "README.md",
       "catalog.json",
+      "env.example",
       "install.py",
       "playwright.py",
       "test_playwright.py",
@@ -254,7 +260,6 @@
       "image-to-disk/server.py"
     ],
     "excluded": {
-      "env.example": "contains a client GitLab host; catalog and README already list the keys",
       "graft": "removed from catalog 2026-09-27; directory is .cache, do not re-admit"
     }
   },
@@ -269,6 +274,11 @@
   "agents": {
     "core": [
       "**"
+    ]
+  },
+  "vendor": {
+    "core": [
+      "tgrep-cursor"
     ]
   }
 }

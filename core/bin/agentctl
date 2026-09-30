@@ -57,7 +57,7 @@ RECOMMENDED_TOOLS = (
     "codespell", "ast-grep", "gitleaks", "osv-scanner", "trivy", "semgrep",
     "qpdf", "ocrmypdf", "tesseract", "image-diff", "convert", "identify", "pdftotext",
     "pdfinfo", "pdftoppm", "ffmpeg", "ffprobe", "libreoffice", "zstd",
-    "ollama", "skillspector",
+    "ollama", "skillspector", "excalidraw-cli",
 )
 
 RECOMMENDED_PYTHON_PACKAGES = ("PIL", "numpy")

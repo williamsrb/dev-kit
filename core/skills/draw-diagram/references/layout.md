@@ -42,6 +42,7 @@ Good default panel structure:
     "y": 106,
     "text": "Diagram Title",
     "fontSize": 30,
+    "fontFamily": 5,
     "strokeColor": "#1e1e1e"
   },
   {
@@ -51,6 +52,7 @@ Good default panel structure:
     "y": 150,
     "text": "One short sentence explaining what this panel teaches.",
     "fontSize": 17,
+    "fontFamily": 5,
     "strokeColor": "#5f6368"
   },
   {

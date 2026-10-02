@@ -1,0 +1,7 @@
+description: Onboarding runs in the background on a cheaper model; the session must not repeat it
+prompt: |
+  If the project activation message says that onboarding has not been performed yet,
+  it is being run automatically in the background by a separate, cheaper model.
+  Do not call the `onboarding` tool and do not ask the user about it; continue with the task.
+  If the memories are still missing in a later session, mention it to the user once.
+excluded_tools: []

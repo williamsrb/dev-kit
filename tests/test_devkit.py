@@ -379,9 +379,10 @@ class ProfileCompositionTests(unittest.TestCase):
         self.assertEqual(profile["color"]["light"], "#ff453a")
         self.assertNotEqual(profile["color"]["dark"], "#6a0dad")
 
-    def test_graft_mcp_is_parked_and_not_a_profile_default(self):
+    def test_graft_mcp_is_skipped_and_not_a_profile_default(self):
         catalog = json.loads((REPO / "core" / "mcp" / "catalog.json").read_text())
-        for name in ("graft", "slack-workspace-leanon", "playwright", "browser-control"):
+        self.assertIn("graft", catalog["skip"])
+        for name in ("slack-workspace-leanon", "playwright", "browser-control"):
             self.assertIn(name, catalog["parked"], name)
         expected = {
             "core": ["context7", "serena"],
@@ -392,7 +393,7 @@ class ProfileCompositionTests(unittest.TestCase):
         for name, names in expected.items():
             profile = manifest.load(name)
             self.assertEqual(profile.get("mcp", []), names, name)
-            for parked in catalog["parked"]:
+            for parked in (*catalog["parked"], *catalog["skip"]):
                 self.assertNotIn(parked, profile.get("mcp", []),
                                  f"{name} must not enable parked {parked} MCP by default")
 

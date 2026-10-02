@@ -128,7 +128,8 @@
     },
     "serena": {
       "transport": "stdio",
-      "command": "${HOME}/.local/bin/serena",
+      "command": "${HOME}/.agents/bin/serena-mcp",
+      "comment": "Wrapper adds the top source languages (agentctl code languages) to .serena/project.yml, then execs ${HOME}/.local/bin/serena.",
       "args": [
         "start-mcp-server",
         "--project-from-cwd",

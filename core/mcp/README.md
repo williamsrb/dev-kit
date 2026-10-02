@@ -42,6 +42,38 @@ Default `register` **skips** a vendor that already has the server. Use
 `register` also **skips parked** catalog names unless `--force`. Do not
 `--force` register the Playwright stub; it has no live port.
 
+## Serena language selection
+
+`serena` runs through `bin/serena-mcp` on all three vendors. Serena has no
+global language setting, so the wrapper runs `agentctl code languages` (top 3
+source languages, plain text, documents, data and binaries excluded), adds any
+missing ones to the project's `.serena/project.yml`, then execs `serena`. It
+never removes a language already listed. Markdown always goes last in the list,
+so it is never first. `SERENA_MCP_AUTO_LANGUAGES=0` skips detection. Changes
+apply on the next server start.
+
+Onboarding: a project with no Serena memories and no earlier attempt gets one
+detached `claude -p --model claude-sonnet-5-5 --max-budget-usd 1.00` run (Serena
+tools plus read-only `Read`/`Glob`/`Grep`, no project writes), so the session's
+own model is never used. The attempt is recorded in
+`~/.serena/onboarding/<id>.json` with a `.log` beside it; a failure is not
+retried automatically, delete the `.json` to retry. The wrapper also passes
+`--add-mode mcp/serena/auto-onboard.yml` so the session agent does not repeat
+it. `SERENA_MCP_AUTO_ONBOARD=0` disables both; `SERENA_MCP_ONBOARD_MODEL` and
+`SERENA_MCP_ONBOARD_BUDGET_USD` override the model and cap.
+
+Orphans: before each server start the wrapper runs `agentctl code orphans --kill
+--fix-state`. It stops a `serena start-mcp-server` whose client is gone
+(re-parented to init) and language servers with no live Serena above them, and
+marks onboarding states stuck at `starting` or `running` with a dead worker as
+`failed`. Serena is exec'd with `SERENA_MCP_SERVER=1`, which every process it
+starts inherits; only that marker or Serena's own install paths count as
+ownership, so an editor's pyright or tsserver is never touched, and marked
+processes that are not Serena or a known language server are reported but not
+killed. A process whose stdin pipe, or the peer of its stdin socket, is still
+held by a live process is never killed either. Run `agentctl code orphans` for a
+report-only check. `SERENA_MCP_REAP_ORPHANS=0` disables the cleanup.
+
 ## Secrets
 
 This directory has **no tokens**. Register reads:

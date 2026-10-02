@@ -1,6 +1,13 @@
 ---
 name: draw-diagram
-description: "Create polished Excalidraw diagrams from text descriptions. Use when the user asks for a diagram, flowchart, architecture diagram, decision tree, process flow, data flow, system overview, or similar visual explanation, or says \"draw this\", \"diagram this\", \"visualize this\", or \"make a chart\". Produces styled `.excalidraw` files with consistent colors and can export a shareable excalidraw.com URL. | recommendedRole: follow | aliases: excalidraw, excalidraw-diagrams, flowchart-diagram, architecture-diagram."
+description: >-
+  Create polished Excalidraw diagrams from text descriptions: a .excalidraw file,
+  a PNG preview, and an optional excalidraw.com URL. Use when the user wants a
+  static editable drawing, flowchart, architecture diagram, decision tree,
+  process or data flow, or says draw this, diagram this, or make a chart. Not
+  for README, git docs, or a static diagram in Markdown (write Mermaid in the
+  doc). Not for an interactive HTML viewer, pan/zoom page, or presentation
+  deck (use archify). User naming this skill wins.
 metadata:
   recommendedRole: follow
   aliases: excalidraw, excalidraw-diagrams, flowchart-diagram, architecture-diagram
@@ -13,6 +20,18 @@ metadata:
 # Excalidraw Diagrams
 
 Use `excalidraw-cli` to turn structured diagram plans into `.excalidraw` files. The published CLI accepts Excalidraw JSON elements, not a custom DSL, so any shorthand notation is only for planning. The executable artifact is always a JSON elements file plus the generated `.excalidraw`.
+
+## Wrong artifact?
+
+Decide the sink before writing elements. User naming this skill
+wins; do not bounce a second time.
+
+- README, docs, PR, or "add diagrams to the docs" → stop. Write
+  Mermaid in the Markdown. Do not emit Excalidraw.
+- Interactive HTML viewer, pan/zoom page, or presentation deck →
+  stop. Read and follow `archify`.
+- Static editable Excalidraw/PNG the operator will keep editing →
+  continue below.
 
 Load this file first, then only the matching references. Do not preload later files.
 
@@ -33,10 +52,9 @@ Load this file first, then only the matching references. Do not preload later fi
 
 ## Triggering
 
-Use this skill when the user wants:
-- A flowchart, architecture diagram, decision tree, data flow, or process map
-- A system or workflow visualized instead of explained in prose
-- A polished Excalidraw artifact they can keep editing
+Use this skill when the user wants a polished Excalidraw artifact
+they can keep editing (flowchart, architecture, decision tree, data
+or process map). See Wrong artifact? before generating.
 
 ## Working Model
 
@@ -47,7 +65,13 @@ Use this skill when the user wants:
    - `{Decision?}` = diamond
    - `[[Store]]` = storage/data node
    - `->`, `-->`, `-> "label" ->` = connectors
-3. Translate that plan into Excalidraw JSON elements in an `elements.json` file. Read [references/elements.md](references/elements.md) for the JSON pattern and bindings. Read [references/styling.md](references/styling.md) for the palette.
+3. Translate that plan into Excalidraw JSON elements in an
+   `elements.json` file. Read
+   [references/elements.md](references/elements.md) for the JSON
+   pattern and bindings. Read
+   [references/styling.md](references/styling.md) for the palette.
+   Put `"fontFamily": 5` (Excalifont) on every `text` and `label`;
+   the CLI otherwise writes `1` (Virgil).
 4. For multiple diagrams, charts, or visual explanations, read [references/layout.md](references/layout.md) and use that container-grid canvas unless the user specifies a different layout.
    - Present multiple charts in one combined editable Excalidraw canvas unless the user asks for separate files.
    - If separate chart files are useful or already created, also create a single combined `.excalidraw` canvas that contains all charts.

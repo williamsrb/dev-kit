@@ -12,7 +12,7 @@ prose: caveman-lite
 
 Heavy groups live in `bin/agentctl_<name>.py`. `bin/agentctl` only registers them. Shared `emit` / `run` / markdown helpers live in `bin/agentctl_common.py` so groups never import `bin/agentctl` (cycle).
 
-Existing siblings: `plan`, `image` (also evidence), `security`, `skills`, `docs` (also local), `kb`, `jira`.
+Existing siblings: `plan`, `image` (also evidence), `security`, `skills`, `docs` (also local), `kb`, `jira`, `code`.
 
 ## Procedure
 

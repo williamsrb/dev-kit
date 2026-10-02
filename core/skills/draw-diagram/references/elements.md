@@ -11,6 +11,8 @@
   - Left edge: `[0, 0.5]`
   - Top edge: `[0.5, 0]`
   - Bottom edge: `[0.5, 1]`
+- Put `"fontFamily": 5` (Excalifont) on every `text` element and
+  every `label`. Omitting it makes the CLI write `1` (Virgil).
 - Use top-to-bottom layouts for flows and left-to-right layouts for architecture unless the user signals otherwise.
 
 ## Minimal JSON Pattern
@@ -29,7 +31,7 @@ Use this as a starting point and expand it to match the request:
     "height": 90,
     "backgroundColor": "#a5d8ff",
     "fillStyle": "solid",
-    "label": { "text": "Start" },
+    "label": { "text": "Start", "fontFamily": 5 },
     "boundElements": [{ "id": "a1", "type": "arrow" }]
   },
   {
@@ -43,7 +45,7 @@ Use this as a starting point and expand it to match the request:
     "endArrowhead": "arrow",
     "startBinding": { "elementId": "start", "fixedPoint": [0.5, 1] },
     "endBinding": { "elementId": "step", "fixedPoint": [0.5, 0] },
-    "label": { "text": "continue" }
+    "label": { "text": "continue", "fontFamily": 5 }
   },
   {
     "type": "rectangle",
@@ -54,7 +56,7 @@ Use this as a starting point and expand it to match the request:
     "height": 90,
     "backgroundColor": "#b2f2bb",
     "fillStyle": "hachure",
-    "label": { "text": "Process step" },
+    "label": { "text": "Process step", "fontFamily": 5 },
     "boundElements": [{ "id": "a1", "type": "arrow" }]
   }
 ]

@@ -17,7 +17,7 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-EXCALIDRAW = "https://esm.sh/@excalidraw/excalidraw@0.17.6"
+EXCALIDRAW = "https://esm.sh/@excalidraw/excalidraw@0.18.1"
 
 PAGE = """<!doctype html>
 <html><head><meta charset="utf-8"><style>body{margin:0;background:#fff}#out svg{display:block}</style></head>
@@ -25,7 +25,7 @@ PAGE = """<!doctype html>
 <script type="module">
 const scene = __SCENE__;
 try {
-  window.EXCALIDRAW_ASSET_PATH = "__EXCALIDRAW__/dist/";
+  window.EXCALIDRAW_ASSET_PATH = "__EXCALIDRAW__/dist/prod/";
   const mod = await import("__EXCALIDRAW__");
   const { exportToSvg, restoreElements } = mod.default || mod;
   const elements = restoreElements(scene.elements, null, { refreshDimensions: true, repairBindings: true });

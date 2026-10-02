@@ -60,7 +60,8 @@ Build `issue key → evidence` using strongest signals first:
 
 1. explicit key in branch or commit
 2. explicit key in a prompt, result, Slack message, or Jira URL
-3. the user's Jira comment or same-day worklog
+3. the user's Jira comment or same-day worklog whose `author.accountId`
+   matches `agentctl jira myself`
 4. substantive issue-specific Slack discussion
 5. a status transition made by the user
 6. assignment plus matching project evidence
@@ -82,8 +83,14 @@ Mark low-confidence fallback mappings for confirmation.
 ## Time rules
 
 - Use UTC-3 for all target-day boundaries.
-- Subtract time already logged for that date before drafting new entries.
-- If requested hours are fully logged, draft nothing unless replacement was asked.
+- **Already logged** is only worklogs whose `author.accountId` equals the
+  account from `agentctl jira myself`. Subtract that time before drafting.
+- Ignore Tempo-app and other-author worklogs, including *Timesheets by Tempo*
+  (`557058:295406f3-a1fc-4733-b906-dd15d021bd79`) and generic `time-tracking`
+  comments. Do not subtract them, do not list them under Already logged or
+  Warnings, and do not ask whether they are the user's.
+- If requested hours are fully logged under that accountId filter, draft
+  nothing unless replacement was asked.
 - Split remaining time proportionally to evidence strength.
 - Round every draft to a multiple of 15 minutes. 15m is the floor: never
   draft a shorter entry, and merge or drop a stream that cannot justify it.
@@ -112,15 +119,17 @@ Jira: https://example.atlassian.net/browse/ISSUE-KEY
 
 Always return all sections in this order:
 
-1. **Already logged (Jira)** — issue, duration, comment snippet, and worklog ID
-   when available; otherwise state that none were found.
+1. **Already logged (Jira)** — only accountId-matched entries: issue, duration,
+   comment snippet, and worklog ID. If none match, state that none were found.
+   Do not mention Tempo-app or other-author rows.
 2. **Summary** — issue, draft time, already logged time, confidence, and offline
    task availability.
 3. **Evidence by work stream** — evidence grouped by issue or unmatched bucket,
    with each source and Slack workspace identified.
 4. **Worklog blocks** — one copy-paste-ready block per issue still needing time.
-5. **Warnings** — failures, skipped workspaces, duplicate risk, weak mappings,
-   unmatched activity, missing/stale offline tasks, and partial pagination.
+5. **Warnings** — failures, skipped workspaces, weak mappings, unmatched
+   activity, missing/stale offline tasks, and partial pagination. Duplicate
+   risk only for accountId-matched worklogs that would collide with a draft.
 6. **Evidence appendix** — counts and success/failure status for every collector,
    including per-workspace Slack counts.
 

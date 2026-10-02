@@ -2,12 +2,14 @@
 # Chooser rows end in llm-index.md — open that folder index, not sibling files.
 
 How-to-add-a-head-tag-from-a-react4xp-part.md	828	head-tag		add head tag react4xp part add-head head-tag tag-react4xp react4xp-part touching page controller part-touching touching-page page-controller
-How-to-add-an-agentctl-command-group.md	442	agentctl-command	run-plan plan-implementation	add agentctl command group add-agentctl agentctl-command command-group
+How-to-add-an-agent-task-to-extractkit.md	868	agent-task	run-plan plan-implementation	add agent task extractkit add-agent agent-task task-extractkit agent-tasks prompt registry extract-agentic business
+How-to-add-an-agentctl-command-group.md	444	agentctl-command	run-plan plan-implementation	add agentctl command group add-agentctl agentctl-command command-group
 How-to-add-an-editor-facing-input-to-an-xp7-schema.md	1096	editor-facing	run-plan plan-implementation validate-impl	add editor facing input xp7 schema add-editor editor-facing facing-input input-xp7 xp7-schema input-schema
+How-to-add-an-optional-slot-to-extractkit.md	650	optional-slot	run-plan plan-implementation	add optional slot extractkit add-optional optional-slot slot-extractkit pipeline optional-pipeline pipeline-slot
 How-to-add-application-level-caching-in-enonic-xp7.md	2672	application-level		add application level caching enonic xp7 add-application application-level level-caching caching-enonic enonic-xp7 site lookup third party page renders mappings enonic-site site-lookup lookup-third third-party party-page page-renders
 How-to-align-NIFS-matches-and-table-form-endpoints.md	546	align-nifs		align nifs matches table form endpoints align-nifs nifs-matches matches-table table-form form-endpoints ntb endpoints-ntb
-How-to-apply-skill-portfolio-redesign.md	338	apply-skill		apply skill portfolio redesign apply-skill skill-portfolio portfolio-redesign phases redesign-phases
-How-to-apply-tgrep-cursor-patches.md	481	apply-tgrep	run-plan	apply tgrep cursor patches apply-tgrep tgrep-cursor cursor-patches
+How-to-apply-skill-portfolio-redesign.md	339	apply-skill		apply skill portfolio redesign apply-skill skill-portfolio portfolio-redesign phases redesign-phases
+How-to-apply-tgrep-cursor-patches.md	494	apply-tgrep	run-plan	apply tgrep cursor patches apply-tgrep tgrep-cursor cursor-patches
 How-to-avoid-xp8-runtime-traps-in-migrated-js-controllers.md	1477	avoid-xp8	upgrade-xp-app run-plan	avoid xp8 runtime traps migrated js controllers avoid-xp8 xp8-runtime runtime-traps traps-migrated migrated-js js-controllers avoid-runtime migrated-controllers
 How-to-backfill-claude-jsonl-ai-titles.md	402	backfill-claude	run-plan	backfill claude jsonl ai titles backfill-claude claude-jsonl jsonl-ai ai-titles title cursor import jsonl-title title-cursor cursor-import
 How-to-build-an-xp8-admin-tool-over-the-server-app-api.md	2182	build-xp8	run-plan	build xp8 admin tool over server app api build-xp8 xp8-admin admin-tool tool-over over-server server-app app-api build-admin
@@ -29,10 +31,10 @@ How-to-fork-devkit-profile-desktop-apps.md	1019	fork-devkit	run-plan	fork devkit
 How-to-give-an-argparse-cli-the-bare-equals-help-contract.md	543	give-argparse	run-plan plan-implementation	give argparse cli bare equals help contract give-argparse argparse-cli cli-bare bare-equals equals-help help-contract
 How-to-handle-implicit-requirements-examples.md	554	implicit-requirements	plan-implementation validate-plan run-plan validate-impl	handle implicit requirements examples handle-implicit implicit-requirements requirements-examples jot 270 review extras called bugs jot-270 270-review review-extras extras-called called-bugs
 How-to-handle-implicit-requirements.md	1767	implicit-requirements	plan-implementation validate-plan run-plan validate-impl	handle implicit requirements handle-implicit implicit-requirements
-How-to-install-cursor-tgrep-rg-hook.md	674	install-cursor	run-plan	install cursor tgrep rg hook install-cursor cursor-tgrep tgrep-rg rg-hook tgrep-hook
+How-to-install-cursor-tgrep-rg-hook.md	672	install-cursor	run-plan	install cursor tgrep rg hook install-cursor cursor-tgrep tgrep-rg rg-hook tgrep-hook
 How-to-inventory-xp7-descriptors-from-disk.md	389	inventory-xp7	run-plan plan-implementation develop-xp7-backend	inventory xp7 descriptors disk inventory-xp7 xp7-descriptors descriptors-disk
 How-to-isolate-harness-tests-from-the-host-home.md	592	isolate-harness	validate-impl run-plan	isolate harness tests host home isolate-harness harness-tests tests-host host-home
-How-to-keep-harness-git-lean.md	1159	keep-harness	run-plan	keep harness git lean keep-harness harness-git git-lean
+How-to-keep-harness-git-lean.md	1175	keep-harness	run-plan	keep harness git lean keep-harness harness-git git-lean
 How-to-keep-harness-scripts-in-bin-and-bin-vendor.md	574	keep-harness		keep harness scripts bin vendor keep-harness harness-scripts scripts-bin bin-bin bin-vendor
 How-to-make-a-hand-maintained-instruction-file-generated.md	871	make-hand	run-plan plan-implementation	make hand maintained instruction file generated make-hand hand-maintained maintained-instruction instruction-file file-generated
 How-to-mirror-a-devkit-core-change-into-the-harness.md	504	mirror-devkit	run-plan validate-impl	mirror devkit core change harness mirror-devkit devkit-core core-change change-harness
@@ -42,9 +44,10 @@ How-to-optimize-agent-token-usage.md	1336	optimize-agent		optimize agent token u
 How-to-parameterize-client-identifiers-out-of-a-core-skill.md	774	parameterize-client	run-plan plan-implementation validate-impl	parameterize client identifiers out core skill parameterize-client client-identifiers identifiers-out out-core core-skill
 How-to-pick-and-verify-font-preloads-before-deploy.md	1253	pick-font		pick verify font preloads before deploy pick-verify verify-font font-preloads preloads-before before-deploy
 How-to-port-xp8-admin-tool-app-to-xp7-13.md	666	port-xp8	run-plan	port xp8 admin tool app xp7 13 port-xp8 xp8-admin admin-tool tool-app app-xp7 xp7-13 down port-admin app-down
+How-to-refuse-overwriting-files-git-cannot-restore.md	493	refuse-overwriting	run-plan plan-implementation	refuse overwriting files git cannot restore refuse-overwriting overwriting-files files-git git-cannot cannot-restore overwrite refuse-overwrite overwrite-files
 How-to-render-jira-payloads-to-prd-markdown.md	955	render-jira	download-jira-task run-plan	render jira payloads prd markdown render-jira jira-payloads payloads-prd prd-markdown
 How-to-resolve-task-context.md	2194	task-context	validate-plan validate-impl plan-implementation run-plan download-jira-task plan-task-evidence handoff multitask-same-repo lint-and-draft-commit-message draft-commit-message	resolve task context resolve-task task-context
-How-to-route-cursor-skills.md	1509	route-cursor		route cursor skills route-cursor cursor-skills skill routing cheat sheet skill-routing routing-cheat cheat-sheet
+How-to-route-cursor-skills.md	1511	route-cursor		route cursor skills route-cursor cursor-skills skill routing cheat sheet skill-routing routing-cheat cheat-sheet
 How-to-run-the-tgrep-serve-pool.md	395	tgrep-serve	run-plan	run tgrep serve pool run-tgrep tgrep-serve serve-pool
 How-to-run-xp8migrator.md	602	xp8migrator	upgrade-xp-app	run xp8migrator run-xp8migrator finish app upgrade xp8migrator-finish finish-app app-upgrade
 How-to-scaffold-a-pnpm-typescript-monorepo.md	1005	scaffold-pnpm		scaffold pnpm typescript monorepo scaffold-pnpm pnpm-typescript typescript-monorepo scaffolding shells out agent clis scaffolding-pnpm monorepo-shells shells-out out-agent agent-clis

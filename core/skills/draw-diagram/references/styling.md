@@ -9,7 +9,14 @@ Every diagram should look intentional. Apply a consistent palette unless the use
 - Storage/external systems/alternate path: `#d0bfff`
 
 Use these heuristics:
+
 - Action steps: `fillStyle: "hachure"`
 - States and outcomes: `fillStyle: "solid"`
 - Error or debug paths: dashed arrows or stronger red/pink accents
-- Keep rounded, hand-drawn defaults unless the user asks for a rigid style
+- Keep rounded, hand-drawn defaults unless the user asks for a rigid
+  style
+
+Text is **Excalifont**. Set `"fontFamily": 5` on every standalone
+`text` element and every `label`. The CLI defaults omitted
+`fontFamily` to `1` (Virgil). Other ids: `1` Virgil, `2` Helvetica,
+`3` Cascadia, `5` Excalifont.

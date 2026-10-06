@@ -13,6 +13,7 @@ import random
 import re
 import shutil
 import subprocess
+import tempfile
 from pathlib import Path
 
 from . import appfork
@@ -23,6 +24,11 @@ from .errors import DevkitError
 PROFILE_EMBLEM = REPO_ROOT / "templates" / "icons" / "profile-emblem.png"
 # Installed copy for the root appfork worker (see appfork.install_hook).
 PROFILE_EMBLEM_INSTALLED = Path("/usr/lib/devkit/profile-emblem.png")
+
+# Sizes the working vendor launchers ship under /usr/share/icons/hicolor,
+# plus 512. GTK looks up Icon=name in these folders; a 1024px PNG sitting in
+# 512x512/ is not a theme hit, and a stale icon-theme.cache hides new names.
+ICON_THEME_SIZES: tuple[int, ...] = (16, 32, 48, 128, 256, 512)
 
 # Default badge colours: vivid on black. Create may pick any unique colour;
 # this list is only the random pool when --color / type colour is absent.
@@ -375,6 +381,64 @@ def recolor_icon(source: Path, dest: Path, color: str) -> bool:
     if result.returncode != 0 or not dest.is_file():
         return False
     dest.chmod(FILE_MODE)
+    return True
+
+
+def hicolor_root(home: Path) -> Path:
+    return home / ".local" / "share" / "icons" / "hicolor"
+
+
+def install_launcher_icons(source: Path, dest_512: Path, color: str) -> bool:
+    """Badge `source` and write a matching-pixel copy into each hicolor size.
+
+    `dest_512` is the existing 512x512 layout path; other sizes share its stem.
+    """
+    binary = imagemagick()
+    if binary is None:
+        return False
+    fd, raw = tempfile.mkstemp(suffix=".png")
+    os.close(fd)
+    tmp = Path(raw)
+    try:
+        if not recolor_icon(source, tmp, color):
+            return False
+        stem = dest_512.stem
+        root = dest_512.parent.parent.parent
+        wrote = True
+        for size in ICON_THEME_SIZES:
+            dest = root / f"{size}x{size}" / "apps" / f"{stem}.png"
+            ensure_dir(dest.parent)
+            result = subprocess.run(
+                [*binary, str(tmp), "-resize", f"{size}x{size}", str(dest)],
+                capture_output=True, text=True, check=False,
+            )
+            if result.returncode != 0 or not dest.is_file():
+                wrote = False
+                continue
+            dest.chmod(FILE_MODE)
+        return wrote
+    finally:
+        tmp.unlink(missing_ok=True)
+
+
+def refresh_hicolor_cache(home: Path) -> bool:
+    """Rebuild ~/.local/share/icons/hicolor/icon-theme.cache so GTK sees new names."""
+    root = hicolor_root(home)
+    if not root.is_dir():
+        return False
+    binary = (shutil.which("gtk-update-icon-cache")
+              or shutil.which("gtk4-update-icon-cache"))
+    if binary is None:
+        return False
+    result = subprocess.run(
+        [binary, "--force", "--ignore-theme-index", str(root)],
+        capture_output=True, text=True, check=False,
+    )
+    if result.returncode != 0:
+        return False
+    cache = root / "icon-theme.cache"
+    if cache.is_file():
+        cache.chmod(FILE_MODE)
     return True
 
 

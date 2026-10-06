@@ -323,7 +323,6 @@ collect_profiles() {
       esac
       wrapper="$HOME/.local/bin/${vendor}-${name}"
       desktop="$HOME/.local/share/applications/${app}-${name}.desktop"
-      icon="$HOME/.local/share/icons/hicolor/512x512/apps/${vendor}-${name}.png"
       data="$HOME/.config/${app}-${name}"
       remove_file "$wrapper"
       if [[ -f "$desktop" ]]; then
@@ -331,7 +330,9 @@ collect_profiles() {
         user_data_from_desktop "$desktop"
       fi
       remove_file "$desktop"
-      remove_file "$icon"
+      for icon in "$HOME/.local/share/icons/hicolor/"*/apps/"${vendor}-${name}.png"; do
+        remove_file "$icon"
+      done
       remove_dir "$data"
     done
   done

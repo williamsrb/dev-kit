@@ -12,7 +12,16 @@ import os
 import sys
 from pathlib import Path
 
-from . import appfork, auth, globalignore, instances, manifest, mcp, privilege, uninstaller
+from . import (
+    appfork,
+    auth,
+    globalignore,
+    instances,
+    manifest,
+    mcp,
+    privilege,
+    uninstaller,
+)
 from .common import (
     EXEC_MODE,
     FILE_MODE,
@@ -127,6 +136,7 @@ def materialize(profile: dict, vendors: list[str] | None, home: Path,
 
     _bind_profile_runtime(plan, profile, home, core_root, force, root)
 
+    wrote_desktop = False
     for instance in _instance_vendors(profile, vendors):
         vendor = instance["vendor"]
         layout = instances.paths_for(profile["name"], vendor, home)
@@ -149,8 +159,10 @@ def materialize(profile: dict, vendors: list[str] | None, home: Path,
 
         _write_vendor_config(plan, vendor, profile, layout, tokens, force, root)
         _write_wrapper(plan, vendor, layout, tokens, force, root)
-        if "desktop" in instance.get("kind", ""):
-            _write_desktop(plan, vendor, profile, layout, tokens, force, root)
+        if ("desktop" in instance.get("kind", "")
+                and _write_desktop(plan, vendor, profile, layout, tokens,
+                                 force, root)):
+            wrote_desktop = True
 
         prov = instances.provenance(profile, vendor, home, kit, commit)
         existing = instances.read_provenance(layout["config_dir"])
@@ -165,6 +177,11 @@ def materialize(profile: dict, vendors: list[str] | None, home: Path,
                 write_json(target, prov)
 
     auth.install_dispatchers(plan, home, kit_root=root)
+    if wrote_desktop:
+        plan.record(f"icon-cache {relative_to_home(instances.hicolor_root(home))}")
+        if plan.apply and not instances.refresh_hicolor_cache(home):
+            print("  note: gtk-update-icon-cache failed or is missing; "
+                  "GNOME may not show launcher icons until the cache is rebuilt")
 
 
 def _write_vendor_config(plan: Plan, vendor: str, profile: dict, layout: dict,
@@ -394,26 +411,29 @@ def _link_profile_cli(plan: Plan, vendor: str, layout: dict) -> None:
 
 
 def _write_desktop(plan: Plan, vendor: str, profile: dict, layout: dict,
-                   tokens: dict, force: bool, root: Path) -> None:
+                   tokens: dict, force: bool, root: Path) -> bool:
     if not instances.first_existing(instances.VENDOR_GUI_CANDIDATES.get(vendor, [])):
         plan.record(f"skip   desktop {vendor} (GUI not installed)")
-        return
+        return False
     template = root / "templates" / "desktop" / f"{vendor}.desktop"
     if not template.is_file():
-        return
+        return False
     rendered = instances.render(template.read_text(encoding="utf-8"), tokens)
     _write(plan, layout["desktop"], rendered, force,
            label=relative_to_home(layout["desktop"]))
 
     light, _dark = instances.profile_colors(profile)
     source_icon = _find_vendor_icon(vendor)
-    if source_icon:
-        plan.record(f"icon   {relative_to_home(layout['icon'])} (badge {light})")
-        if plan.apply:
-            if not instances.recolor_icon(source_icon, layout["icon"], light):
-                print(f"  note: could not badge {vendor} icon "
-                      f"(ImageMagick or emblem missing?); "
-                      f"the launcher falls back to the stock icon")
+    if not source_icon:
+        return False
+    sizes = "/".join(str(s) for s in instances.ICON_THEME_SIZES)
+    plan.record(f"icon   hicolor {sizes} {layout['icon'].name} (badge {light})")
+    if plan.apply and not instances.install_launcher_icons(
+            source_icon, layout["icon"], light):
+        print(f"  note: could not badge {vendor} icon "
+              f"(ImageMagick or emblem missing?); "
+              f"the launcher falls back to the stock icon")
+    return True
 
 
 def _find_vendor_icon(vendor: str) -> Path | None:

@@ -1577,6 +1577,9 @@ class UninstallTests(unittest.TestCase):
             icon = home / ".local" / "share" / "icons" / "hicolor" / "512x512" / "apps" / "claude-dummy.png"
             icon.parent.mkdir(parents=True)
             icon.write_bytes(b"png")
+            icon48 = home / ".local" / "share" / "icons" / "hicolor" / "48x48" / "apps" / "claude-dummy.png"
+            icon48.parent.mkdir(parents=True)
+            icon48.write_bytes(b"png")
             data = home / ".config" / "Claude-dummy"
             data.mkdir(parents=True)
             shell = home / ".bashrc"
@@ -1598,6 +1601,7 @@ class UninstallTests(unittest.TestCase):
             self.assertFalse(wrapper.exists())
             self.assertFalse(desktop.exists())
             self.assertFalse(icon.exists())
+            self.assertFalse(icon48.exists())
             self.assertFalse(data.exists())
             self.assertTrue(stock.is_symlink())
             self.assertEqual((harness / "keep.md").read_text(encoding="utf-8"), "keep\n")
@@ -1643,6 +1647,50 @@ class UninstallTests(unittest.TestCase):
             result = _run_uninstall(Path(tmp), "--root-only", "/etc/passwd")
         self.assertEqual(result.returncode, 2)
         self.assertIn("root", result.stderr)
+
+
+class LauncherIconTests(unittest.TestCase):
+    @unittest.skipUnless(
+        instances.imagemagick() and instances.profile_emblem(),
+        "needs ImageMagick and the profile emblem",
+    )
+    def test_install_launcher_icons_writes_matching_pixel_sizes(self):
+        binary = instances.imagemagick()
+        with tempfile.TemporaryDirectory() as tmp:
+            source = Path(tmp) / "stock.png"
+            subprocess.run(
+                [*binary, "-size", "64x64", "xc:#ff0000", str(source)],
+                check=True, capture_output=True,
+            )
+            dest = instances.paths_for("dummy", "claude", Path(tmp))["icon"]
+            self.assertTrue(
+                instances.install_launcher_icons(source, dest, "#2563EB"))
+            root = dest.parent.parent.parent
+            for size in instances.ICON_THEME_SIZES:
+                path = root / f"{size}x{size}" / "apps" / dest.name
+                self.assertTrue(path.is_file(), path)
+                probe = subprocess.run(
+                    [*binary, str(path), "-format", "%w", "info:"],
+                    capture_output=True, text=True, check=True,
+                )
+                self.assertEqual(probe.stdout.strip(), str(size), path)
+
+    @unittest.skipUnless(
+        shutil.which("gtk-update-icon-cache")
+        or shutil.which("gtk4-update-icon-cache"),
+        "gtk-update-icon-cache not on PATH",
+    )
+    def test_refresh_hicolor_cache_indexes_new_names(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            icon = (home / ".local" / "share" / "icons" / "hicolor"
+                    / "48x48" / "apps" / "codex-dummy.png")
+            icon.parent.mkdir(parents=True)
+            icon.write_bytes(b"\x89PNG\r\n\x1a\n")
+            self.assertTrue(instances.refresh_hicolor_cache(home))
+            cache = home / ".local" / "share" / "icons" / "hicolor" / "icon-theme.cache"
+            self.assertTrue(cache.is_file())
+            self.assertIn(b"codex-dummy", cache.read_bytes())
 
 
 class UninstallerIsAlwaysWrittenTests(unittest.TestCase):

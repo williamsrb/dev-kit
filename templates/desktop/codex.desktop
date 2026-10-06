@@ -9,6 +9,7 @@ Exec=${PROFILE_AUTH_LAUNCH} --vendor codex --profile ${PROFILE_NAME} -- env CODE
 Icon=${PROFILE_ICON_NAME}
 Terminal=false
 Categories=Development;IDE;
+Keywords=AI;Chat;Assistant;ChatGPT;Codex;LLM;
 StartupNotify=true
 StartupWMClass=${PROFILE_WM_CLASS}
 SingleMainWindow=true

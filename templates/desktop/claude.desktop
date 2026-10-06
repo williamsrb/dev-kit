@@ -9,5 +9,16 @@ Exec=${PROFILE_AUTH_LAUNCH} --vendor claude --profile ${PROFILE_NAME} -- env CLA
 Icon=${PROFILE_ICON_NAME}
 Terminal=false
 Categories=Development;IDE;
+Keywords=AI;Chat;Assistant;Claude;Code;LLM;
 StartupNotify=true
 StartupWMClass=${PROFILE_WM_CLASS}
+SingleMainWindow=true
+Actions=NewChat;NewCode;
+
+[Desktop Action NewChat]
+Name=New Chat
+Exec=${PROFILE_AUTH_LAUNCH} --vendor claude --profile ${PROFILE_NAME} -- env CLAUDE_CONFIG_DIR=${PROFILE_CONFIG_DIR} ${PROFILE_GUI_BIN} --user-data-dir=${PROFILE_USER_DATA_DIR} claude://claude.ai/new
+
+[Desktop Action NewCode]
+Name=New Claude Code Session
+Exec=${PROFILE_AUTH_LAUNCH} --vendor claude --profile ${PROFILE_NAME} -- env CLAUDE_CONFIG_DIR=${PROFILE_CONFIG_DIR} ${PROFILE_GUI_BIN} --user-data-dir=${PROFILE_USER_DATA_DIR} claude://code/new

@@ -1159,6 +1159,20 @@ class CodexDesktopTests(unittest.TestCase):
         self.assertIn("Name=Codex · dummy", rendered)
         self.assertIn("/usr/lib/devkit/codex-dummy/codex-launcher", rendered)
         self.assertIn("StartupWMClass=Codex-dummy", rendered)
+        self.assertIn("Keywords=AI;Chat;Assistant;ChatGPT;Codex;LLM;", rendered)
+        self.assertNotIn("x-scheme-handler/", rendered)
+        self.assertNotIn("[Desktop Action", rendered)
+
+    def test_cursor_desktop_new_empty_window_keeps_profile_dirs(self):
+        profile = load_for_create("dummy", "enonic")
+        tokens = instances.render_tokens(profile, "cursor", Path("/home/example"))
+        rendered = instances.render(
+            (REPO / "templates" / "desktop" / "cursor.desktop").read_text(), tokens)
+        self.assertIn("Actions=new-empty-window;", rendered)
+        self.assertIn("[Desktop Action new-empty-window]", rendered)
+        self.assertIn("--new-window", rendered)
+        self.assertEqual(rendered.count(
+            "--user-data-dir=/home/example/.agents-profiles/dummy/cursor"), 2)
         self.assertNotIn("x-scheme-handler/", rendered)
 
     def test_profile_desktops_do_not_claim_vendor_schemes(self):
@@ -1466,6 +1480,14 @@ class AppForkTests(unittest.TestCase):
             (REPO / "templates" / "desktop" / "claude.desktop").read_text(), tokens)
         self.assertIn("/usr/lib/devkit/claude-dummy/claude-desktop", rendered)
         self.assertNotIn("/usr/bin/claude-desktop", rendered)
+        self.assertIn("SingleMainWindow=true", rendered)
+        self.assertIn("Actions=NewChat;NewCode;", rendered)
+        self.assertIn("[Desktop Action NewChat]", rendered)
+        self.assertIn("[Desktop Action NewCode]", rendered)
+        self.assertIn("claude://claude.ai/new", rendered)
+        self.assertIn("claude://code/new", rendered)
+        self.assertEqual(rendered.count("CLAUDE_CONFIG_DIR=/home/example/.agents-profiles/dummy/claude"), 3)
+        self.assertEqual(rendered.count("--user-data-dir=/home/example/.config/Claude-dummy"), 3)
 
 
 class WirePathTests(unittest.TestCase):

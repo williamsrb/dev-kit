@@ -9,6 +9,12 @@ Exec=${PROFILE_AUTH_LAUNCH} --vendor cursor --profile ${PROFILE_NAME} -- ${PROFI
 Icon=${PROFILE_ICON_NAME}
 Terminal=false
 Categories=TextEditor;Development;IDE;
+Keywords=cursor;Code;Editor;AI;
 StartupNotify=false
 StartupWMClass=${PROFILE_WM_CLASS}
 MimeType=application/x-cursor-workspace;
+Actions=new-empty-window;
+
+[Desktop Action new-empty-window]
+Name=New Empty Window
+Exec=${PROFILE_AUTH_LAUNCH} --vendor cursor --profile ${PROFILE_NAME} -- ${PROFILE_GUI_BIN} --user-data-dir=${PROFILE_CONFIG_DIR} --extensions-dir=${PROFILE_DATA_DIR}/extensions --new-window %F

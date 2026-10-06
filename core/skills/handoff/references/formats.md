@@ -4,7 +4,7 @@ Load only the format the skill selected.
 
 ## Context Summary
 
-Save under the OS temp dir. Not a PRD. Not a plan.
+Save under `/var/tmp` (survives reboot). Not a PRD. Not a plan.
 
 ```markdown
 # Handoff — <focus>

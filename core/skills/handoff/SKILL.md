@@ -18,7 +18,7 @@ Follow `~/.agents/kb/implementation/How-to-resolve-task-context.md` when a `<TAS
 
 | Format | When | Output |
 |--------|------|--------|
-| **Context Summary** | Continue this chat in a fresh session. Session glue, not a spec. | OS temp dir — not the workspace, not `~/.agents/prds/` |
+| **Context Summary** | Continue this chat in a fresh session. Session glue, not a spec. | `/var/tmp` — not the workspace, not `~/.agents/prds/` |
 | **PRD** | Persist chat as task context for `plan-implementation` / `run-plan` / `validate-impl`. | `~/.agents/prds/<slug>.md` |
 
 Triggers (any one is enough):
@@ -36,7 +36,7 @@ Templates: [references/formats.md](references/formats.md). Load only the chosen 
 
 1. Write the Context Summary template from `references/formats.md`.
 2. Include **Suggested skills** — names the next agent should invoke.
-3. Save under the OS temp dir (`${TMPDIR:-/tmp}/handoff-<slug-or-focus>-<YYYYMMDD>.md`). Do not write into the repo or `~/.agents/prds/`.
+3. Save under `/var/tmp` (`/var/tmp/handoff-<slug-or-focus>-<YYYYMMDD>.md`), always, never `$TMPDIR` or `/tmp`: those are cleared on reboot. Do not write into the repo or `~/.agents/prds/`.
 4. Tell the user the absolute path. Hard-stop. Do not cascade into planning.
 
 ## PRD

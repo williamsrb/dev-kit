@@ -1714,6 +1714,66 @@ class LauncherIconTests(unittest.TestCase):
                 self.assertEqual(probe.stdout.strip(), str(size), path)
 
     @unittest.skipUnless(
+        instances.imagemagick() and instances.profile_emblem(),
+        "needs ImageMagick and the profile emblem",
+    )
+    def test_full_bleed_icon_is_shrunk_before_badging(self):
+        binary = instances.imagemagick()
+        emblem = instances.profile_emblem()
+
+        def draw(path, shape):
+            subprocess.run(
+                [*binary, "-size", "100x100", "xc:none", "-fill", "#ff0000",
+                 "-draw", shape, str(path)],
+                check=True, capture_output=True,
+            )
+
+        def alpha(path, x, y):
+            out = subprocess.run(
+                [*binary, str(path), "-format", f"%[fx:p{{{x},{y}}}.a]", "info:"],
+                capture_output=True, text=True, check=True,
+            )
+            return float(out.stdout)
+
+        # Full-bleed art shrunk to 84% leaves (95, 95) transparent; art that
+        # already has a margin reaches (90, 90) unless it is shrunk too.
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            full, margin, out = tmp / "full.png", tmp / "margin.png", tmp / "out.png"
+            draw(full, "roundrectangle 0,0 99,99 12,12")
+            draw(margin, "rectangle 8,8 91,91")
+            badge_with = {
+                "recolor_icon": lambda src: instances.recolor_icon(
+                    src, out, "#2563EB"),
+                "_badge_icon": lambda src: appfork._badge_icon(
+                    binary, src, out, "#2563EB", emblem) is None,
+            }
+            for name, badge in badge_with.items():
+                self.assertTrue(badge(full), name)
+                self.assertEqual(alpha(out, 95, 95), 0.0, f"{name} full")
+                self.assertTrue(badge(margin), name)
+                self.assertEqual(alpha(out, 90, 90), 1.0, f"{name} margin")
+
+            stock = tmp / "stock"
+            (stock / "resources").mkdir(parents=True)
+            for name in ("icon.png", "TrayIcon.png"):
+                shutil.copy(full, stock / "resources" / name)
+            spec = appfork.Vendor(
+                name="claude", package="claude-desktop", stock_lib=stock,
+                binary="claude-desktop",
+                stock_desktop_name="com.anthropic.Claude.desktop",
+                icon_globs=("resources/icon.png", "resources/TrayIcon*.png"),
+            )
+            fork_root = tmp / "root"
+            fork_root.mkdir()
+            shutil.copy(emblem, fork_root / appfork.EMBLEM_NAME)
+            dest = tmp / "fork"
+            appfork.recolor_tree_icons(
+                spec, dest, "#2563EB", dry_run=False, fork_root=fork_root)
+            self.assertEqual(alpha(dest / "resources" / "icon.png", 95, 95), 0.0)
+            self.assertEqual(alpha(dest / "resources" / "TrayIcon.png", 95, 95), 1.0)
+
+    @unittest.skipUnless(
         shutil.which("gtk-update-icon-cache")
         or shutil.which("gtk4-update-icon-cache"),
         "gtk-update-icon-cache not on PATH",

@@ -61,7 +61,7 @@ The blocker is nested runtime, not the GUI. A containerized harness driving
 which erases the isolation the container was built for.
 
 Cost per profile matters too: Playwright browsers are ~400MB per image, the
-skills tree is 20M, and Ollama models are GB-scale and should never be
+kit's `core/` tree is 20M, and Ollama models are GB-scale and should never be
 duplicated.
 
 Docker does earn its place for a headless CLI-agent image — see

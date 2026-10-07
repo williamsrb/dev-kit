@@ -87,6 +87,14 @@ emblem is missing (`templates/icons/profile-emblem.png`, or the installed copy
 at `/usr/lib/devkit/profile-emblem.png`). This is a warning: the launcher falls
 back to the stock icon and the install completes.
 
+## `gtk-update-icon-cache failed or is missing`
+
+The icons were written, but the cache under `~/.local/share/icons/hicolor` was
+not rebuilt, so GNOME may keep the old icon. Install `gtk-update-icon-cache`
+(package `libgtk-3-bin` on Debian and Ubuntu), then run
+`gtk-update-icon-cache --force --ignore-theme-index ~/.local/share/icons/hicolor`
+or re-run `devkit profile sync <name> --apply`.
+
 ## `lint-paths: N violation(s)`
 
 See [paths.md](paths.md). The short version: `~` does not expand in a parsed

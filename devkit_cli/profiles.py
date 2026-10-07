@@ -15,6 +15,7 @@ from pathlib import Path
 from . import (
     appfork,
     auth,
+    cli_link,
     globalignore,
     instances,
     manifest,
@@ -571,6 +572,7 @@ def cmd_create(args) -> int:
     materialize(profile, args.vendor, home, plan, args.force)
     uninstaller.ensure(home, plan)
     globalignore.ensure(home, plan)
+    cli_link.ensure(home, plan)
     result = plan.report(f"profile {args.name}")
     if plan.apply and plan.actions:
         _report_home_root_rules(home)
@@ -586,6 +588,7 @@ def cmd_sync(args) -> int:
     materialize(profile, None, home, plan, force=True)
     uninstaller.ensure(home, plan)
     globalignore.ensure(home, plan)
+    cli_link.ensure(home, plan)
     result = plan.report(f"profile {args.name} (sync)")
     if plan.apply:
         finish_appforks(home, profile, user.pw_name)

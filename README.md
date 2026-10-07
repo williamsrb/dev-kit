@@ -5,20 +5,39 @@ isolation so several agent harnesses run side by side on one box without
 colliding. An Enonic developer and a PHP developer can share a laptop and not
 share a single skill, rule, or MCP registration.
 
+## Install
+
+Run from the checkout, in this order. Every step has a dry run (omit
+`--apply`); read it before applying.
+
 ```bash
-./bootstrap.sh --profile enonic --apply    # step 1: dependencies, no config
-./install.py --apply                       # step 2: offers a first profile
-# or skip the offer:
-./install.py --name dummy --profile enonic --apply
-claude-dummy
+./bootstrap.sh --profile enonic --apply    # 1. dependencies, no config
+./devkit export --apply                    # 2. only if install.py says core/ is not exported
+./install.py --name dummy --profile enonic --apply   # 3. profile, wrappers, `devkit` on PATH
+./install.py --profile enonic --verify     # 4. check
+./devkit doctor
+claude-dummy                               # 5. start the profile
 ```
 
-Running this as an assistant rather than reading it: go to
+What step 3 leaves on your machine, all under `~/.local/bin` (which must be on
+`PATH`; pass `--wire-path` to step 1 or edit your shell profile yourself):
+
+| File | Purpose |
+|------|---------|
+| `devkit` | Link to this checkout's `devkit.py`, so `devkit` runs from any directory. Moving the checkout means re-running `install.py --apply`. |
+| `<vendor>-<name>` (`claude-dummy`) | The profile's CLI wrappers. |
+| `devkit-uninstall.sh` | Removes everything the kit wrote. |
+
+Open a new shell after install so `PATH` changes apply. Without `--name` or
+`--profile`, `install.py` on a terminal asks which first profile to create.
+
+Installing as an assistant rather than reading this: go to
 [docs/install.md#agent-runbook](docs/install.md#agent-runbook) before running
-anything. It is the same two steps as ordered commands, each with its success
+anything. It is the same steps as ordered commands, each with its success
 signal, its exit codes and its stop condition, plus the uninstall sequence and
-the questions to put to the operator first. The rest of this README is
-orientation, not a procedure.
+the questions to put to the operator first. Do not stop at the install
+command: the verify step and the PATH check are part of the install. The rest
+of this README is orientation, not a procedure.
 
 Neither step assumes the other had network access. Privileged work prints its
 plan, then asks for administrator privileges — never the other way around. A
@@ -122,7 +141,7 @@ python3 -m unittest discover -s tests       # the acceptance checklist
 |------|----------|
 | `bootstrap.sh` | Step 1. Dependencies only. The one bash file, because it runs before Python is guaranteed. |
 | `install.py` | Step 2. Configuration only. Refuses root. |
-| `devkit` | Profile, export, update and diagnostic CLI. |
+| `devkit` | Profile, export, update and diagnostic CLI. `install.py` links it to `~/.local/bin/devkit`. |
 | `profiles/` | Profile manifests. `core` is the base; the rest extend it. |
 | `core/` | The curated export of the harness. Generated — never edit directly. |
 | `templates/` | Vendor configs, CLI wrappers, desktop launchers, auth dispatchers. |

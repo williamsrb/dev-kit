@@ -15,7 +15,7 @@ import argparse
 import sys
 from typing import Callable
 
-from . import bootstrap_plan, docsgen, export, paths, profiles, update
+from . import bootstrap_plan, docsgen, export, paths, profiles, session_sync, update
 from .errors import DevkitError
 
 DESCRIPTION = """\
@@ -36,6 +36,7 @@ Common examples:
   devkit profile create enonic
   devkit profile apps-sync --apply   # prints the fork plan, then asks sudo
   devkit profile auth restore
+  devkit profile session-sync --source stock --target dummy   # dry run
   devkit update check
   devkit doctor
   devkit deps --profile enonic       # are the declared binaries on PATH?
@@ -232,6 +233,39 @@ def build_parser() -> argparse.ArgumentParser:
     p_apps.add_argument("--apply", action="store_true",
                         help="Write. Prints the plan, then asks sudo. Default: dry run.")
     p_apps.set_defaults(func=profiles.cmd_apps_sync)
+
+    p_sessions = profile.add_parser(
+        "session-sync",
+        help="Copy agent sessions (Claude, Codex, Cursor) between instances.",
+        description=(
+            "Copy sessions from --source to --target. Names are installed "
+            "profiles, or 'stock' for the unprefixed installs. --agent picks "
+            "which agents to copy (claude: Code transcripts and Desktop chats; "
+            "codex: rollouts and the thread index; cursor: IDE chats from "
+            "state.vscdb), each from the source's instance into the target's "
+            "instance of the same agent. One direction per run: swap the two "
+            "for the other. A file or row is copied when the target lacks it or "
+            "the source is newer; nothing is deleted. Databases are backed up "
+            "first. Quit the agents' apps on the target first."
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    p_sessions.add_argument("--source", required=True, metavar="NAME",
+                            help="Instance to read from: a profile name or 'stock'.")
+    p_sessions.add_argument("--target", required=True, metavar="NAME",
+                            help="Instance to write to: a profile name or 'stock'.")
+    p_sessions.add_argument("--agent", default="claude", metavar="LIST",
+                            help="Comma-separated: claude, codex, cursor, or 'all' for "
+                                 "every agent both sides have (default: claude).")
+    p_sessions.add_argument("--only", choices=["code", "desktop"],
+                            help="Claude only: copy just Code transcripts or just Desktop chats.")
+    p_sessions.add_argument("--indexeddb", action="store_true",
+                            help="Claude only: also replace the target's Desktop IndexedDB "
+                                 "(claude.ai web history) with the source's. Replaces, never "
+                                 "merges; the old one is kept beside it. Quit the source too.")
+    p_sessions.add_argument("--apply", action="store_true",
+                            help="Write. Default: dry run.")
+    p_sessions.set_defaults(func=session_sync.cmd_session_sync)
 
     # -- update -------------------------------------------------------------
     upd = group("update", "Check, stage, and apply kit updates (one direction).")

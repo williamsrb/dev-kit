@@ -2,7 +2,7 @@
 # Chooser rows end in llm-index.md — open that folder index, not sibling files.
 
 How-to-add-a-head-tag-from-a-react4xp-part.md	828	head-tag		add head tag react4xp part add-head head-tag tag-react4xp react4xp-part touching page controller part-touching touching-page page-controller
-How-to-add-an-agent-task-to-extractkit.md	868	agent-task	run-plan plan-implementation	add agent task extractkit add-agent agent-task task-extractkit agent-tasks prompt registry extract-agentic business
+How-to-add-an-agent-task-to-extractkit.md	1224	agent-task	run-plan plan-implementation	add agent task extractkit add-agent agent-task task-extractkit
 How-to-add-an-agentctl-command-group.md	444	agentctl-command	run-plan plan-implementation	add agentctl command group add-agentctl agentctl-command command-group
 How-to-add-an-editor-facing-input-to-an-xp7-schema.md	1096	editor-facing	run-plan plan-implementation validate-impl	add editor facing input xp7 schema add-editor editor-facing facing-input input-xp7 xp7-schema input-schema
 How-to-add-an-optional-slot-to-extractkit.md	650	optional-slot	run-plan plan-implementation	add optional slot extractkit add-optional optional-slot slot-extractkit pipeline optional-pipeline pipeline-slot
@@ -19,7 +19,7 @@ How-to-cold-build-rfd-xp7-without-local-jvm.md	1334	cold-build	run-plan	cold bui
 How-to-debug-xp-server-logs.md	675	debug-xp	debug-xp-app	debug xp server logs debug-xp xp-server server-logs build failures debug-server logs-build build-failures
 How-to-dispatch-linux-vendor-auth-callbacks.md	516	dispatch-linux	run-plan	dispatch linux vendor auth callbacks dispatch-linux linux-vendor vendor-auth auth-callbacks across profiles callbacks-across across-profiles
 How-to-download-atlassian-attachments.md	1748	download-atlassian	download-jira-task	download atlassian attachments download-atlassian atlassian-attachments
-How-to-drive-extractkit-headless-and-test-it-with-a-fake-agent.md	718	headless	run-plan plan-implementation validate-impl	drive extractkit headless fake agent drive-extractkit extractkit-headless headless-fake fake-agent json envelope env resources
+How-to-drive-extractkit-headless-and-test-it-with-a-fake-agent.md	949	drive-extractkit	run-plan plan-implementation validate-impl	drive extractkit headless test it fake agent drive-extractkit extractkit-headless headless-test test-it it-fake fake-agent test-fake
 How-to-embed-json-ld-safely-in-an-enonic-xp-page.md	927	embed-json		embed json ld safely enonic xp page embed-json json-ld ld-safely safely-enonic enonic-xp xp-page json-safely enonic-page
 How-to-enable-playwright-mcp.md	1367	playwright-mcp	spawn-playwright-mcp plan-task-evidence run-plan generate-worklogs	enable playwright mcp enable-playwright playwright-mcp demand enable-demand demand-playwright
 How-to-execute-an-xp7-to-xp8-app-upgrade-locally.md	2396	execute-xp7	upgrade-xp-app run-plan	execute xp7 xp8 app upgrade locally execute-xp7 xp7-xp8 xp8-app app-upgrade upgrade-locally execute-app

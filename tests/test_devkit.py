@@ -12,12 +12,14 @@ import json
 import os
 import re
 import shutil
+import sqlite3
 import subprocess
 import sys
 import tempfile
 import unittest
 from contextlib import redirect_stdout
 from pathlib import Path
+from unittest import mock
 
 REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO))
@@ -25,6 +27,7 @@ sys.path.insert(0, str(REPO))
 from devkit_cli import (
     appfork,
     auth,
+    cli_link,
     export,
     globalignore,
     instances,
@@ -32,6 +35,7 @@ from devkit_cli import (
     paths,
     privilege,
     profiles,
+    session_sync,
     update,
 )
 from devkit_cli.common import Plan
@@ -480,31 +484,26 @@ class PlaywrightProfileEnableTests(unittest.TestCase):
             codex = self._instance(home, "dummy", "codex")
             (codex / "config.toml").write_text("model = \"x\"\n")
             url = "http://localhost:8942/mcp"
-            saved = os.environ.pop("DEVKIT_PROFILE", None)
-            try:
+            with mock.patch.dict(os.environ):
+                os.environ.pop("DEVKIT_PROFILE", None)
                 pw.enable_on_profiles(home, "playwright-JOT-101", url,
                                       ["cursor", "claude", "codex"], dry_run=False)
-            finally:
-                if saved is None:
-                    os.environ.pop("DEVKIT_PROFILE", None)
-                else:
-                    os.environ["DEVKIT_PROFILE"] = saved
-            cursor_mcp = json.loads((cursor / "mcp.json").read_text())["mcpServers"]
-            self.assertEqual(cursor_mcp["playwright-JOT-101"], {"url": url})
-            self.assertEqual(cursor_mcp["context7"]["url"], "https://x")
-            claude_mcp = json.loads((claude / ".claude.json").read_text())["mcpServers"]
-            self.assertEqual(claude_mcp["playwright-JOT-101"]["url"], url)
-            toml = (codex / "config.toml").read_text()
-            self.assertIn("[mcp_servers.playwright-JOT-101]", toml)
-            self.assertIn(url, toml)
-            pw.disable_on_profiles(home, "playwright-JOT-101",
-                                   ["cursor", "claude", "codex"], dry_run=False)
-            self.assertNotIn("playwright-JOT-101",
-                             json.loads((cursor / "mcp.json").read_text())["mcpServers"])
-            self.assertNotIn("playwright-JOT-101",
-                             json.loads((claude / ".claude.json").read_text())["mcpServers"])
-            self.assertNotIn("[mcp_servers.playwright-JOT-101]",
-                             (codex / "config.toml").read_text())
+                cursor_mcp = json.loads((cursor / "mcp.json").read_text())["mcpServers"]
+                self.assertEqual(cursor_mcp["playwright-JOT-101"], {"url": url})
+                self.assertEqual(cursor_mcp["context7"]["url"], "https://x")
+                claude_mcp = json.loads((claude / ".claude.json").read_text())["mcpServers"]
+                self.assertEqual(claude_mcp["playwright-JOT-101"]["url"], url)
+                toml = (codex / "config.toml").read_text()
+                self.assertIn("[mcp_servers.playwright-JOT-101]", toml)
+                self.assertIn(url, toml)
+                pw.disable_on_profiles(home, "playwright-JOT-101",
+                                       ["cursor", "claude", "codex"], dry_run=False)
+                self.assertNotIn("playwright-JOT-101",
+                                 json.loads((cursor / "mcp.json").read_text())["mcpServers"])
+                self.assertNotIn("playwright-JOT-101",
+                                 json.loads((claude / ".claude.json").read_text())["mcpServers"])
+                self.assertNotIn("[mcp_servers.playwright-JOT-101]",
+                                 (codex / "config.toml").read_text())
 
     def test_devkit_profile_hides_sibling_mcp(self):
         pw = _load_playwright()
@@ -1869,6 +1868,382 @@ class GlobalIgnoreTests(unittest.TestCase):
         self.assertIn("globalignore.ensure(home, plan)",
                       (REPO / "install.py").read_text(encoding="utf-8"))
         self.assertEqual(body.count("globalignore.ensure(home, plan)"), 2)
+
+
+class CliLinkTests(unittest.TestCase):
+    def test_links_devkit_onto_path_and_is_idempotent(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            dry = Plan(False)
+            cli_link.ensure(home, dry)
+            self.assertEqual(len(dry.actions), 1)
+            self.assertFalse((home / ".local" / "bin" / "devkit").exists())
+            cli_link.ensure(home, Plan(True))
+            link = home / ".local" / "bin" / "devkit"
+            self.assertEqual(link.resolve(), (REPO / "devkit.py").resolve())
+            again = Plan(True)
+            cli_link.ensure(home, again)
+            self.assertEqual(again.actions, [])
+
+    def test_foreign_file_is_left_alone(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            link = home / ".local" / "bin" / "devkit"
+            link.parent.mkdir(parents=True)
+            link.write_text("mine", encoding="utf-8")
+            plan = Plan(True)
+            cli_link.ensure(home, plan)
+            self.assertEqual(plan.actions, [])
+            self.assertEqual(link.read_text(encoding="utf-8"), "mine")
+
+    def test_every_profile_writing_command_calls_ensure(self):
+        body = (REPO / "devkit_cli" / "profiles.py").read_text(encoding="utf-8")
+        self.assertIn("cli_link.ensure(home, plan)",
+                      (REPO / "install.py").read_text(encoding="utf-8"))
+        self.assertEqual(body.count("cli_link.ensure(home, plan)"), 2)
+
+    def test_uninstaller_removes_the_link(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            cli_link.ensure(home, Plan(True))
+            result = _run_uninstall(home, "--apply")
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertFalse((home / ".local" / "bin" / "devkit").is_symlink())
+
+
+class SessionSyncTests(unittest.TestCase):
+    ORG = ("acct", "org")
+    quiet = staticmethod(lambda *args, **kwargs: [])
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.home = Path(self._tmp.name)
+        for name in ("one", "two"):
+            config = self.home / ".agents-profiles" / name / "claude"
+            config.mkdir(parents=True)
+            (config / ".devkit-profile.json").write_text(
+                json.dumps({"profile": name, "vendor": "claude"}), encoding="utf-8")
+
+    def _desktop(self, name, org=ORG):
+        base = self.home / ".config" / ("Claude" if name == "stock" else f"Claude-{name}")
+        folder = base / "claude-code-sessions" / org[0] / org[1]
+        folder.mkdir(parents=True, exist_ok=True)
+        return folder
+
+    def _code(self, name):
+        return self.home / (".claude" if name == "stock"
+                            else f".agents-profiles/{name}/claude") / "projects"
+
+    def _write(self, path, text, mtime):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text, encoding="utf-8")
+        os.utime(path, (mtime, mtime))
+
+    def _sync(self, source, target, apply=True, **kwargs):
+        plan = Plan(apply)
+        session_sync.sync_sessions(self.home, source, target, plan,
+                                   find_running=self.quiet, find_holders=self.quiet, **kwargs)
+        return plan
+
+    def test_code_copies_new_and_newer_and_never_deletes_or_downgrades(self):
+        self._write(self._code("one") / "p" / "a.jsonl", "one-a", 200)
+        self._write(self._code("one") / "p" / "b.jsonl", "one-b-old", 100)
+        self._write(self._code("one") / "p" / "c.jsonl", "one-c", 300)
+        self._write(self._code("two") / "p" / "b.jsonl", "two-b-new", 150)
+        self._write(self._code("two") / "p" / "c.jsonl", "two-c-old", 50)
+        self._write(self._code("two") / "p" / "only.jsonl", "two-only", 10)
+        plan = self._sync("one", "two")
+        target = self._code("two") / "p"
+        self.assertEqual((target / "a.jsonl").read_text(), "one-a")
+        self.assertEqual((target / "b.jsonl").read_text(), "two-b-new")
+        self.assertEqual((target / "c.jsonl").read_text(), "one-c")
+        self.assertEqual((target / "only.jsonl").read_text(), "two-only")
+        self.assertEqual(len(plan.actions), 1)
+        self.assertIn("1 new, 1 newer, 1 unchanged", plan.actions[0])
+        again = self._sync("one", "two")
+        self.assertEqual(again.actions, [])
+        self.assertEqual(list(target.glob("*.devkit-partial")), [])
+
+    def test_dry_run_writes_nothing(self):
+        self._write(self._code("one") / "p" / "a.jsonl", "x", 200)
+        plan = self._sync("one", "two", apply=False)
+        self.assertEqual(len(plan.actions), 1)
+        self.assertFalse(self._code("two").exists())
+
+    def test_desktop_chats_flatten_into_the_targets_org_only(self):
+        self._write(self._desktop("stock", ("accA", "org1")) / "local_1.json", "s1", 100)
+        self._write(self._desktop("stock", ("accA", "org2")) / "local_2.json", "s2", 100)
+        self._write(self._desktop("stock", ("accA", "org2")) / "local_1.json", "s1-newer", 200)
+        self._write(self._desktop("stock", ("accA", "org2")) / "scheduled-tasks.json", "t", 100)
+        mine = self._desktop("one", ("accB", "orgB"))
+        self._write(mine / "local_9.json", "mine", 100)
+        self._sync("stock", "one")
+        self.assertEqual(sorted(p.name for p in mine.glob("*.json")),
+                         ["local_1.json", "local_2.json", "local_9.json"])
+        self.assertEqual((mine / "local_1.json").read_text(), "s1-newer")
+        sessions = mine.parent.parent
+        self.assertEqual([p.name for p in sessions.iterdir()], ["accB"])
+        self.assertEqual([p.name for p in sessions.glob("*/*")], ["orgB"])
+
+    def test_desktop_target_without_an_org_folder_is_refused(self):
+        self._write(self._desktop("one") / "local_1.json", "x", 100)
+        (self.home / ".config" / "Claude-two").mkdir(parents=True)
+        with self.assertRaises(DevkitError) as raised:
+            self._sync("one", "two")
+        self.assertIn("signed-in organization", str(raised.exception))
+
+    def test_only_limits_the_trees(self):
+        self._write(self._code("one") / "p" / "a.jsonl", "x", 100)
+        self._write(self._desktop("one") / "local_1.json", "y", 100)
+        self._desktop("two")
+        self._sync("one", "two", only="code")
+        self.assertTrue((self._code("two") / "p" / "a.jsonl").is_file())
+        self.assertFalse((self._desktop("two") / "local_1.json").exists())
+
+    def test_running_target_blocks_apply_but_not_a_dry_run(self):
+        self._write(self._code("one") / "p" / "a.jsonl", "x", 100)
+        busy = lambda *args, **kwargs: [("Desktop", "4242")]
+        with self.assertRaises(DevkitError) as raised:
+            session_sync.sync_sessions(self.home, "one", "two", Plan(True), find_running=busy)
+        self.assertIn("4242", str(raised.exception))
+        self.assertFalse(self._code("two").exists())
+        session_sync.sync_sessions(self.home, "one", "two", Plan(False), find_running=busy)
+
+    def test_indexeddb_is_replaced_and_the_old_one_kept_only_when_asked(self):
+        for name, text in (("one", "from-one"), ("two", "from-two")):
+            db = self._desktop(name).parents[2] / "IndexedDB"
+            db.mkdir()
+            (db / "CURRENT").write_text(text, encoding="utf-8")
+        self._write(self._code("one") / "p" / "a.jsonl", "x", 100)
+        two_db = self._desktop("two").parents[2] / "IndexedDB"
+        self._sync("one", "two")
+        self.assertEqual((two_db / "CURRENT").read_text(), "from-two")
+        self._sync("one", "two", indexeddb=True)
+        self.assertEqual((two_db / "CURRENT").read_text(), "from-one")
+        backups = list(two_db.parent.glob("IndexedDB.devkit-backup-*"))
+        self.assertEqual(len(backups), 1)
+        self.assertEqual((backups[0] / "CURRENT").read_text(), "from-two")
+
+    def test_refuses_same_unknown_and_empty(self):
+        with self.assertRaises(DevkitError):
+            self._sync("one", "one")
+        with self.assertRaises(DevkitError) as raised:
+            self._sync("nope", "one")
+        self.assertIn("stock", raised.exception.fix)
+        with self.assertRaises(DevkitError):
+            self._sync("one", "two")
+
+    def test_stock_names_the_unprefixed_install(self):
+        self._write(self._code("stock") / "p" / "a.jsonl", "x", 100)
+        self._sync("stock", "one")
+        self.assertTrue((self._code("one") / "p" / "a.jsonl").is_file())
+
+    def _fake_proc(self, procs):
+        root = self.home / "proc"
+        for pid, comm, args, env in procs:
+            entry = root / str(pid)
+            entry.mkdir(parents=True)
+            (entry / "comm").write_text(comm + "\n")
+            (entry / "cmdline").write_bytes(args.encode())
+            (entry / "environ").write_bytes(env.encode())
+        return root
+
+    def test_running_matches_the_right_instance_only(self):
+        one = session_sync.resolve_side("one", self.home)
+        two = session_sync.resolve_side("two", self.home)
+        stock = session_sync.resolve_side("stock", self.home)
+        root = self._fake_proc([
+            (11, "claude-desktop", f"/x/claude-desktop\0--user-data-dir={one.desktop}\0", ""),
+            (12, "claude-desktop", "/x/claude-desktop --type=zygote --no-zygote-sandbox", ""),
+            (13, "claude", "claude", f"A=b\0CLAUDE_CONFIG_DIR={two.code}\0"),
+            (14, "bash", "bash", f"CLAUDE_CONFIG_DIR={one.code}\0"),
+            (15, "claude-desktop", "/opt/Claude/claude-desktop", ""),
+            (16, "claude", "claude", "A=b\0"),
+        ])
+        self.assertEqual(session_sync.running(one, True, True, root), [("Desktop", "11")])
+        self.assertEqual(session_sync.running(two, True, True, root), [("Code", "13")])
+        self.assertCountEqual(session_sync.running(stock, True, True, root),
+                              [("Desktop", "15"), ("Code", "16")])
+        self.assertEqual(session_sync.running(stock, False, False, root), [])
+
+    def _agent_dir(self, name, vendor):
+        if name == "stock":
+            return self.home / {"codex": ".codex", "cursor": ".config/Cursor"}[vendor]
+        config = self.home / ".agents-profiles" / name / vendor
+        config.mkdir(parents=True, exist_ok=True)
+        (config / ".devkit-profile.json").write_text(
+            json.dumps({"profile": name, "vendor": vendor}), encoding="utf-8")
+        return config
+
+    def _codex(self, name, threads, db=True):
+        home = self._agent_dir(name, "codex")
+        home.mkdir(parents=True, exist_ok=True)
+        if db:
+            con = sqlite3.connect(home / "state_5.sqlite")
+            con.execute("create table threads (id text primary key, rollout_path text not null,"
+                        " cwd text not null, title text not null, updated_at integer not null,"
+                        " updated_at_ms integer, project_id text)")
+            for thread_id, updated, mtime in threads:
+                rollout = home / "sessions" / "2026" / f"rollout-{thread_id}.jsonl"
+                self._write(rollout, f"body-{name}-{thread_id}", mtime)
+                con.execute("insert into threads values (?,?,?,?,?,?,?)",
+                            (thread_id, str(rollout), "/w", f"t-{thread_id}", updated,
+                             updated * 1000, "proj-" + name))
+            con.commit()
+            con.close()
+        for thread_id, _u, _m in threads:
+            with (home / "session_index.jsonl").open("a", encoding="utf-8") as index:
+                index.write(json.dumps({"id": thread_id, "thread_name": f"t-{thread_id}"}) + "\n")
+        return home
+
+    def _threads(self, home):
+        con = sqlite3.connect(home / "state_5.sqlite")
+        try:
+            return {r[0]: r[1:] for r in con.execute(
+                "select id, rollout_path, updated_at, project_id from threads")}
+        finally:
+            con.close()
+
+    def test_codex_copies_rollouts_adds_threads_and_bumps_newer(self):
+        src = self._codex("one", [("a", 100, 100), ("b", 300, 300), ("c", 50, 50)])
+        dst = self._codex("two", [("b", 200, 200), ("c", 50, 50)])
+        plan = self._sync("one", "two", agents="codex")
+        self.assertEqual(len(plan.actions), 3)
+        rows = self._threads(dst)
+        self.assertEqual(sorted(rows), ["a", "b", "c"])
+        self.assertEqual(rows["a"][0], str(dst / "sessions" / "2026" / "rollout-a.jsonl"))
+        self.assertIsNone(rows["a"][2])
+        self.assertEqual(rows["b"][1], 300)
+        self.assertEqual((dst / "sessions" / "2026" / "rollout-a.jsonl").read_text(), "body-one-a")
+        self.assertEqual((dst / "sessions" / "2026" / "rollout-b.jsonl").read_text(), "body-one-b")
+        ids = [json.loads(line)["id"] for line in (dst / "session_index.jsonl").read_text().splitlines()]
+        self.assertEqual(sorted(ids), ["a", "b", "c"])
+        self.assertEqual(len(list(dst.glob("state_5.sqlite.devkit-backup-*"))), 1)
+        self.assertEqual(self._sync("one", "two", agents="codex").actions, [])
+        self.assertEqual(len(self._threads(src)), 3)
+
+    def test_codex_without_a_target_database_copies_files_only(self):
+        self._codex("one", [("a", 100, 100)])
+        dst = self._codex("two", [], db=False)
+        self._sync("one", "two", agents="codex")
+        self.assertTrue((dst / "sessions" / "2026" / "rollout-a.jsonl").is_file())
+        self.assertFalse((dst / "state_5.sqlite").exists())
+
+    def test_codex_refuses_a_target_schema_it_cannot_fill(self):
+        self._codex("one", [("a", 100, 100)])
+        dst = self._codex("two", [])
+        con = sqlite3.connect(dst / "state_5.sqlite")
+        con.execute("alter table threads add column cli_version text not null default ''")
+        con.execute("create table other (x integer not null)")
+        con.execute("drop table threads")
+        con.execute("create table threads (id text primary key, rollout_path text not null,"
+                    " updated_at integer not null, brand_new text not null)")
+        con.commit()
+        con.close()
+        with self.assertRaises(DevkitError) as raised:
+            self._sync("one", "two", agents="codex")
+        self.assertIn("brand_new", str(raised.exception))
+        self.assertFalse((dst / "sessions").exists())
+
+    def _cursor(self, name, chats, extra=()):
+        db = self._agent_dir(name, "cursor") / "User" / "globalStorage" / "state.vscdb"
+        db.parent.mkdir(parents=True, exist_ok=True)
+        con = sqlite3.connect(db)
+        con.execute("create table cursorDiskKV (key text unique on conflict replace, value blob)")
+        con.execute("create table composerHeaders (composerId text primary key, workspaceId text,"
+                    " lastUpdatedAt integer, value text)")
+        for composer_id, updated in chats:
+            con.execute("insert into composerHeaders values (?,?,?,?)",
+                        (composer_id, "ws", updated, f"{name}-head-{composer_id}"))
+            for key in (f"composerData:{composer_id}", f"bubbleId:{composer_id}:b1",
+                        f"bubbleId:{composer_id}:b2", f"checkpointId:{composer_id}:c1"):
+                con.execute("insert into cursorDiskKV values (?,?)", (key, f"{name}-{key}"))
+        for key in extra:
+            con.execute("insert into cursorDiskKV values (?,?)", (key, f"{name}-{key}"))
+        con.commit()
+        con.close()
+        return db
+
+    def _kv(self, db):
+        con = sqlite3.connect(db)
+        try:
+            return dict(con.execute("select key, value from cursorDiskKV"))
+        finally:
+            con.close()
+
+    def test_cursor_copies_new_and_newer_chats_family_by_family(self):
+        self._cursor("one", [("aaa", 100), ("aaab", 100), ("old", 10), ("up", 300)],
+                     extra=["agentKv:blob:xyz", "composerData:aaaZ"])
+        dst = self._cursor("two", [("old", 20), ("up", 200)], extra=["composerData:mine"])
+        plan = self._sync("one", "two", agents="cursor")
+        self.assertEqual(len(plan.actions), 1)
+        self.assertIn("2 new, 1 newer, 1 unchanged", plan.actions[0])
+        kv = self._kv(dst)
+        self.assertEqual(kv["bubbleId:aaa:b2"], "one-bubbleId:aaa:b2")
+        self.assertEqual(kv["composerData:aaab"], "one-composerData:aaab")
+        self.assertEqual(kv["checkpointId:up:c1"], "one-checkpointId:up:c1")
+        self.assertEqual(kv["composerData:mine"], "two-composerData:mine")
+        self.assertEqual(kv["composerData:old"], "two-composerData:old")
+        self.assertNotIn("agentKv:blob:xyz", kv)
+        self.assertNotIn("composerData:aaaZ", kv)
+        con = sqlite3.connect(dst)
+        heads = dict(con.execute("select composerId, value from composerHeaders"))
+        con.close()
+        self.assertEqual(heads["up"], "one-head-up")
+        self.assertEqual(heads["old"], "two-head-old")
+        self.assertEqual(len(list(dst.parent.glob("state.vscdb.devkit-backup-*"))), 1)
+        self.assertEqual(self._sync("one", "two", agents="cursor").actions, [])
+
+    def test_cursor_refuses_a_target_that_never_started(self):
+        self._cursor("one", [("aaa", 100)])
+        self._agent_dir("two", "cursor")
+        with self.assertRaises(DevkitError) as raised:
+            self._sync("one", "two", agents="cursor")
+        self.assertIn("launch the target Cursor", raised.exception.fix)
+
+    def test_an_unusable_database_is_reported_not_a_traceback(self):
+        self._cursor("one", [("aaa", 100)])
+        db = self._cursor("two", [])
+        con = sqlite3.connect(db)
+        con.execute("drop table composerHeaders")
+        con.commit()
+        con.close()
+        with self.assertRaises(DevkitError) as raised:
+            self._sync("one", "two", agents="cursor")
+        self.assertIn("session database", str(raised.exception))
+
+    def test_agents_are_chosen_by_name_and_all_means_what_both_sides_have(self):
+        self._write(self._code("one") / "p" / "a.jsonl", "x", 100)
+        self._codex("one", [("a", 100, 100)])
+        self._codex("two", [])
+        plan = self._sync("one", "two", agents="claude,codex")
+        self.assertEqual(len(plan.actions), 4)
+        again = self._sync("one", "two", agents="all")
+        self.assertEqual(again.actions, [])
+        for bad, text in (("nope", "unknown agent"), ("cursor", "no cursor instance")):
+            with self.assertRaises(DevkitError) as raised:
+                self._sync("one", "two", agents=bad)
+            self.assertIn(text, str(raised.exception))
+        with self.assertRaises(DevkitError):
+            self._sync("one", "two", agents="codex", only="code")
+
+    def test_holders_finds_a_process_with_a_file_open_under_a_root(self):
+        from devkit_cli.sessions import common
+        root = self.home / "fakeproc"
+        for pid, link in ((21, f"{self.home}/data/state.db"), (22, f"{self.home}/data-other/x"),
+                          (23, "/etc/passwd")):
+            fds = root / str(pid) / "fd"
+            fds.mkdir(parents=True)
+            (fds / "3").symlink_to(link)
+            (root / str(pid) / "comm").write_text("app\n")
+        found = common.holders("Cursor", [self.home / "data"], root)
+        self.assertEqual(found, [("Cursor", "21")])
+
+    def test_cli_help_exits_zero(self):
+        result = run("profile", "session-sync", "--help")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("--source", result.stdout)
 
 
 class GlobalIgnoreWithoutGitTests(unittest.TestCase):

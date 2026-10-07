@@ -23,6 +23,9 @@ print the rsync/asar/hook plan and ask `sudo`. `install.py --apply` with no
 profiles yet offers to create a first one (type, then name) unless you passed
 `--profile` or `--name`.
 
+A profile is not the only way to give a repo the harness: `devkit project build`
+links skills and an `AGENTS.md` into the repo itself. See [project.md](project.md).
+
 ```bash
 ./devkit profile apps-sync --user "$USER" --install-hook --apply
 ```

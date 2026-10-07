@@ -26,7 +26,7 @@ What step 3 leaves on your machine, all under `~/.local/bin` (which must be on
 |------|---------|
 | `devkit` | Link to the installed kit's `devkit.py`, so `devkit` runs from any directory. |
 | `<vendor>-<name>` (`claude-dummy`) | The profile's CLI wrappers. |
-| `devkit-uninstall.sh` | Removes everything the kit wrote. |
+| `devkit-uninstall.sh` | Removes everything the kit wrote, except projects built with `devkit project build`: run `devkit project clean` in each repo first. |
 
 The kit is also copied to `~/.local/share/devkit/`, and every profile links into that copy, not into this checkout. Once step 3 has run you can move or delete the checkout; it is only the source of an upgrade (see [docs/updates.md](docs/updates.md)).
 
@@ -115,6 +115,7 @@ Nothing on Arch may require the AUR.
 | [docs/install.md#agent-runbook](docs/install.md#agent-runbook) | An assistant is running the install or the uninstall |
 | [docs/install.md#uninstalling](docs/install.md#uninstalling) | Removing profiles, launchers, and desktop forks |
 | [docs/profiles.md](docs/profiles.md) | Creating, syncing, or adopting a profile |
+| [docs/project.md](docs/project.md) | Applying the harness to a work repo instead of a profile |
 | [docs/paths.md](docs/paths.md) | Something rendered `~/...` literally, or a link is broken |
 | [docs/updates.md](docs/updates.md) | Updating, or an update refused to apply |
 | [docs/troubleshooting.md](docs/troubleshooting.md) | A refusal message sent you here |
@@ -145,6 +146,7 @@ python3 -m unittest discover -s tests       # the acceptance checklist
 | `install.py` | Step 2. Configuration only. Refuses root. |
 | `devkit` | Profile, export, update and diagnostic CLI. `install.py` links it to `~/.local/bin/devkit`. |
 | `profiles/` | Profile manifests. `core` is the base; the rest extend it. |
+| `devkit_cli/project.py` | `devkit project`: applies skills and instructions to a work repo ([docs/project.md](docs/project.md)). |
 | `core/` | The curated export of the harness. Generated — never edit directly. |
 | `templates/` | Vendor configs, CLI wrappers, desktop launchers, auth dispatchers. |
 | `export-allowlist.json` | What ships, per layer, with a recorded reason for every exclusion. |

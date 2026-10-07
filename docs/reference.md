@@ -30,6 +30,7 @@ Common examples:
   devkit profile apps-sync --apply   # prints the fork plan, then asks sudo
   devkit profile auth restore
   devkit profile session-sync --source stock --target dummy   # dry run
+  devkit project init . --layer core --apply   # then: devkit project build . --apply
   devkit update check
   devkit doctor
   devkit deps --profile enonic       # are the declared binaries on PATH?
@@ -48,6 +49,8 @@ command groups:
     deps            Check that every binary a profile declares is on PATH.
     profile         Create, inspect, sync, and rebuild isolated harness
                     profiles.
+    project         Apply the harness (skills, instructions) to a work repo,
+                    alongside profiles.
     update          Check, stage, and apply kit updates (one direction).
     origin          Inspect and adopt the kit this instance came from.
     docs            Generate and verify the documentation tree.
@@ -285,6 +288,89 @@ options:
                         never merges; the old one is kept beside it. Quit the
                         source too.
   --apply               Write. Default: dry run.
+```
+
+### `devkit project`
+
+```
+usage: devkit project [-h] COMMAND ...
+
+Apply the harness (skills, instructions) to a work repo, alongside profiles.
+
+options:
+  -h, --help  show this help message and exit
+
+commands:
+  COMMAND
+    init      Write harness/project.json naming the layers.
+    build     Link the layers' skills into the repo and exclude them from git.
+    status    Check a built project for drift and broken links.
+    clean     Remove what the build wrote.
+```
+
+#### `devkit project init`
+
+```
+usage: devkit project init [-h] [--layer TYPE] [--force] [--apply] [PATH]
+
+Write harness/project.json in the repo. Each --layer is a profile type of the installed kit (core, enonic, ...); the build links the union of their skills. Dry run without --apply.
+
+positional arguments:
+  PATH          Root of the git work tree (default: .).
+
+options:
+  -h, --help    show this help message and exit
+  --layer TYPE  Profile type to apply (repeatable, at least one).
+  --force       Overwrite an existing harness/project.json.
+  --apply       Write. Default: dry run.
+```
+
+#### `devkit project build`
+
+```
+usage: devkit project build [-h] [--config FILE] [--rules | --no-rules] [--apply] [PATH]
+
+Link the skills of the layers in harness/project.json into .agents/skills (Codex, Cursor) and .claude/skills (Claude Code), link repo-owned skills from harness/skills, write AGENTS.md and a CLAUDE.md link when the repo has neither, and list every generated path in .git/info/exclude. Tracked files are never modified. Reads the installed kit; never installs one. Dry run without --apply.
+
+positional arguments:
+  PATH                 Root of the git work tree (default: .).
+
+options:
+  -h, --help           show this help message and exit
+  --config FILE        Project config. Default: <PATH>/harness/project.json.
+  --rules, --no-rules  Also embed the kit's rules (core, plus client for client layers) in the generated AGENTS.md. Default: the
+                       choice the last build recorded.
+  --apply              Write. Default: dry run.
+```
+
+#### `devkit project status`
+
+```
+usage: devkit project status [-h] [--config FILE] [PATH]
+
+Compare the repo with what a build would write now. Exit 1 on a missing or dangling link or a changed entry set; a newer kit release alone is informational. Warns when the active profile provides a skill of the same name. Writes nothing.
+
+positional arguments:
+  PATH           Root of the git work tree (default: .).
+
+options:
+  -h, --help     show this help message and exit
+  --config FILE  Project config. Default: <PATH>/harness/project.json.
+```
+
+#### `devkit project clean`
+
+```
+usage: devkit project clean [-h] [--apply] [PATH]
+
+Remove the links and files the stamp lists (only while they still point where the build put them), this worktree's exclude block, the stamp, and the directories left empty. Repo-owned links and tracked files stay. Dry run without --apply.
+
+positional arguments:
+  PATH        Root of the git work tree (default: .).
+
+options:
+  -h, --help  show this help message and exit
+  --apply     Write. Default: dry run.
 ```
 
 ### `devkit update`

@@ -160,6 +160,41 @@ The generator was proved by reproducing the previous file **byte for byte**
 before any content changed. That gate is the whole safety net — without it, a
 content bug hides inside a large diff.
 
+## Project mode is content, not runtime
+
+`devkit project` applies the harness to a work repo as a third target next to
+profiles. The decisions that outlive the plan it was built from:
+
+- **Composes with profiles, does not replace them.** A project carries what the
+  agent knows (skills, instructions); a profile keeps what the agent runs on
+  (hooks, MCP, auth, env, GUI identity). Putting those in a repo would lose
+  auth, session and tool isolation and the desktop forks, so the project mode
+  writes none of them.
+- **Layers are profile types.** `harness/project.json` names types and the
+  build unions their skills. That gives stack composition (`core` + `enonic`)
+  without changing the manifest format; a list-valued `extends` stays deferred
+  until something needs it.
+- **The build only reads an installed kit.** `ensure_installed` writes the kit
+  home, and a smoke run of a write command with a temp `HOME` once created a
+  real profile because those commands take the home from the passwd entry. A
+  project build never installs, never writes the home, and refuses without
+  `current`.
+- **Client repos stay clean.** Generated paths go into a managed block of
+  `.git/info/exclude`, keyed per worktree because a linked worktree shares the
+  common dir's file. Tracked paths are skipped with a warning, never replaced.
+  Repo-owned links are not excluded, so the repo can commit them and a
+  teammate without devkit gets them from `git clone`.
+- **Base rules are opt-in (`--rules`).** A profile already projects them, so
+  embedding them by default would load them twice. `AGENTS.md` carries the
+  repo's own `harness/AGENTS.md` unless asked.
+- **Drift is the entry set, not the release.** Links go through `current`, so a
+  kit release that does not change the resolved skills needs no rebuild;
+  `status` reports it as informational.
+- **No static export, no overlay by repo name, no `doctor` integration in v1.**
+  None has a consumer yet. `--config FILE` already keeps a client repo free of
+  `harness/`, and `status` is the per-project check because there is no
+  registry of built projects.
+
 ## Refusals name the fix
 
 Every refusal in this kit prints the command that resolves it. A refusal the

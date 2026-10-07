@@ -218,11 +218,10 @@ def set_default(desktop: str, scheme: str, home: Path | None = None) -> None:
         capture_output=True, check=False, env=env)
 
 
-def _tokens(home: Path, kit_root: Path | None = None) -> dict[str, str]:
+def _tokens(home: Path) -> dict[str, str]:
     dummy = {"name": "auth", "type": "auth"}
-    tokens = instances.render_tokens(dummy, "claude", home)
-    tokens["PROFILE_KIT_ROOT"] = str(kit_root or REPO_ROOT)
-    return tokens
+    # PROFILE_KIT_ROOT comes from render_tokens: <kit-home>/current, never a checkout.
+    return instances.render_tokens(dummy, "claude", home)
 
 
 def _template(root: Path, name: str) -> str:
@@ -235,7 +234,7 @@ def _template(root: Path, name: str) -> str:
 
 def install_dispatchers(plan: Plan, home: Path, kit_root: Path | None = None) -> None:
     root = kit_root or REPO_ROOT
-    tokens = _tokens(home, root)
+    tokens = _tokens(home)
     paths = instances.auth_paths(home)
     ensure_dir(home / ".config")
     ensure_dir(paths["applications"])

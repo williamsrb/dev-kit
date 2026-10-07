@@ -26,6 +26,63 @@ labels the same commands `would run (as root):` and does not prompt.
 They also assume nothing about each other. Either can run on a machine where the
 other has not.
 
+## The installed kit is a copy, not a link
+
+Profile projections used to be symlinks into the checkout's `core/`, and the
+auth scripts put the checkout on `PYTHONPATH`. Measured on the owner's machine
+on 2026-10-07: 326 symlinks reached the repo (325 under `~/.agents-profiles`
+plus `~/.local/bin/devkit`), so deleting or moving the clone broke every
+profile and the desktop launchers. Everything else devkit writes (wrappers,
+vendor configs, `.desktop` files, icons, the uninstaller, the app-fork worker)
+was already a copy.
+
+devkit now copies a release of itself into `${XDG_DATA_HOME:-~/.local/share}/devkit/`
+and points every projection at it. The reasons for each choice:
+
+- **One shared kit home, not a copy per profile.** The payload is 16.7M of
+  tracked plus untracked files (measured 2026-10-07); a copy per profile is the
+  cost this document already rejects for `core/`. One shared copy keeps it once.
+- **Immutable `releases/<id>` plus a `current` symlink.** Projections link
+  through `current`, so an upgrade flips one link and never rewrites the 325
+  profile links. Replacing one directory in place would be neither atomic nor
+  reversible.
+- **Under `~/.local/share`, not `~/.agents` or `~/.cache`.** Launcher icons and
+  desktop files already live there. `~/.agents` is the export source and must
+  not hold a runtime copy; `~/.cache` is clearable, which a runtime must not be.
+  `XDG_DATA_HOME` counts only when it lies under `$HOME`, so a `--user` run or a
+  test cannot write into the caller's data dir, and the static uninstaller can
+  apply the same rule.
+- **The runtime allowlist, not the repository.** `core/` ships whole,
+  `skills-vendor` included, so a release matches what `export` produced;
+  filtering inside it would be a second allowlist with no consumer. Bootstrap and
+  install stay checkout-only (first install), docs and tests stay in the repo.
+- **Release id is the payload digest.** An identical re-install is a no-op, and a
+  dirty working tree gets a distinct id, which a git commit alone cannot name.
+- **Source order is `--from`, the recorded source, then `upstream`.** The origin
+  fork has `upstream: null`, so the recorded checkout path makes a bare
+  `devkit update` re-pull from where it was installed.
+- **A local source is its working tree, not HEAD.** Testing an uncommitted
+  change against the real install is the main local use, and the allowlist
+  bounds what is copied.
+- **Flip, then re-sync, and roll the flip back on failure.** Projections link
+  through `current`, so they cannot be written against a release that is not yet
+  current.
+- **Maintainer commands refuse from a release.** They write into `core/` and
+  `docs/`, which only exist as sources in a checkout.
+- **`REPO_ROOT` keeps its name**, documented as "the tree the running code lives
+  in". It resolves symlinks, so a running installed devkit sees a release
+  directory: anything written for later use names `current`, never `REPO_ROOT`.
+- **Keep the current and the previous release** (about 34M). Rollback needs one;
+  more is cost without a use. The prune runs after every install, so repeated
+  `profile sync` from an edited checkout does not accumulate releases.
+- **The uninstaller removes the kit home**, guarded by the release stamps, and
+  stays static shell. `README.md` promises it removes everything the kit wrote.
+
+The app-fork worker run as root (`/usr/local/bin/sync-devkit-profile-apps.py`)
+and `/usr/lib/devkit/*` are unchanged. `profile apps-sync` re-executes the CLI
+under sudo, so root runs user-owned code today (the checkout) and tomorrow (the
+installed release): the same trust level, not addressed here.
+
 ## Profile isolation is config plus a GUI fork, not containers
 
 Config isolation is environment variables, a uniquely named CLI wrapper, and a

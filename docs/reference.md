@@ -300,38 +300,53 @@ options:
 commands:
   COMMAND
     check     Report available updates. Never writes.
-    fetch     Download and verify into the staging cache.
-    apply     Install a staged update. Offline.
+    fetch     Verify a source and stage it in the cache.
+    apply     Install a staged update as a new kit release. Offline unless
+              --from names a git URL, which is staged first.
 ```
 
 #### `devkit update check`
 
 ```
-usage: devkit update check [-h] [--profile NAME]
+usage: devkit update check [-h] [--profile NAME] [--from SRC] [--ref REF]
 
 options:
   -h, --help      show this help message and exit
   --profile NAME
+  --from SRC      Update source: a local directory (its working tree, payload
+                  files only) or a git URL. Default: the source the installed
+                  kit recorded, then devkit.yaml upstream.
+  --ref REF       Ref to take from a git URL (default: HEAD). A local directory
+                  is always read as its working tree.
 ```
 
 #### `devkit update fetch`
 
 ```
-usage: devkit update fetch [-h] [--ref REF]
+usage: devkit update fetch [-h] [--from SRC] [--ref REF]
 
 options:
   -h, --help  show this help message and exit
-  --ref REF
+  --from SRC  Update source: a local directory (its working tree, payload files
+              only) or a git URL. Default: the source the installed kit
+              recorded, then devkit.yaml upstream.
+  --ref REF   Ref to take from a git URL (default: HEAD). A local directory is
+              always read as its working tree.
 ```
 
 #### `devkit update apply`
 
 ```
-usage: devkit update apply [-h] [--profile NAME] [--apply]
+usage: devkit update apply [-h] [--profile NAME] [--from SRC] [--ref REF] [--apply]
 
 options:
   -h, --help      show this help message and exit
   --profile NAME
+  --from SRC      Update source: a local directory (its working tree, payload
+                  files only) or a git URL. Default: the source the installed
+                  kit recorded, then devkit.yaml upstream.
+  --ref REF       Ref to take from a git URL (default: HEAD). A local directory
+                  is always read as its working tree.
   --apply         Write. Default: dry run.
 ```
 

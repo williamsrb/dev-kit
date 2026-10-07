@@ -24,9 +24,11 @@ What step 3 leaves on your machine, all under `~/.local/bin` (which must be on
 
 | File | Purpose |
 |------|---------|
-| `devkit` | Link to this checkout's `devkit.py`, so `devkit` runs from any directory. Moving the checkout means running `<checkout>/devkit profile sync <name> --apply`. |
+| `devkit` | Link to the installed kit's `devkit.py`, so `devkit` runs from any directory. |
 | `<vendor>-<name>` (`claude-dummy`) | The profile's CLI wrappers. |
 | `devkit-uninstall.sh` | Removes everything the kit wrote. |
+
+The kit is also copied to `~/.local/share/devkit/`, and every profile links into that copy, not into this checkout. Once step 3 has run you can move or delete the checkout; it is only the source of an upgrade (see [docs/updates.md](docs/updates.md)).
 
 Open a new shell after install so `PATH` changes apply. Without `--name` or
 `--profile`, `install.py` on a terminal asks which first profile to create.

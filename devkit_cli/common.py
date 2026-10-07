@@ -10,7 +10,13 @@ from pathlib import Path
 
 from .errors import DevkitError
 
+# The tree the running code lives in: a checkout, or an installed release under
+# the kit home. Never write it into anything that outlives the run; use
+# kithome.current_link(home) for that.
 REPO_ROOT = Path(__file__).resolve().parent.parent
+
+# Present at the root of every installed release; absent from a checkout.
+STAMP_NAME = ".devkit-install.json"
 
 # Written into kit source wherever a home-anchored path is unavoidable, and
 # rendered per context at install time. `~` is never used:
@@ -35,6 +41,25 @@ def ensure_dir(path: Path) -> None:
 
 def repo_file(name: str) -> Path:
     return REPO_ROOT / name
+
+
+def require_checkout(command: str) -> None:
+    """Refuse a maintainer command that needs sources an installed release lacks."""
+    stamp = REPO_ROOT / STAMP_NAME
+    if not stamp.is_file():
+        return
+    try:
+        source = json.loads(stamp.read_text(encoding="utf-8")).get("source") or ""
+    except (OSError, ValueError):
+        source = ""
+    if source and Path(source).is_dir():
+        where = f"cd {source} && ./devkit {command}"
+    else:
+        where = (f"git clone {source or '<your kit repo>'} devkit-src "
+                 f"&& cd devkit-src && ./devkit {command}")
+    raise DevkitError(
+        f"'devkit {command}' needs a checkout; this devkit runs from an installed release",
+        f"run it from your checkout: {where}")
 
 
 def load_json(path: Path, what: str) -> dict:

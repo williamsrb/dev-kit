@@ -13,7 +13,7 @@ import difflib
 import re
 
 from . import manifest
-from .common import repo_file
+from .common import repo_file, require_checkout
 from .errors import DevkitError
 
 MARKER_START = "<!-- devkit:generated:{name} -->"
@@ -100,6 +100,7 @@ def _apply_blocks(text: str, name: str, body: str) -> str:
 
 
 def cmd_generate(args) -> int:
+    require_checkout("docs generate")
     docs_root = repo_file("docs")
     targets = sorted(docs_root.rglob("*.md")) if docs_root.is_dir() else []
     targets += [repo_file("README.md")] if repo_file("README.md").is_file() else []

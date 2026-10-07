@@ -16,8 +16,8 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-from . import appfork
-from .common import FILE_MODE, REPO_ROOT, ensure_dir, timestamp
+from . import appfork, kithome
+from .common import FILE_MODE, REPO_ROOT, STAMP_NAME, ensure_dir, timestamp
 from .errors import DevkitError
 
 # Top-left shield badge. Profile colour tints the black fill; white rim stays.
@@ -520,7 +520,7 @@ def render_tokens(profile: dict, vendor: str, home: Path) -> dict[str, str]:
         "PROFILE_CODEX_CLI": resolve_stock_cli("codex", VENDOR_CLI_CANDIDATES["codex"]),
         "PROFILE_CURSOR_AGENT": resolve_stock_cli(
             "cursor-agent", VENDOR_CLI_CANDIDATES["cursor"]),
-        "PROFILE_KIT_ROOT": str(REPO_ROOT),
+        "PROFILE_KIT_ROOT": str(kithome.current_link(home)),
         "PROFILE_AUTH_LAUNCH": str(auth["launch"]),
         "PROFILE_AUTH_DISPATCH": str(auth["dispatch"]),
         "PROFILE_AUTH_SCHEME": "claude",
@@ -573,14 +573,28 @@ def read_provenance(config_dir: Path) -> dict | None:
                           "delete it and re-run 'devkit profile sync'") from None
 
 
-def kit_commit() -> str:
-    """The kit's HEAD, or "unknown" when it cannot be read.
+def kit_commit(root: Path | None = None) -> str:
+    """The commit of the kit at `root` (default: the running tree).
+
+    An installed release answers from its stamp, with "-dirty" when it was
+    installed from a working tree that differed from HEAD. A checkout answers
+    with HEAD, or "unknown" when git cannot say.
 
     check=False swallows a non-zero exit, not a missing binary, and git is a
     dependency bootstrap.sh installs rather than one devkit can assume.
     """
+    root = root or REPO_ROOT
+    stamp = root / STAMP_NAME
+    if stamp.is_file():
+        try:
+            data = json.loads(stamp.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            data = {}
+        commit = data.get("commit")
+        if commit:
+            return f"{commit}-dirty" if data.get("dirty") else commit
     try:
-        result = subprocess.run(["git", "-C", str(REPO_ROOT), "rev-parse", "HEAD"],
+        result = subprocess.run(["git", "-C", str(root), "rev-parse", "HEAD"],
                                 capture_output=True, text=True, check=False)
     except FileNotFoundError:
         return "unknown"

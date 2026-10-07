@@ -111,7 +111,7 @@
     ]
   },
   "rules": {
-    "_comment": "AGENTS.md is generated from manifest.json, so the generator and its inputs ship, not a rendered snapshot. `devkit export` runs generate-agents-md.py --layer <profile layers> at install time.",
+    "_comment": "AGENTS.md is generated from manifest.json, so the generator and its inputs ship, not a rendered snapshot. `devkit project build` runs generate-agents-md.py --layer <project layers> to render it.",
     "core": [
       "manifest.json",
       "agents.d/",

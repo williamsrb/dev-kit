@@ -16,6 +16,7 @@ from __future__ import annotations
 import datetime as _dt
 import json
 import shutil
+import tempfile
 from pathlib import Path
 
 from . import instances, kithome, kitsource, manifest, privilege
@@ -208,12 +209,21 @@ def _restore(backups: list[tuple[Path, Path]]) -> None:
 
 def cmd_apply(args) -> int:
     privilege.refuse_root(getattr(args, "user", None))
+    if (getattr(args, "from_source", None) or getattr(args, "ref", None)) and not args.apply:
+        # A dry run stages into a throwaway directory: anything left in the
+        # staging cache is what a later bare `apply --apply` installs.
+        with tempfile.TemporaryDirectory(prefix="devkit-dry-run-") as tmp:
+            return _apply(args, Path(tmp))
+    return _apply(args, STAGING_ROOT)
+
+
+def _apply(args, staging_root: Path) -> int:
     home = Path.home()
     kit = _kit()
     from_source, ref = getattr(args, "from_source", None), getattr(args, "ref", None)
     if from_source or ref:
         source = kitsource.resolve_source(from_source, home)
-        payload = kitsource.stage(source, ref or "HEAD", kit, STAGING_ROOT, _stamp())
+        payload = kitsource.stage(source, ref or "HEAD", kit, staging_root, _stamp())
         marker = kitsource.read_marker(payload)
     else:
         staged = _latest_staged()
@@ -269,6 +279,7 @@ def cmd_apply(args) -> int:
             type_name = instances.instance_type(prov, name)
             profile = instances.bind_instance(
                 manifest.load(type_name, kit_root=current), name, type_name)
+            instances.apply_provenance_color(profile, prov)
             materialize(profile, [vendor], home, Plan(apply=True), force=True,
                         kit_root=current)
             updated = instances.read_provenance(config_dir) or prov

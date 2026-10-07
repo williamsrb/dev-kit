@@ -1,7 +1,7 @@
 """Fill a profile instance's MCP files from the catalog.
 
 The profile `mcp` list is the default-alive set. Catalog `parked` names
-(graft, slack, playwright stub, browser-control) stay out unless the operator
+(slack, playwright stub, browser-control) stay out unless the operator
 puts them on a profile list *and* registers with --force via mcp/install.py.
 Spawned `playwright-<id>` instances are not profile defaults.
 """

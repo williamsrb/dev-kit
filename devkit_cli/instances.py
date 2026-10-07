@@ -88,7 +88,6 @@ VENDOR_GUI_CANDIDATES = {
     "codex": ["/usr/bin/chatgpt", "/usr/lib/chatgpt/ChatGPT"],
     "cursor": ["/usr/share/cursor/cursor", "/opt/cursor/cursor"],
 }
-CURSOR_CLI_CANDIDATES = ["/usr/share/cursor/bin/cursor", "/opt/cursor/bin/cursor"]
 VENDOR_CLI_CANDIDATES = {
     "claude": ["/usr/bin/claude", "/usr/local/bin/claude"],
     "codex": ["/usr/bin/codex", "/usr/local/bin/codex"],
@@ -515,7 +514,6 @@ def render_tokens(profile: dict, vendor: str, home: Path) -> dict[str, str]:
         "PROFILE_CLAUDE_BIN": first_existing(VENDOR_GUI_CANDIDATES.get("claude", [])) or "claude",
         "PROFILE_CHATGPT_BIN": first_existing(VENDOR_GUI_CANDIDATES.get("codex", [])) or "chatgpt",
         "PROFILE_CURSOR_GUI": first_existing(VENDOR_GUI_CANDIDATES.get("cursor", [])) or "cursor",
-        "PROFILE_CURSOR_CLI": first_existing(CURSOR_CLI_CANDIDATES) or "cursor",
         "PROFILE_CLAUDE_CLI": resolve_stock_cli("claude", VENDOR_CLI_CANDIDATES["claude"]),
         "PROFILE_CODEX_CLI": resolve_stock_cli("codex", VENDOR_CLI_CANDIDATES["codex"]),
         "PROFILE_CURSOR_AGENT": resolve_stock_cli(

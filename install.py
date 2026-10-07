@@ -20,7 +20,7 @@ Usage:
     ./install.py --apply                    # TTY: offer name + type. Non-TTY: type core
     ./install.py --profile enonic --apply   # skip the offer; name = type
     ./install.py --name dummy --profile enonic --apply
-    ./install.py --verify
+    ./install.py --name dummy --profile enonic --verify
 
 Exit codes: 0 ok, 1 a refusal or a --verify problem, 2 bad invocation.
 
@@ -39,7 +39,6 @@ from devkit_cli import (
     cli_link,
     globalignore,
     instances,
-    manifest,
     privilege,
     uninstaller,
 )
@@ -65,6 +64,7 @@ def verify(profile: dict, home: Path) -> int:
     print(f"  core export        {'ok' if core.is_dir() else 'MISSING — run devkit export --apply'}")
     problems += 0 if core.is_dir() else 1
 
+    installed = 0
     for instance in profile.get("instances", []):
         vendor = instance["vendor"]
         layout = instances.paths_for(profile["name"], vendor, home)
@@ -72,9 +72,13 @@ def verify(profile: dict, home: Path) -> int:
         state = "installed" if prov else "not installed"
         print(f"  {vendor:18s} {state}")
         if prov:
+            installed += 1
             wrapper = layout["wrapper"]
             print(f"    wrapper          {'ok' if wrapper.is_file() else 'MISSING'} {wrapper}")
             problems += 0 if wrapper.is_file() else 1
+    if not installed:
+        print(f"  no vendor of {profile['name']} is installed")
+        problems += 1
 
     for problem in _home_root_problems(home):
         print(f"  {problem}")
@@ -105,7 +109,8 @@ def main() -> int:
     parser.add_argument("--user", metavar="NAME",
                         help="Install for this account. Required when running under sudo.")
     parser.add_argument("--verify", action="store_true",
-                        help="Report installed state and exit. Writes nothing.")
+                        help="Report the installed state of --name (default: the "
+                             "type) and exit. Writes nothing.")
     parser.add_argument("--fix-home-rules", action="store_true",
                         help="Also move a populated home-root CLAUDE.md/AGENTS.md "
                              "into its vendor config dir.")
@@ -116,7 +121,7 @@ def main() -> int:
         home = Path(user.pw_dir)
 
         if args.verify:
-            return verify(manifest.load(args.profile), home)
+            return verify(load_for_create(args.name or args.profile, args.profile), home)
 
         if not repo_file("core").is_dir():
             raise DevkitError("core/ has not been exported yet",

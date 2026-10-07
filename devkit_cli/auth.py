@@ -236,10 +236,11 @@ def install_dispatchers(plan: Plan, home: Path, kit_root: Path | None = None) ->
     root = kit_root or REPO_ROOT
     tokens = _tokens(home)
     paths = instances.auth_paths(home)
-    ensure_dir(home / ".config")
-    ensure_dir(paths["applications"])
-    ensure_dir(paths["launch"].parent)
-    ensure_dir(paths["state"].parent)
+    if plan.apply:
+        ensure_dir(home / ".config")
+        ensure_dir(paths["applications"])
+        ensure_dir(paths["launch"].parent)
+        ensure_dir(paths["state"].parent)
     scripts = (
         (paths["launch"], instances.render(_template(root, "launch.sh"), tokens)),
         (paths["dispatch"], instances.render(_template(root, "dispatch.sh"), tokens)),

@@ -17,8 +17,9 @@ override. Name a real user account.
 
 ## `<path> exists and was not written by devkit`
 
-The kit will not overwrite a file it did not create. Look at the file. If you
-want it replaced, `--force` backs it up first, timestamped, beside the original.
+The kit will not write over a file it did not create (`profile sync` excepted,
+which always backs up and replaces). Look at the file. If you want it replaced,
+`--force` backs it up first, timestamped, beside the original.
 
 ## `core/ has not been exported yet`
 
@@ -43,6 +44,11 @@ checkout moves or is deleted. Make it standalone from the checkout:
 ```bash
 <checkout>/devkit profile sync <profile> --apply
 ```
+
+Run from a checkout, `sync` first installs that checkout's working tree,
+uncommitted edits included, as the `current` release, and `current` is what
+every profile links through. Commit or stash anything you do not want installed
+for all of them.
 
 ## `legacy: ~/.local/bin/devkit is linked to …`
 
@@ -131,9 +137,10 @@ or re-run `devkit profile sync <name> --apply`.
 See [paths.md](paths.md). The short version: `~` does not expand in a parsed
 value, so use `${HOME}` there.
 
-If a violation is a false positive, add it to the `allow` map in
-`path-contract.json` against the specific rule id, with the reason. Do not
-disable the rule.
+If a violation is a false positive, add the file to the `allow` map in
+`path-contract.json` with the rule ids it is exempt from. The exemption covers
+the whole file for those rules, and there is no per-entry reason field: extend
+the map's `_comment` to say why. Do not disable the rule.
 
 ## `gitleaks found N finding(s) in the export`
 
@@ -155,9 +162,10 @@ the profile `bin/` are on `PATH`. After a kit update that added those wrappers:
 
 ## Graft MCP is missing from a new profile
 
-That is the default. Graft is **parked** (CLI + `graft.mdc` stay). The live MCP
-set is `context7`, plus `gitlab` on Enonic and `atlassian-rovo-preview` on
-`client`. See [profiles.md](profiles.md#mcp).
+That is the default. Graft has no MCP server (catalog `skip`); the CLI and
+`graft.mdc` are how it is used. The live MCP set is `context7` and `serena`, plus
+`gitlab` on Enonic and `atlassian-rovo-preview` on `client`. See
+[profiles.md](profiles.md#mcp).
 
 ## Login opened the wrong app (or nowhere)
 

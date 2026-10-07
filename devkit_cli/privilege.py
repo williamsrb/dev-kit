@@ -58,13 +58,45 @@ def resolve_target_user(explicit: str | None) -> pwd.struct_passwd:
 
 
 def refuse_root(target_user: str | None = None) -> pwd.struct_passwd:
-    """Guard for every configuration write."""
+    """Guard for every configuration write.
+
+    Root with --user becomes that account before anything is written, so every
+    created path is owned by it.
+    """
     if is_root() and not target_user:
         who = invoking_user()
         hint = (f"re-run without sudo, or pass --user {who}" if who
                 else "re-run as the user who will use the harness, or pass --user <name>")
         raise DevkitError("refusing to write configuration as root", hint)
-    return resolve_target_user(target_user)
+    entry = resolve_target_user(target_user)
+    if is_root():
+        act_as(entry)
+    return entry
+
+
+def act_as(entry: pwd.struct_passwd) -> None:
+    """Switch real and effective ids to `entry`, keeping root as the saved uid.
+
+    Real and effective must both change: bash resets its effective uid to the
+    real one, so a child shell of a seteuid-only process would write as root.
+    The saved uid survives here but not across exec, so only this process can
+    take root back, through `regain_root`.
+    """
+    os.setgroups(os.getgrouplist(entry.pw_name, entry.pw_gid))
+    os.setresgid(entry.pw_gid, entry.pw_gid, 0)
+    os.setresuid(entry.pw_uid, entry.pw_uid, 0)
+    os.environ["HOME"] = entry.pw_dir
+    os.environ["USER"] = os.environ["LOGNAME"] = entry.pw_name
+
+
+def regain_root() -> bool:
+    """Take root back after `act_as`. False when this process never had it."""
+    if os.getresuid()[2] != 0 or os.geteuid() == 0:
+        return is_root()
+    os.setresuid(0, 0, 0)
+    os.setresgid(0, 0, 0)
+    os.setgroups([0])
+    return True
 
 
 def shell_is_interactive() -> bool:

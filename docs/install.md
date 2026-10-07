@@ -74,29 +74,32 @@ offer and uses the type as the name. Non-interactive runs do the same
 ./install.py --apply                       # TTY: Create a first profile?
 ./install.py --profile enonic --apply      # skip the offer; name = enonic
 ./install.py --name dummy --profile enonic --apply
-./install.py --profile enonic --verify     # report state, write nothing
+./install.py --name dummy --profile enonic --verify   # report state, write nothing
 ```
 
 This creates the profile's config directories, projects its skills, rules and
 knowledge base as per-entry symlinks (the profile's subset, not the whole kit
 `core/` tree), renders the vendor configs, writes the Tier 1 wrappers (with
 `DEVKIT_PROFILE` / `AGENTS_HOME`) and desktop launchers, badges the icons with a
-coloured shield emblem,
-and records a provenance file. Wrappers and launchers also export
-`GRAFT_NO_GITIGNORE=1` and `GRAFT_NO_IGNORE=1`, so graft stops writing
-`.gitignore` and `.ignore` into every repo it builds in. Instead, the kit's
-ignore block (graft, graphify and agentctl security-scan output, at any depth)
-is appended to your global git ignore: the file `core.excludesFile` names, or
-`~/.config/git/ignore`. It is skipped when every pattern is already there, or
-when git is not installed.
-Desktop identity forks (patched asar / `WM_CLASS`) rsync into `/usr/lib/devkit/`. `install.py --apply` prints that plan and then
-asks `sudo` for a password. Re-run later with:
+coloured shield emblem, and records a provenance file. Wrappers and launchers
+also export `GRAFT_NO_GITIGNORE=1` and `GRAFT_NO_IGNORE=1`, so graft stops
+writing `.gitignore` and `.ignore` into every repo it builds in. Instead, the
+kit's ignore block (graft, graphify and agentctl security-scan output, at any
+depth) is appended to your global git ignore: the file `core.excludesFile`
+names, or `~/.config/git/ignore`. It is skipped when every pattern is already
+there, or when git is not installed. Desktop identity forks (patched asar /
+`WM_CLASS`) rsync into `/usr/lib/devkit/`. When the profile's fork is missing or
+stale, or the apt/dpkg hooks are not installed, `install.py --apply` prints that
+plan and then asks for administrator privileges (`sudo` on a terminal, `pkexec`
+or `sudo -A` without one). Re-run later with:
 
 ```bash
 ./devkit profile apps-sync --user "$USER" --install-hook --apply
 ```
 
-Dry-run (no `--apply`) lists the same privileged commands without prompting.
+`apps-sync` without `--apply` lists the same privileged commands without
+prompting. `install.py` without `--apply` does not get that far: it prints no
+fork plan.
 
 Then use the wrappers:
 
@@ -116,13 +119,17 @@ target account:
 sudo ./install.py --profile enonic --user yourname --apply
 ```
 
-Every created path is then owned by that account. Resolution to uid 0 or a
-`/root` home is refused outright, with or without `--user`.
+Every created path is then owned by that account: devkit switches to its uid
+and groups before writing anything, and takes root back only for the
+desktop-fork step at the end. Resolution to uid 0 or a `/root` home is refused
+outright, with or without `--user`.
 
 ### When a path already exists
 
-Any write to an existing path aborts and names it. That is deliberate: the kit
-does not know whether that file is yours.
+Writing a file over an existing one that devkit did not write (it carries no
+`devkit` marker) aborts and names it. That is deliberate: the kit does not know
+whether that file is yours. Projection links are different: a file or link
+where a projection goes is replaced, and only a real directory there refuses.
 
 ```
 error: /home/you/.agents-profiles/enonic/codex/config.toml exists and was not written by devkit
@@ -130,6 +137,8 @@ fix:   re-run with --force to back it up and proceed
 ```
 
 `--force` makes a timestamped backup beside the file, then proceeds.
+`devkit profile sync` always runs with `--force`: it rewrites the profile it
+owns, backing up anything it replaces.
 
 ## The installed kit
 
@@ -170,21 +179,22 @@ until you re-sync it. `devkit doctor` and `devkit update check` list it:
 ## Verifying
 
 ```bash
-./install.py --profile enonic --verify    # 0 ok, 1 a problem, 2 bad invocation
+./install.py --name dummy --profile enonic --verify   # 0 ok, 1 a problem, 2 bad invocation
 ./devkit doctor
 ./devkit deps --profile enonic
 ```
 
 `devkit deps` lists every declared binary, whether it was found, and which rung
-of the ladder it came from. It is the check `bootstrap.sh` runs at the end of
+of the ladder declares it. It is the check `bootstrap.sh` runs at the end of
 step 1; `bootstrap_plan.py` remains a module entry point because bash calls it
 before `devkit` is guaranteed to work.
 
 ## Uninstalling
 
 `install.py`, `devkit profile create` and `devkit profile sync` write
-`~/.local/bin/devkit-uninstall.sh`. Every command that writes a profile leaves
-one, so there is no order of commands that produces a profile you cannot remove,
+`~/.local/bin/devkit-uninstall.sh`. Every command that creates or syncs a profile
+leaves one (`devkit update apply` re-syncs instances that already have it), so
+there is no order of commands that produces a profile you cannot remove,
 and `devkit doctor` reports an installed machine that has lost it. That shell
 file is not in this checkout. It does not import the kit and does not call
 `devkit`.
@@ -207,6 +217,8 @@ Removed:
 - the installed kit, `~/.local/share/devkit` (only when it holds
   `releases/*/.devkit-install.json` stamps; `${XDG_DATA_HOME}/devkit` when that
   is under `$HOME`)
+- the update staging cache, `~/.cache/devkit` (only when it holds
+  `staged/*/.devkit-staged.json` markers)
 - `~/.local/bin/devkit`, when it is a link to a `devkit.py`
 - `~/.local/bin/<vendor>-<name>` wrappers and their `.devkit-backup-*` copies
 - any other file in `~/.local/bin` or `~/.local/share/applications` carrying the
@@ -228,7 +240,12 @@ Removed:
   profile, unloaded with `apparmor_parser -R` before it is deleted
 
 Left in place: this checkout, `~/.agents`, and packages `bootstrap.sh`
-installed. Bootstrap does not record which packages it added.
+installed. Bootstrap does not record which packages it added. What
+`devkit fix-home-rules` (or `install.py --fix-home-rules`) did is also left: the
+rules it moved into `~/.claude/CLAUDE.md` or `~/.codex/AGENTS.md` are your
+content in the stock vendor directories, and the 1-byte mode-000 stubs at
+`~/CLAUDE.md` and `~/AGENTS.md` keep the vendors from reading home-root rules.
+Their `.devkit-backup-*` copies hold the originals.
 
 Run it as the account that owns the profiles. As root it refuses unless you
 name that account with `--user NAME`, and a `--user` resolving to uid 0 is
@@ -314,7 +331,7 @@ Standing rules for the whole run:
 5. Verify. Report all three outputs verbatim.
 
    ```bash
-   ./install.py --profile enonic --verify
+   ./install.py --name dummy --profile enonic --verify
    ./devkit deps --profile enonic
    ./devkit doctor
    ```

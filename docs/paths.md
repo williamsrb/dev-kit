@@ -29,7 +29,9 @@ hypothesis.
 ./devkit lint-paths core/skills     # a subtree
 ```
 
-Files are classified by extension, and rules apply per class:
+Files are classified by extension (plus the bare filenames `crontab` and
+`config`, which are machine-consumed); a file in no class is not checked. Rules
+apply per class:
 
 | Class | Examples | `~/` allowed? |
 |-------|----------|---------------|
@@ -50,25 +52,32 @@ because it explains what they do *not* flag:
 - **`quoted-tilde`** applies to shell only. In Python a `"~/..."` literal is
   usually prose in a help string, or is about to go through `expanduser()`.
 
+One rule is easy to miss because it is not about `~`: **`home-fallback`** flags
+`${HOME:-/some/path}` in scripts and shell. A fallback bakes one machine's home
+into every other machine; require `HOME` instead.
+
 ## Exemptions
 
 `path-contract.json` has an `allow` map keyed by file path. An exemption is a
 claim that a human reads that line and no program resolves it, so each one is
 listed against specific rule ids rather than blanket-disabling a file.
 
-The test suite carries deliberate positive fixtures — a test proving a rule
-fires has to contain the string the rule matches — so it is exempt by name.
+`tests/test_devkit.py` carries deliberate positive fixtures — a test proving a
+rule fires has to contain the string the rule matches — so it is exempt by name.
+Other test files, `tests/test_project.py` included, are checked like any code.
 
 `ignore` is the blunter list beside it: paths the gate does not read at all,
 rather than a file it reads with one rule switched off. It covers generated and
-vendored content, and the local state this repo's `.gitignore` already declares
-— `.security-local/`, `.ruff_cache/`, `.cache/`, `graft/`. A security scan
-embeds commit messages in its JSON output, so without that entry a routine scan
-can turn the gate red over a path nobody wrote.
+vendored content, and local state that git already ignores — `.security-local/`
+and `.cache/` (this repo's `.gitignore`), `.ruff_cache/` (its own `.gitignore`)
+and `graft/` (the global ignore). A security scan embeds commit messages in its
+JSON output, so without that entry a routine scan can turn the gate red over a
+path nobody wrote.
 
 ## Rendering
 
-`${HOME}` and `${PROFILE_*}` are rendered at install time, per context, by
-`install.py`. Going the other way, `devkit export` rewrites literal home paths
-back to `${HOME}` as files leave the harness, so a path that leaks into the
-source gets normalised on the way out rather than shipping.
+`${HOME}` and `${PROFILE_*}` are rendered at install time, per context, by every
+command that materializes a profile (`install.py`, `devkit profile create` and
+`sync`, `devkit update apply`). Going the other way, `devkit export` rewrites
+literal home paths back to `${HOME}` as files leave the harness, so a path that
+leaks into the source gets normalised on the way out rather than shipping.

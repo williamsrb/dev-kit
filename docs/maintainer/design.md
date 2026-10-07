@@ -6,10 +6,12 @@ is finished.
 
 ## Two steps, not one
 
-`bootstrap.sh` installs packages and writes no configuration. `install.py`
-writes configuration and installs no packages.
+`bootstrap.sh` installs packages and writes no configuration (with one opt-in
+exception: `--wire-path` appends a `PATH` line to your shell profile).
+`install.py` writes configuration and installs no packages.
 
-They are split because they need different privileges. Packages need `sudo`;
+They are split because they need different privileges. Distro packages need
+`sudo` (nvm, uv tools and release binaries go into `$HOME` without it);
 configuration must **not** have it, because a config file owned by root in a
 user's home is a support ticket. Keeping them in one script means one privilege
 level for both, and the wrong one for at least one of them.
@@ -20,8 +22,9 @@ command runs under `pkexec`, or `sudo -A`
 when `pkexec` is absent. Package elevation is the start of the workflow
 (`bootstrap.sh --apply`). `install.py --apply` writes user-owned config, then
 the `/usr/lib/devkit` rsyncs are the end (`devkit profile apps-sync`). Each
-elevated command can be run on its own before or after the rest. Dry-run
-labels the same commands `would run (as root):` and does not prompt.
+elevated command can be run on its own before or after the rest. A dry run does
+not prompt: `bootstrap.sh` labels its commands `would run (as root):`, and
+`apps-sync` prints the fork plan followed by `dry-run: no writes`.
 
 They also assume nothing about each other. Either can run on a machine where the
 other has not.
@@ -66,9 +69,12 @@ and points every projection at it. The reasons for each choice:
   bounds what is copied.
 - **Flip, then re-sync, and roll the flip back on failure.** Projections link
   through `current`, so they cannot be written against a release that is not yet
-  current.
-- **Maintainer commands refuse from a release.** They write into `core/` and
-  `docs/`, which only exist as sources in a checkout.
+  current. The rollback is `devkit update apply`'s; `profile create`, `profile
+  sync` and `install.py` install a release and flip without one, because they
+  re-sync a single profile that a re-run repairs.
+- **Maintainer commands refuse from a release.** `export` and `docs generate`
+  write into `core/` and `docs/`, and `lint-paths` with no path scans them; all
+  three only exist as sources in a checkout.
 - **`REPO_ROOT` keeps its name**, documented as "the tree the running code lives
   in". It resolves symlinks, so a running installed devkit sees a release
   directory: anything written for later use names `current`, never `REPO_ROOT`.
@@ -80,8 +86,8 @@ and points every projection at it. The reasons for each choice:
 
 The app-fork worker run as root (`/usr/local/bin/sync-devkit-profile-apps.py`)
 and `/usr/lib/devkit/*` are unchanged. `profile apps-sync` re-executes the CLI
-under sudo, so root runs user-owned code today (the checkout) and tomorrow (the
-installed release): the same trust level, not addressed here.
+under sudo, so root runs user-owned code: the installed release, or the
+checkout when devkit runs from one. The same trust level, not addressed here.
 
 ## Profile isolation is config plus a GUI fork, not containers
 
@@ -118,8 +124,8 @@ The blocker is nested runtime, not the GUI. A containerized harness driving
 which erases the isolation the container was built for.
 
 Cost per profile matters too: Playwright browsers are ~400MB per image, the
-kit's `core/` tree is 20M, and Ollama models are GB-scale and should never be
-duplicated.
+kit's `core/` tree is 16M (21M on disk), and Ollama models are GB-scale and
+should never be duplicated.
 
 Docker does earn its place for a headless CLI-agent image — see
 [container.md](container.md).
@@ -197,8 +203,10 @@ profiles. The decisions that outlive the plan it was built from:
 
 ## Refusals name the fix
 
-Every refusal in this kit prints the command that resolves it. A refusal the
-user cannot act on is just an outage with extra steps.
+A refusal prints the command that resolves it wherever one exists. A refusal
+the user cannot act on is just an outage with extra steps. Where no command
+fixes it (a missing ref, a path that does not exist, a failed `git`), the
+message names the input to correct instead.
 
 The exceptions are deliberate: a foreign lineage and a too-old installer have no
 override, because the failure modes they prevent are worse than the
@@ -206,8 +214,11 @@ inconvenience of stopping.
 
 ## Dry run is the default
 
-Every writing command plans first and prints what it would do. `--apply` is the
-exception, not the default. This matches the contract the harness's existing
+Every command that writes the machine plans first and prints what it would do.
+`--apply` is the exception, not the default. Two commands write without it,
+because what they write is inside the kit: `docs generate` regenerates
+`docs/` in a checkout (`--check` is its dry run), and `update fetch` writes only
+the staging cache. This matches the contract the harness's existing
 projection scripts already use, so the kit does not introduce a second
 convention.
 
@@ -220,5 +231,5 @@ that says what to install, or hand-rolling a subset reader that misparses the
 first anchor someone writes.
 
 The cost is comments, which JSON lacks. Every manifest carries a `_comment`
-array as its first key instead. `devkit.yaml` stays YAML because nothing parses
-it at runtime.
+array as its first key instead. `devkit.yaml` stays YAML because it is flat
+`key: value` lines, which a line reader parses exactly; it must stay flat.

@@ -45,6 +45,7 @@ HOME_ROOT_RULES = {
 }
 STUB_BYTES = b"\n"
 STUB_MODE = 0o000
+CLIENT_OVERLAY_NAME = "client-overlay.json"
 
 
 # ---------------------------------------------------------------- materialize
@@ -302,7 +303,10 @@ def _bind_profile_runtime(plan: Plan, profile: dict, home: Path, core_root: Path
         _link_layer(plan, agents_dir, layer, profile.get(layer, []), core_root,
                     link_core)
     for name in ("bin", "mcp", "share", "config"):
-        if (core_root / name).exists():
+        if name == "config" and profile.get("client_overlay"):
+            _write_client_config(plan, agents_dir / name, profile["client_overlay"],
+                                 core_root, link_core)
+        elif (core_root / name).exists():
             _symlink(plan, agents_dir / name, link_core / name, f"agents/{name}")
     _project_hooks(plan, harness / "hooks", core_root, link_core, tokens, force, root)
     _symlink(plan, agents_dir / "hooks", harness / "hooks", "agents/hooks")
@@ -376,6 +380,25 @@ def _isolate_auth(plan: Plan, agents_dir: Path, home: Path) -> None:
             _symlink(plan, dest / name, source, f"agents/.auth/{name}")
 
 
+def _write_client_config(plan: Plan, config_dir: Path, overlay: dict,
+                         core_root: Path, link_core: Path) -> None:
+    """A real config/ holding the client overlay beside links into core/config.
+
+    Skills read `$AGENTS_HOME/config/client-overlay.json`; `core/` ships only the
+    example, and a link to the read-only release could not hold the real file.
+    """
+    if config_dir.is_symlink():
+        plan.record(f"unlink {relative_to_home(config_dir)} (becomes a directory)")
+        if plan.apply:
+            config_dir.unlink()
+    entries = sorted(p.name for p in (core_root / "config").iterdir()) \
+        if (core_root / "config").is_dir() else []
+    _link_layer(plan, config_dir.parent, config_dir.name, entries, core_root, link_core)
+    target = config_dir / CLIENT_OVERLAY_NAME
+    _write(plan, target, json.dumps(overlay, indent=2) + "\n", force=True,
+           label=relative_to_home(target))
+
+
 def _symlink(plan: Plan, dest: Path, target: Path, label: str) -> None:
     if dest.is_symlink() and dest.readlink() == target:
         return
@@ -430,22 +453,27 @@ def _write_desktop(plan: Plan, vendor: str, profile: dict, layout: dict,
     template = root / "templates" / "desktop" / f"{vendor}.desktop"
     if not template.is_file():
         return False
+    light, _dark = instances.profile_colors(profile)
+    source_icon = _find_vendor_icon(vendor)
+    if source_icon:
+        sizes = "/".join(str(s) for s in instances.ICON_THEME_SIZES)
+        plan.record(f"icon   hicolor {sizes} {layout['icon'].name} (badge {light})")
+        if plan.apply and not instances.install_launcher_icons(
+                source_icon, layout["icon"], light):
+            fallback = "keeps the previous badge"
+            if not layout["icon"].is_file():
+                # Icon= must name an icon that exists, or the launcher shows none.
+                tokens = {**tokens, "PROFILE_ICON_NAME": source_icon.stem}
+                fallback = f"uses the stock icon {source_icon.stem}"
+            print(f"  note: could not badge {vendor} icon "
+                  f"(ImageMagick or emblem missing?); the launcher {fallback}")
+    else:
+        print(f"  note: no stock {vendor} icon found; the launcher has no icon")
+
     rendered = instances.render(template.read_text(encoding="utf-8"), tokens)
     _write(plan, layout["desktop"], rendered, force,
            label=relative_to_home(layout["desktop"]))
-
-    light, _dark = instances.profile_colors(profile)
-    source_icon = _find_vendor_icon(vendor)
-    if not source_icon:
-        return False
-    sizes = "/".join(str(s) for s in instances.ICON_THEME_SIZES)
-    plan.record(f"icon   hicolor {sizes} {layout['icon'].name} (badge {light})")
-    if plan.apply and not instances.install_launcher_icons(
-            source_icon, layout["icon"], light):
-        print(f"  note: could not badge {vendor} icon "
-              f"(ImageMagick or emblem missing?); "
-              f"the launcher falls back to the stock icon")
-    return True
+    return source_icon is not None
 
 
 def _find_vendor_icon(vendor: str) -> Path | None:
@@ -466,9 +494,9 @@ def _find_vendor_icon(vendor: str) -> Path | None:
 def _kit_metadata(root: Path | None = None) -> dict:
     """Read devkit.yaml without a YAML parser.
 
-    It is a flat file of `key: value` lines by design — YAML is kept only where
-    nothing parses it at runtime — so a line reader is honest here. Inline `#`
-    comments are stripped: the file documents itself heavily.
+    It is a flat file of `key: value` lines by design, so a line reader is
+    honest here. Inline `#` comments are stripped: the file documents itself
+    heavily.
     """
     path = (root or REPO_ROOT) / "devkit.yaml"
     data: dict = {}
@@ -659,6 +687,16 @@ def cmd_adopt(args) -> int:
     if not config_dir.is_dir():
         raise DevkitError(f"{config_dir} is not a directory",
                           "pass --config-dir pointing at the existing vendor config")
+    # Discovery only walks ~/.agents-profiles/<name>/<dir>; provenance written
+    # anywhere else (a stock ~/.claude) is an instance no command can find again.
+    expected_parent = (home / ".agents-profiles" / args.name).resolve()
+    if (config_dir.parent != expected_parent
+            or config_dir.name in instances.PROFILE_SKIP_DIRS):
+        raise DevkitError(
+            f"{config_dir} is not under {relative_to_home(expected_parent)}/, "
+            "so devkit could not find the adopted instance again",
+            f"use 'devkit profile create {args.name} --type TYPE' instead, or move the "
+            f"directory to {relative_to_home(expected_parent)}/{args.vendor} first")
 
     plan = Plan(args.apply)
     prov = instances.provenance(profile, args.vendor, home, _kit_metadata(),
@@ -838,7 +876,7 @@ def escalate_appforks(home: Path, profile: dict | None, user: str) -> int:
         return 0
     profile_name = None if profile is None else profile["name"]
     env = appfork.Env()
-    if privilege.is_root():
+    if privilege.regain_root():
         for line in appfork.install_hook(env, dry_run=False):
             print(line)
         return appfork.sync_homes(

@@ -238,16 +238,19 @@ def _write_claude_mcp(plan: Plan, profile: dict, layout: dict, force: bool,
                       root: Path, home: Path) -> None:
     catalog = mcp.load_catalog(root)
     target = layout["config_dir"] / ".claude.json"
-    existing = {}
+    current = {}
     if target.is_file():
         try:
-            existing = json.loads(target.read_text()).get("mcpServers") or {}
+            loaded = json.loads(target.read_text())
         except json.JSONDecodeError:
-            existing = {}
-    payload = json.dumps(
-        mcp.claude_payload(profile, catalog, home, existing=existing),
-        indent=2) + "\n"
-    _write(plan, target, payload, force, label="claude/.claude.json")
+            loaded = None
+        current = loaded if isinstance(loaded, dict) else {}
+    merged = {**current, **mcp.claude_payload(
+        profile, catalog, home, existing=current.get("mcpServers") or {})}
+    if merged == current:
+        return
+    _write(plan, target, json.dumps(merged, indent=2) + "\n", force,
+           label="claude/.claude.json")
 
 
 def _write_wrapper(plan: Plan, vendor: str, layout: dict,

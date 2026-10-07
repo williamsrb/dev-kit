@@ -49,6 +49,29 @@ wrappers. If desktop forks are missing or stale, that command prints the rsync
 plan and asks `sudo`. Apt/dpkg hooks rebuild forks when the original vendor
 package updates; they do not replace this step after a kit-only change.
 
+## Updating the origin fork (no upstream)
+
+The kit you cloned is its own origin: `devkit.yaml` has `upstream: null`, so
+`fetch` refuses and there is nothing to stage. `~/.local/bin/devkit` is a link to
+`devkit.py` in your checkout, so the CLI is already whatever the checkout holds.
+To bring installed profiles in line with it:
+
+```bash
+git pull                                    # or commit your own changes
+./devkit update check                       # profiles at an older commit say "update available"
+./devkit profile sync <name> --apply        # per profile; dry run without --apply
+./devkit doctor
+```
+
+`sync` re-materializes the profile from the checkout and records its commit, so
+`update check` then reports "up to date". It keeps everything in the profile's
+`.claude.json` outside `mcpServers` (login state, trust flags). Quit that
+profile's Claude first: a running process rewrites `.claude.json` and can undo
+the write. `sync` also re-creates `~/.local/bin/devkit` when the link is missing
+or the checkout moved; run it as `<checkout>/devkit profile sync <name> --apply`.
+Do not use a bare `install.py --apply` for this on an installed machine: it
+creates a new profile named after the type.
+
 ## Forks and lineage
 
 `devkit.yaml` declares the topology:

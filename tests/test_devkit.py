@@ -423,6 +423,23 @@ class ProfileCompositionTests(unittest.TestCase):
                 self.assertNotIn(parked, claude["mcpServers"])
                 self.assertNotIn(f"[mcp_servers.{parked}]", toml)
 
+    def test_sync_keeps_claude_state_outside_mcp_servers(self):
+        """.claude.json also holds login state and trust flags, which sync must not erase."""
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            profile = load_for_create("dummy", "enonic")
+            materialize(profile, ["claude"], home, Plan(apply=True), force=True)
+            path = home / ".agents-profiles/dummy/claude/.claude.json"
+            data = json.loads(path.read_text())
+            data["oauthAccount"] = {"emailAddress": "someone@example.com"}
+            data["projects"] = {"/work": {"hasTrustDialogAccepted": True}}
+            path.write_text(json.dumps(data, indent=2) + "\n")
+            materialize(profile, ["claude"], home, Plan(apply=True), force=True)
+            after = json.loads(path.read_text())
+            self.assertEqual(after["oauthAccount"], data["oauthAccount"])
+            self.assertEqual(after["projects"], data["projects"])
+            self.assertEqual(sorted(after["mcpServers"]), sorted(data["mcpServers"]))
+
     def test_sync_keeps_spawned_playwright_mcp(self):
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp)

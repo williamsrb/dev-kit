@@ -24,6 +24,9 @@ from .errors import DevkitError
 PROFILE_EMBLEM = REPO_ROOT / "templates" / "icons" / "profile-emblem.png"
 # Installed copy for the root appfork worker (see appfork.install_hook).
 PROFILE_EMBLEM_INSTALLED = Path("/usr/lib/devkit/profile-emblem.png")
+# Stock hicolor icons keep ~8% transparent margin, so the shield overhangs the
+# tile edge. A full-bleed icon is shrunk to the same margin first.
+FULL_BLEED_SCALE = "84%"
 
 # Sizes the working vendor launchers ship under /usr/share/icons/hicolor,
 # plus 512. GTK looks up Icon=name in these folders; a 1024px PNG sitting in
@@ -356,8 +359,10 @@ def recolor_icon(source: Path, dest: Path, color: str) -> bool:
     """Copy the stock icon and overlay a profile-coloured shield badge.
 
     The emblem canvas matches the icon size; the shield sits in the top-left
-    quarter with a transparent rest, so a plain Over composite is enough.
-    Black fill becomes `color`; the white rim is kept for contrast.
+    corner with a transparent rest, so a plain Over composite is enough.
+    Black fill becomes `color`; the white rim is kept for contrast. A
+    full-bleed source is shrunk to the margin stock hicolor icons have, so the
+    shield overhangs the tile instead of covering it.
     """
     binary = imagemagick()
     emblem = profile_emblem()
@@ -365,14 +370,20 @@ def recolor_icon(source: Path, dest: Path, color: str) -> bool:
         return False
     ensure_dir(dest.parent)
     probe = subprocess.run(
-        [*binary, str(source), "-format", "%wx%h", "info:"],
+        [*binary, str(source), "-format", "%wx%h %@", "info:"],
         capture_output=True, text=True, check=False,
     )
-    size = (probe.stdout or "").strip()
-    if probe.returncode != 0 or not size:
+    fields = (probe.stdout or "").split()
+    if probe.returncode != 0 or len(fields) != 2:
         return False
+    size, bbox = fields
+    art = [str(source)]
+    if bbox == f"{size}+0+0":
+        art = ["(", str(source), "-alpha", "set", "-resize", FULL_BLEED_SCALE,
+               "-background", "none", "-gravity", "center",
+               "-extent", size, "+gravity", ")"]
     command = [
-        *binary, str(source),
+        *binary, *art,
         "(", str(emblem), "-resize", f"{size}!",
         "-fuzz", "15%", "-fill", color, "-opaque", "black", ")",
         "-compose", "Over", "-composite", str(dest),

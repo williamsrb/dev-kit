@@ -102,7 +102,7 @@ What each agent copies:
 ~/.local/bin/<vendor>-<profile>          # public wrapper (not a stock name)
 ~/.agents-profiles/<profile>/bin/<cli>   # unprefixed vendor CLI + agentctl
 ~/.local/share/applications/...          # launcher (Exec is the fork)
-~/.local/share/icons/.../...png          # stock icon + coloured shield badge
+~/.local/share/icons/hicolor/<size>/apps/<vendor>-<profile>.png   # badged, 16 to 512
 /usr/lib/devkit/<vendor>-<profile>/      # identity fork (root, apt-rebuilt)
 ```
 
@@ -177,13 +177,20 @@ it does not re-roll.
 
 Icons keep the stock artwork. A shield emblem from
 `templates/icons/profile-emblem.png` is resized to the icon canvas (shield in
-the top-left quarter, rest transparent), its black fill is tinted to the
-profile colour (white rim kept), and it is composited over the original. The
-same badge is applied to launcher icons under `~/.local/share/icons` and to
-in-tree icons inside `/usr/lib/devkit/<vendor>-<profile>/`. Badging needs
+the top-left corner, rest transparent), its black fill is tinted to the
+profile colour (white rim kept), and it is composited over the original. A
+full-bleed icon (opaque art touching all four edges, such as Claude's in-tree
+`resources/icon.png`) is first shrunk to 84% and centred, the margin the stock
+hicolor icons have, so the shield overhangs the tile instead of covering it;
+tray icons are never shrunk. The
+same badge is applied to launcher icons, written at 16, 32, 48, 128, 256 and
+512 px under `~/.local/share/icons/hicolor/<size>x<size>/apps/` (GTK ignores a
+1024 px file in `512x512/`), and to in-tree icons inside `/usr/lib/devkit/<vendor>-<profile>/`. Badging needs
 ImageMagick (`magick`, else `convert`). If Magick or the emblem is missing the
 launcher falls back to the stock icon and says so — it does not fail the
-install. The apt/dpkg hook installs a copy of the emblem at
+install. After writing launchers the kit rebuilds `icon-theme.cache` there with
+`gtk-update-icon-cache` (or `gtk4-update-icon-cache`); without it GNOME can keep
+showing the stock icon. The apt/dpkg hook installs a copy of the emblem at
 `/usr/lib/devkit/profile-emblem.png` for the root worker.
 
 ## Adopting an existing setup
@@ -207,7 +214,8 @@ Enonic and Jira rules through it no matter how cleanly the profile-scoped rules
 are split.
 
 `install.py` and `devkit doctor` report this; they never move your files
-silently. To fix it:
+silently. `install.py --fix-home-rules` does the same move as part of an install.
+To fix it on its own:
 
 ```bash
 ./devkit fix-home-rules --apply

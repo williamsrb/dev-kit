@@ -461,19 +461,30 @@ def profile_color(profile: str, provenance: dict | None = None) -> str:
     return palette[(digest[0] << 8 | digest[1]) % len(palette)]
 
 
+# Stock hicolor icons keep ~8% transparent margin, so the shield overhangs the
+# tile edge. A full-bleed in-tree icon is shrunk to the same margin first.
+FULL_BLEED_SCALE = "84%"
+
+
 def _badge_icon(binary: list[str], source: Path, dest: Path, color: str,
-                emblem: Path) -> str | None:
+                emblem: Path, *, shrink_full_bleed: bool = True) -> str | None:
     """Overlay a colourised shield on a stock icon. None on success."""
     probe = subprocess.run(
-        [*binary, str(source), "-format", "%wx%h", "info:"],
+        [*binary, str(source), "-format", "%wx%h %@", "info:"],
         capture_output=True, text=True, check=False,
     )
-    size = (probe.stdout or "").strip()
-    if probe.returncode != 0 or not size:
+    fields = (probe.stdout or "").split()
+    if probe.returncode != 0 or len(fields) != 2:
         return probe.stderr.strip() or f"size probe failed ({probe.returncode})"
+    size, bbox = fields
+    art = [str(source)]
+    if shrink_full_bleed and bbox == f"{size}+0+0":
+        art = ["(", str(source), "-alpha", "set", "-resize", FULL_BLEED_SCALE,
+               "-background", "none", "-gravity", "center",
+               "-extent", size, "+gravity", ")"]
     result = subprocess.run(
         [
-            *binary, str(source),
+            *binary, *art,
             "(", str(emblem), "-resize", f"{size}!",
             "-fuzz", "15%", "-fill", color, "-opaque", "black", ")",
             "-compose", "Over", "-composite", str(dest),
@@ -509,7 +520,10 @@ def recolor_tree_icons(spec: Vendor, dest: Path, color: str, *, dry_run: bool,
             if dry_run:
                 continue
             target.parent.mkdir(parents=True, exist_ok=True)
-            err = _badge_icon(binary, src, target, color, emblem)
+            # Tray glyphs fill their canvas by design; shrinking them would
+            # shrink the glyph in the tray.
+            err = _badge_icon(binary, src, target, color, emblem,
+                              shrink_full_bleed="tray" not in src.name.lower())
             if err is not None:
                 actions[-1] = f"skip {rel}: {err}"
     return actions

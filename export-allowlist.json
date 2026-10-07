@@ -93,6 +93,8 @@
       "develop-godot-3d": "personal, not work tooling",
       "dsnote": "personal, not work tooling",
       "enonic-marketplace": "no SKILL.md; a reference directory, not a skill",
+      "extract-agentic": "needs the separately installed extractkit and the unshipped impeccable skill",
+      "extract-legacy": "names a client review host and needs the separately installed extractkit",
       "godot-game-dev-shared": "no SKILL.md; shared assets for the godot skills",
       "graphify": "opt-in, heavy, superseded by graft for this kit",
       "ppt-master": "gitignored multi-hundred-MB asset trees; 14 of the 23 broken links"
@@ -164,7 +166,7 @@
     "core_excludes": [
       "implementation/enonic-cli/**",
       "implementation/xp7-to-xp8-upgrade/**",
-      "implementation/acme-group-multitask/**"
+      "implementation/How-to-import-legacy-claude-personal-sessions-into-the-personal-profile.md"
     ],
     "enonic": [
       "offline-reference/xp7/**",
@@ -184,6 +186,7 @@
       "offline-reference/godot-2d/**": "personal",
       "offline-reference/godot-3d/**": "personal",
       "worklog/**": "personal, already a hard exclude",
+      "implementation/How-to-import-legacy-claude-personal-sessions-into-the-personal-profile.md": "machine-specific one-off; superseded by `devkit profile session-sync`",
       "calibration/classify-ticket-autonomy/Calibration-runs-of-classify-ticket-autonomy.md": "specific Jira keys; host-local run log",
       "calibration/classify-ticket-autonomy/Corpus-precedents-for-classify-ticket-autonomy.md": "specific Jira keys; host-local precedent map",
       "calibration/llm-index.md": "indexes the host-local corpus files"

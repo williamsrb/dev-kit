@@ -394,6 +394,9 @@ strip_ignore_block
 collect_profiles
 scan_marked "$HOME/.local/bin"
 scan_marked "$HOME/.local/share/applications"
+if [[ -L "$HOME/.local/bin/devkit" && "$(basename "$(readlink "$HOME/.local/bin/devkit")")" == "devkit.py" ]]; then
+  remove_file "$HOME/.local/bin/devkit"
+fi
 remove_file "$HOME/.local/bin/devkit-auth-launch"
 remove_file "$HOME/.local/bin/devkit-auth-dispatch"
 remove_dir "$HOME/.local/state/devkit"

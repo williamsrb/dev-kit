@@ -29,6 +29,7 @@ Common examples:
   devkit profile create enonic
   devkit profile apps-sync --apply   # prints the fork plan, then asks sudo
   devkit profile auth restore
+  devkit profile session-sync --source stock --target dummy   # dry run
   devkit update check
   devkit doctor
   devkit deps --profile enonic       # are the declared binaries on PATH?
@@ -123,18 +124,19 @@ usage: devkit profile [-h] COMMAND ...
 Create, inspect, sync, and rebuild isolated harness profiles.
 
 options:
-  -h, --help   show this help message and exit
+  -h, --help      show this help message and exit
 
 commands:
   COMMAND
-    list       Show known profiles and their instances.
-    show       Show one profile's resolved manifest.
-    create     Materialize a named instance from a profile type.
-    sync       Re-materialize after a manifest change.
-    adopt      Record an existing dir as an instance.
-    migrate    Move an instance to another fork.
-    auth       Install or restore URL-redirect auth handlers.
-    apps-sync  Rebuild per-profile desktop app forks (rsync + asar identity).
+    list          Show known profiles and their instances.
+    show          Show one profile's resolved manifest.
+    create        Materialize a named instance from a profile type.
+    sync          Re-materialize after a manifest change.
+    adopt         Record an existing dir as an instance.
+    migrate       Move an instance to another fork.
+    auth          Install or restore URL-redirect auth handlers.
+    apps-sync     Rebuild per-profile desktop app forks (rsync + asar identity).
+    session-sync  Copy agent sessions (Claude, Codex, Cursor) between instances.
 ```
 
 #### `devkit profile list`
@@ -260,6 +262,29 @@ options:
                    /usr/local/bin.
   --icons-only     Badge fork icons from stock; skip rsync/asar.
   --apply          Write. Prints the plan, then asks sudo. Default: dry run.
+```
+
+#### `devkit profile session-sync`
+
+```
+usage: devkit profile session-sync [-h] --source NAME --target NAME [--agent LIST] [--only {code,desktop}] [--indexeddb] [--apply]
+
+Copy sessions from --source to --target. Names are installed profiles, or 'stock' for the unprefixed installs. --agent picks which agents to copy (claude: Code transcripts and Desktop chats; codex: rollouts and the thread index; cursor: IDE chats from state.vscdb), each from the source's instance into the target's instance of the same agent. One direction per run: swap the two for the other. A file or row is copied when the target lacks it or the source is newer; nothing is deleted. Databases are backed up first. Quit the agents' apps on the target first.
+
+options:
+  -h, --help            show this help message and exit
+  --source NAME         Instance to read from: a profile name or 'stock'.
+  --target NAME         Instance to write to: a profile name or 'stock'.
+  --agent LIST          Comma-separated: claude, codex, cursor, or 'all' for
+                        every agent both sides have (default: claude).
+  --only {code,desktop}
+                        Claude only: copy just Code transcripts or just Desktop
+                        chats.
+  --indexeddb           Claude only: also replace the target's Desktop IndexedDB
+                        (claude.ai web history) with the source's. Replaces,
+                        never merges; the old one is kept beside it. Quit the
+                        source too.
+  --apply               Write. Default: dry run.
 ```
 
 ### `devkit update`

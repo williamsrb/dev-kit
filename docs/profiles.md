@@ -27,6 +27,60 @@ profiles yet offers to create a first one (type, then name) unless you passed
 ./devkit profile apps-sync --user "$USER" --install-hook --apply
 ```
 
+## Syncing sessions between profiles
+
+`devkit profile session-sync` copies agent sessions from one instance to another.
+Names are installed profiles, or `stock` for the unprefixed installs
+(`~/.config/Claude`, `~/.claude`, `~/.codex`, `~/.config/Cursor`). One direction
+per run; swap the two names for the other way. `--agent` takes a comma-separated
+list (`claude`, `codex`, `cursor`) or `all` for every agent both sides have; the
+default is `claude`. Each agent is copied from the source's instance into the
+target's instance of the same agent, and a profile that lacks that instance is
+refused.
+
+```bash
+devkit profile session-sync --source stock --target dummy            # dry run
+devkit profile session-sync --source stock --target dummy --apply
+devkit profile session-sync --source dummy --target other --agent claude,codex,cursor --apply
+devkit profile session-sync --source dummy --target other --agent all
+```
+
+Common rules. A file or row is copied when the target lacks it or the source copy
+is newer. Nothing is deleted and a newer target is never overwritten, but an
+older target is replaced and the old version is not kept. SQLite databases are
+backed up beside themselves (`<name>.devkit-backup-<timestamp>`) before the first
+write, and the command checks there is room for it. Backups are never pruned;
+remove old ones yourself. The dry run prints counts per
+agent and names apps that would block `--apply`: quit the agents' apps on the
+target first. Stock and a profile are often different accounts; the copied chats
+then appear under the target's account, and the command prints a note.
+
+What each agent copies:
+
+- **claude**: Code transcripts (every file under `<config dir>/projects`) and
+  Desktop chats (the `local_*.json` index files, written into the target's own
+  organization folder, the only one its sidebar lists). The target must have
+  signed in and started one chat first, or the command refuses.
+  `scheduled-tasks.json` is not copied. `--only code|desktop` limits it.
+  `--indexeddb` also replaces the target's Desktop IndexedDB (claude.ai web
+  history); it replaces, never merges, keeps the old one beside it, and needs the
+  source Desktop quit too. Cookies and `.claude.json` trust flags are not copied.
+- **codex**: rollout files under `sessions/` and `archived_sessions/`, the
+  `threads` rows in `state_N.sqlite` that list them (paths rewritten to the target
+  home; project and section ids left unset), and `session_index.jsonl`. The
+  history projection database is not copied; Codex rebuilds it. When the target
+  has no state database yet, only the files are copied and Codex indexes them on
+  its first start.
+- **cursor**: IDE chats. For each chat the target lacks or has older, its
+  `composerHeaders` row and its `cursorDiskKV` rows (`composerData`, `bubbleId`,
+  `checkpointId`, `codeBlockDiff`, and the other per-chat families) move in one
+  transaction. The target must have started once so its `state.vscdb` exists. The
+  content-addressed rows (`agentKv:blob:*`, `composer.content.*`) and the
+  per-workspace databases are not copied, because their keys name no chat. A chat
+  may not list under a folder until that folder is opened in the target. The
+  backup copies the whole target database, so stock needs as much free disk as
+  its size.
+
 ## What gets created
 
 ```
@@ -68,6 +122,7 @@ gates skip that copy when the fork's version and `desktopName` already match.
 ./devkit profile sync dummy --apply    # after a manifest change
 ./devkit profile adopt core --vendor claude --config-dir ~/.claude --apply
 ./devkit profile auth restore            # put stock URL handlers back
+./devkit profile session-sync --source stock --target dummy --agent all --apply   # copy sessions
 ./devkit profile apps-sync --user "$USER" --apply   # prints plan, then sudo
 ```
 

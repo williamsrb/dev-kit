@@ -34,6 +34,37 @@ The kit moved on since that instance was installed:
 ./devkit profile sync <profile> --apply
 ```
 
+## `legacy: <profile>: N link(s) point outside the kit home`
+
+The profile was created before the kit was installed into `~/.local/share/devkit`,
+so its skills, rules, hooks and tools link into a checkout. It works until that
+checkout moves or is deleted. Make it standalone from the checkout:
+
+```bash
+<checkout>/devkit profile sync <profile> --apply
+```
+
+## `legacy: ~/.local/bin/devkit is linked to …`
+
+The `devkit` command still points at a checkout's `devkit.py`. Any
+`profile sync` relinks it to the kit home.
+
+## `'devkit export' needs a checkout; this devkit runs from an installed release`
+
+`export`, `docs generate` and `lint-paths` (with no path) write into `core/` and
+`docs/`, which exist only in a checkout. Run them there:
+
+```bash
+cd <checkout> && ./devkit export --apply
+```
+
+## A moved or deleted checkout
+
+Nothing installed depends on it. If `devkit` still says a path is missing, that
+profile is a `legacy` install: run `<checkout>/devkit profile sync <profile>
+--apply` from wherever the checkout is now. With no checkout at all, clone the
+kit again; `devkit update apply --from <git URL> --apply` needs only the remote.
+
 ## `~/.local/bin/devkit-uninstall.sh: missing`
 
 Profiles are installed and nothing on PATH removes them. Any profile will

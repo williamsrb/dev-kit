@@ -31,6 +31,8 @@ from devkit_cli import (
     export,
     globalignore,
     instances,
+    kithome,
+    kitsource,
     manifest,
     paths,
     privilege,
@@ -1957,7 +1959,8 @@ class CliLinkTests(unittest.TestCase):
             self.assertFalse((home / ".local" / "bin" / "devkit").exists())
             cli_link.ensure(home, Plan(True))
             link = home / ".local" / "bin" / "devkit"
-            self.assertEqual(link.resolve(), (REPO / "devkit.py").resolve())
+            self.assertEqual(os.readlink(link),
+                             str(kithome.current_link(home) / "devkit.py"))
             again = Plan(True)
             cli_link.ensure(home, again)
             self.assertEqual(again.actions, [])
@@ -1978,6 +1981,18 @@ class CliLinkTests(unittest.TestCase):
         self.assertIn("cli_link.ensure(home, plan)",
                       (REPO / "install.py").read_text(encoding="utf-8"))
         self.assertEqual(body.count("cli_link.ensure(home, plan)"), 2)
+
+    def test_a_link_into_a_checkout_is_relinked(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            link = home / ".local" / "bin" / "devkit"
+            link.parent.mkdir(parents=True)
+            link.symlink_to(Path(tmp) / "old-checkout" / "devkit.py")
+            plan = Plan(True)
+            cli_link.ensure(home, plan)
+            self.assertEqual(len(plan.actions), 1)
+            self.assertEqual(os.readlink(link),
+                             str(kithome.current_link(home) / "devkit.py"))
 
     def test_uninstaller_removes_the_link(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -2363,6 +2378,10 @@ class UninstallDocTests(unittest.TestCase):
                 self.assertIn(declared.group(1), section,
                               f"{name} is removed but not documented")
 
+    def test_the_kit_home_is_documented(self):
+        self.assertIn(".local/share/devkit", self._uninstall_section())
+        self.assertIn("releases/*/.devkit-install.json", SCRIPT)
+
     def test_every_literal_home_target_is_documented(self):
         section = self._uninstall_section()
         literals = set(re.findall(r'remove_(?:file|dir) "\$HOME/([^"$]+)"', SCRIPT))
@@ -2371,6 +2390,700 @@ class UninstallDocTests(unittest.TestCase):
             with self.subTest(path=rel):
                 self.assertIn(rel, section,
                               f"$HOME/{rel} is removed but not documented")
+
+
+# ---------------------------------------------------------------- standalone
+
+LINEAGE = "a" * 40
+GIT_ENV = {"GIT_CONFIG_GLOBAL": "/dev/null", "GIT_CONFIG_SYSTEM": "/dev/null",
+           "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@example.com",
+           "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@example.com"}
+
+
+def _git(cwd: Path, *args: str) -> str:
+    result = subprocess.run(["git", *args], cwd=str(cwd), capture_output=True,
+                            text=True, check=True, env={**os.environ, **GIT_ENV})
+    return result.stdout.strip()
+
+
+def _put(root: Path, rel: str, text: str = "x\n", mode: int = 0o644) -> Path:
+    path = root / rel
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text, encoding="utf-8")
+    path.chmod(mode)
+    return path
+
+
+def _mini_kit(root: Path, lineage: str = LINEAGE, skill: str = "one\n") -> Path:
+    """A tiny tree with the payload shape, plus files the payload must skip."""
+    for rel, mode in (("devkit.py", 0o755), ("devkit", 0o755),
+                      ("devkit_cli/__init__.py", 0o644), ("core/bin/agentctl.py", 0o755),
+                      ("templates/a.txt", 0o644), ("profiles/core.json", 0o644),
+                      ("export-allowlist.json", 0o644), ("path-contract.json", 0o644)):
+        _put(root, rel, "#!/usr/bin/env python3\n" if mode == 0o755 else "{}\n", mode)
+    _put(root, "core/skills/s/SKILL.md", skill)
+    _put(root, "devkit.yaml", f"lineage_id: {lineage}\nfork_id: t\nupstream: null\n")
+    (root / "core/bin/agentctl").symlink_to("agentctl.py")
+    for noise in ("docs/a.md", "tests/t.py", "scripts/s.sh", "bootstrap.sh", "install.py",
+                  "graft/INDEX.md", ".gitleaks.toml", "devkit_cli/__pycache__/x.pyc",
+                  ".git/HEAD"):
+        _put(root, noise)
+    return root
+
+
+def _git_kit(root: Path) -> str:
+    """A git checkout of the mini kit whose devkit.yaml names its root commit."""
+    _mini_kit(root, lineage="pending")
+    _put(root, ".gitignore", "core/ignored.txt\n__pycache__/\n")
+    shutil.rmtree(root / ".git")
+    for rel in ("docs", "tests", "scripts", "graft", "bootstrap.sh", "install.py",
+                ".gitleaks.toml"):
+        target = root / rel
+        shutil.rmtree(target) if target.is_dir() else target.unlink()
+    _git(root, "init", "-q", "-b", "main")
+    _git(root, "add", "-A")
+    _git(root, "commit", "-q", "-m", "root")
+    lineage = _git(root, "rev-parse", "HEAD")
+    _put(root, "devkit.yaml", f"lineage_id: {lineage}\nfork_id: t\nupstream: null\n")
+    _git(root, "commit", "-q", "-am", "record lineage")
+    return lineage
+
+
+class KitHomeTests(unittest.TestCase):
+    """'The installed kit is a copy: immutable releases and a current link.'"""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.tmp = Path(self._tmp.name)
+        self.home = self.tmp / "home"
+        self.home.mkdir()
+        self.kit = _mini_kit(self.tmp / "kit")
+        pinned = mock.patch.dict(os.environ, {"XDG_DATA_HOME": str(self.tmp / "elsewhere")})
+        pinned.start()
+        self.addCleanup(pinned.stop)
+
+    def _install(self, src: Path | None = None) -> Plan:
+        plan = Plan(True)
+        kithome.ensure_installed(src or self.kit, self.home, plan)
+        return plan
+
+    def _releases(self) -> list[str]:
+        return sorted(p.name for p in kithome.releases_dir(self.home).iterdir())
+
+    def test_payload_excludes_what_a_release_does_not_need(self):
+        files = kithome.payload_files(self.kit)
+        for skipped in ("docs", "tests", "scripts", "graft", "bootstrap.sh", "install.py",
+                        ".gitleaks.toml", "__pycache__", ".git"):
+            with self.subTest(skipped=skipped):
+                self.assertFalse([f for f in files if skipped in f.split("/")
+                                  or f.startswith(skipped)], files)
+        self.assertIn("core/skills/s/SKILL.md", files)
+        self.assertIn("core/bin/agentctl", files)
+
+    def test_release_keeps_exec_bits_and_relative_symlinks(self):
+        self._install()
+        release = kithome.current_release(self.home)
+        self.assertTrue(os.access(release / "devkit.py", os.X_OK))
+        self.assertFalse(os.access(release / "templates" / "a.txt", os.X_OK))
+        link = release / "core" / "bin" / "agentctl"
+        self.assertTrue(link.is_symlink())
+        self.assertEqual(os.readlink(link), "agentctl.py")
+        self.assertTrue(link.exists())
+        stamp = kithome.read_stamp(release)
+        self.assertEqual(stamp["release_id"], release.name)
+        self.assertEqual(stamp["payload_digest"][:12], release.name)
+        self.assertEqual(stamp["lineage_id"], LINEAGE)
+        self.assertFalse((release / "docs").exists())
+
+    def test_an_absolute_or_escaping_symlink_is_refused(self):
+        for target in (str(self.tmp / "outside"), "../../../outside", "../../docs/a.md"):
+            with self.subTest(target=target):
+                kit = _mini_kit(self.tmp / f"kit-{abs(hash(target))}")
+                (kit / "core/bin/bad").symlink_to(target)
+                with self.assertRaises(DevkitError):
+                    self._install(kit)
+        self.assertFalse(kithome.releases_dir(self.home).exists()
+                         and any(kithome.releases_dir(self.home).iterdir()))
+
+    def test_digest_is_stable_and_the_same_payload_installs_once(self):
+        files = kithome.payload_files(self.kit)
+        self.assertEqual(kithome.payload_digest(self.kit, files),
+                         kithome.payload_digest(self.kit, files))
+        first = self._install()
+        again = self._install()
+        self.assertTrue(first.actions)
+        self.assertEqual(again.actions, [])
+        self.assertEqual(len(self._releases()), 1)
+
+    def test_digest_ignores_umask_but_not_content_or_exec_bit(self):
+        files = kithome.payload_files(self.kit)
+        base = kithome.payload_digest(self.kit, files)
+        (self.kit / "templates/a.txt").chmod(0o600)
+        self.assertEqual(kithome.payload_digest(self.kit, files), base)
+        (self.kit / "templates/a.txt").chmod(0o755)
+        self.assertNotEqual(kithome.payload_digest(self.kit, files), base)
+
+    def test_flip_current_never_exposes_a_missing_link(self):
+        import threading
+        self._install()
+        first = kithome.current_release(self.home)
+        _put(self.kit, "core/skills/s/SKILL.md", "two\n")
+        self._install()
+        second = kithome.current_release(self.home)
+        self.assertNotEqual(first, second)
+        stop, bad = threading.Event(), []
+
+        def flipper():
+            while not stop.is_set():
+                for release in (first, second):
+                    kithome.flip_current(self.home, release)
+
+        thread = threading.Thread(target=flipper)
+        thread.start()
+        try:
+            link = kithome.current_link(self.home)
+            for _ in range(3000):
+                try:
+                    if not (os.readlink(link) and (link / "devkit.py").exists()):
+                        bad.append("dangling")
+                except OSError as exc:
+                    bad.append(str(exc))
+        finally:
+            stop.set()
+            thread.join()
+        self.assertEqual(bad, [])
+
+    def test_prune_keeps_current_and_the_previous_release(self):
+        for text in ("one\n", "two\n", "three\n", "four\n"):
+            _put(self.kit, "core/skills/s/SKILL.md", text)
+            self._install()
+            self.assertLessEqual(len(self._releases()), 2)
+        current = kithome.current_release(self.home)
+        self.assertEqual(len(self._releases()), 2)
+        self.assertEqual(kithome.previous_release(self.home).name != current.name, True)
+        self.assertIn("three", (kithome.previous_release(self.home)
+                                / "core/skills/s/SKILL.md").read_text())
+
+    def test_running_from_current_copies_nothing(self):
+        self._install()
+        plan = Plan(True)
+        root = kithome.ensure_installed(kithome.current_release(self.home), self.home, plan)
+        self.assertEqual(plan.actions, [])
+        self.assertEqual(root, kithome.current_link(self.home))
+
+    def test_dry_run_installs_nothing_and_reads_the_source(self):
+        plan = Plan(False)
+        root = kithome.ensure_installed(self.kit, self.home, plan)
+        self.assertEqual(root, self.kit)
+        self.assertTrue(plan.actions)
+        self.assertFalse(kithome.kit_home(self.home).exists())
+
+    def test_xdg_data_home_counts_only_under_the_home(self):
+        with mock.patch.dict(os.environ, {"XDG_DATA_HOME": str(self.home / "data")}):
+            self.assertEqual(kithome.kit_home(self.home), self.home / "data" / "devkit")
+        with mock.patch.dict(os.environ, {"XDG_DATA_HOME": "/somewhere/else"}):
+            self.assertEqual(kithome.kit_home(self.home),
+                             self.home / ".local" / "share" / "devkit")
+
+    def test_kit_commit_reads_the_stamp_before_git(self):
+        self._install()
+        release = kithome.current_release(self.home)
+        stamp = release / ".devkit-install.json"
+        data = json.loads(stamp.read_text())
+        data.update(commit="c" * 40, dirty=True)
+        stamp.write_text(json.dumps(data))
+        self.assertEqual(instances.kit_commit(release), "c" * 40 + "-dirty")
+        self.assertEqual(instances.kit_commit(self.tmp / "nowhere"), "unknown")
+
+    def test_dry_run_lists_every_projection_through_current(self):
+        profile = load_for_create("dummy", "core")
+        dry_home = self.tmp / "dry"
+        real_home = self.tmp / "real"
+        dry_home.mkdir()
+        real_home.mkdir()
+        dry, real = Plan(False), Plan(True)
+        with redirect_stdout(io.StringIO()):
+            materialize(profile, ["claude"], dry_home, dry, force=True)
+            materialize(profile, ["claude"], real_home, real, force=True)
+        # Only links into the kit: in dry run `claude/hooks` waits for a directory
+        # the apply run creates first, which is unrelated to where links point.
+        def links(plan: Plan, home: Path) -> list[str]:
+            return sorted(a.replace(str(home), "~") for a in plan.actions
+                          if a.startswith("link") and "/current/core/" in a)
+
+        self.assertGreater(len(links(dry, dry_home)), 10)
+        self.assertEqual(links(dry, dry_home), links(real, real_home))
+        self.assertFalse([a for a in dry.actions if str(REPO) in a])
+        self.assertFalse(kithome.kit_home(dry_home).exists())
+
+
+class KitSourceTests(unittest.TestCase):
+    """'The upgrade source is a local directory or a git URL; lineage is checked.'"""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.tmp = Path(self._tmp.name)
+        self.staging = self.tmp / "staging"
+        self.repo = self.tmp / "repo"
+        self.lineage = _git_kit(self.repo)
+        self.kit = {"lineage_id": self.lineage}
+
+    def _stage(self, source, ref: str = "HEAD") -> Path:
+        with redirect_stdout(io.StringIO()):
+            return kitsource.stage(str(source), ref, self.kit, self.staging, "20260101T000000000000Z")
+
+    def test_directory_with_git_reads_the_working_tree(self):
+        _put(self.repo, "core/untracked.txt", "u\n")
+        _put(self.repo, "core/ignored.txt", "i\n")
+        clean = kitsource.inspect_directory(self.repo, self.kit)
+        self.assertIn("core/untracked.txt", clean["files"])
+        self.assertNotIn("core/ignored.txt", clean["files"])
+        self.assertTrue(clean["dirty"], "an untracked payload file differs from HEAD")
+        (self.repo / "core/untracked.txt").unlink()
+        self.assertFalse(kitsource.inspect_directory(self.repo, self.kit)["dirty"])
+        _put(self.repo, "core/skills/s/SKILL.md", "edited\n")
+        edited = kitsource.inspect_directory(self.repo, self.kit)
+        self.assertTrue(edited["dirty"])
+        self.assertTrue(edited["lineage_verified"])
+        staged = self._stage(self.repo)
+        marker = kitsource.read_marker(staged)
+        self.assertTrue(marker["dirty"])
+        self.assertEqual(marker["commit"], _git(self.repo, "rev-parse", "HEAD"))
+        self.assertEqual((staged / "core/skills/s/SKILL.md").read_text(), "edited\n")
+        self.assertFalse((staged / ".git").exists())
+
+    def test_directory_without_git_is_read_by_walking(self):
+        plain = self.tmp / "plain"
+        shutil.copytree(self.repo, plain, symlinks=True)
+        shutil.rmtree(plain / ".git")
+        out = io.StringIO()
+        with redirect_stdout(out):
+            staged = kitsource.stage_directory(plain, self.kit, self.staging, "s1")
+        marker = kitsource.read_marker(staged)
+        self.assertFalse(marker["dirty"])
+        self.assertEqual(marker["commit"], "unknown")
+        self.assertFalse(marker["lineage_verified"])
+        self.assertIn("unverified by history", out.getvalue())
+        self.assertTrue((staged / "core/bin/agentctl").is_symlink())
+
+    def test_git_remote_with_a_ref(self):
+        _git(self.repo, "tag", "v1")
+        first = _git(self.repo, "rev-parse", "HEAD")
+        _put(self.repo, "core/skills/s/SKILL.md", "later\n")
+        _git(self.repo, "commit", "-q", "-am", "later")
+        bare = self.tmp / "remote.git"
+        _git(self.tmp, "clone", "-q", "--bare", str(self.repo), str(bare))
+        staged = self._stage(f"file://{bare}", ref="v1")
+        marker = kitsource.read_marker(staged)
+        self.assertEqual(marker["commit"], first)
+        self.assertEqual(marker["lineage_id"], self.lineage)
+        self.assertEqual(marker["source"], f"file://{bare}")
+        self.assertEqual((staged / "core/skills/s/SKILL.md").read_text(), "one\n")
+        head = self._stage(f"file://{bare}")
+        self.assertEqual((head / "core/skills/s/SKILL.md").read_text(), "later\n")
+        with self.assertRaises(DevkitError):
+            self._stage(f"file://{bare}", ref="no-such-ref")
+
+    def test_foreign_lineage_is_refused_for_git_and_for_a_plain_directory(self):
+        other = {"lineage_id": "b" * 40}
+        bare = self.tmp / "remote.git"
+        _git(self.tmp, "clone", "-q", "--bare", str(self.repo), str(bare))
+        plain = self.tmp / "plain"
+        shutil.copytree(self.repo, plain, symlinks=True)
+        shutil.rmtree(plain / ".git")
+        for source in (self.repo, f"file://{bare}", plain):
+            with self.subTest(source=str(source)), redirect_stdout(io.StringIO()):
+                with self.assertRaises(DevkitError) as caught:
+                    kitsource.stage(str(source), "HEAD", other, self.staging, "s2")
+                self.assertIn("lineage mismatch", str(caught.exception))
+        self.assertFalse(self.staging.exists() and any(
+            p.name != "fetch-s2" and p.is_dir() for p in self.staging.iterdir()),
+            "a refused source must leave nothing staged")
+
+    def test_a_directory_that_is_not_a_kit_is_refused(self):
+        with self.assertRaises(DevkitError):
+            kitsource.inspect_directory(self.tmp / "missing", self.kit)
+        (self.tmp / "empty").mkdir()
+        with self.assertRaises(DevkitError):
+            kitsource.inspect_directory(self.tmp / "empty", self.kit)
+
+    def test_source_resolution_order(self):
+        home = self.tmp / "home"
+        home.mkdir()
+        meta = {"upstream": "https://example.com/kit.git"}
+        with mock.patch("devkit_cli.profiles._kit_metadata", return_value=meta):
+            self.assertEqual(kitsource.resolve_source("/x", home), "/x")
+            self.assertEqual(kitsource.resolve_source(None, home),
+                             "https://example.com/kit.git")
+            with redirect_stdout(io.StringIO()):
+                kithome.ensure_installed(self.repo, home, Plan(True))
+            self.assertEqual(kitsource.resolve_source(None, home), str(self.repo.resolve()))
+            self.assertEqual(kitsource.resolve_source("/y", home), "/y")
+        shutil.rmtree(kithome.kit_home(home))
+        with mock.patch("devkit_cli.profiles._kit_metadata", return_value={}):
+            with self.assertRaises(DevkitError) as caught:
+                kitsource.resolve_source(None, home)
+            self.assertIn("--from", caught.exception.fix)
+
+
+class _HomePatched(unittest.TestCase):
+    """A temp home that `Path.home()`, the staging cache and the root guard see."""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.tmp = Path(self._tmp.name)
+        self.home = self.tmp / "home"
+        self.home.mkdir()
+        self.checkout = self.tmp / "checkout"
+        kithome.copy_payload(REPO, self.checkout, kithome.payload_files(REPO))
+        for patcher in (
+                mock.patch.dict(os.environ, {"HOME": str(self.home),
+                                             "XDG_CONFIG_HOME": str(self.home / ".config"),
+                                             "XDG_DATA_HOME": ""}),
+                mock.patch.object(Path, "home", staticmethod(lambda: self.home)),
+                mock.patch.object(update, "STAGING_ROOT", self.tmp / "staged"),
+                mock.patch.object(privilege, "refuse_root", lambda *_a, **_k: None)):
+            patcher.start()
+            self.addCleanup(patcher.stop)
+
+    def _profile(self, kit: Path | None = None) -> dict:
+        kit = kit or self.checkout
+        return instances.bind_instance(manifest.load("core", kit_root=kit), "core", "core")
+
+    def _install(self, kit: Path | None = None) -> None:
+        kit = kit or self.checkout
+        with redirect_stdout(io.StringIO()):
+            materialize(self._profile(kit), ["claude"], self.home, Plan(True),
+                        force=True, kit_root=kit)
+            ensure(self.home, Plan(True))
+            cli_link.ensure(self.home, Plan(True))
+
+    def _env(self) -> dict:
+        return {**os.environ, "HOME": str(self.home),
+                "XDG_CONFIG_HOME": str(self.home / ".config")}
+
+    def _core_skill(self, kit: Path) -> Path:
+        """A skill the core profile projects, so an edit to it is visible."""
+        return kit / "core" / "skills" / self._profile(kit)["skills"][0]
+
+    def _apply(self, source: Path | str | None, apply: bool = True) -> tuple[int, str]:
+        out = io.StringIO()
+        with redirect_stdout(out):
+            rc = update.cmd_apply(argparse.Namespace(
+                profile="core", apply=apply, from_source=str(source) if source else None,
+                ref=None))
+        return rc, out.getvalue()
+
+    def _projections(self) -> dict[str, str]:
+        found = {}
+        for base in (self.home / ".agents-profiles", self.home / ".local" / "bin"):
+            for root, dirs, files in os.walk(base):
+                dirs[:] = [d for d in dirs if not d.endswith("-data")]
+                for name in (*dirs, *files):
+                    path = Path(root) / name
+                    if path.is_symlink():
+                        found[str(path)] = os.readlink(path)
+        return found
+
+
+class StandaloneInstallTests(_HomePatched):
+    """'Delete the checkout, keep working.'"""
+
+    def test_nothing_under_home_names_the_checkout(self):
+        self._install()
+        needle = str(self.checkout).encode()
+        links = self._projections()
+        self.assertGreater(len(links), 50)
+        for path, target in links.items():
+            self.assertNotIn(str(self.checkout), target, path)
+        scanned = 0
+        for root, dirs, files in os.walk(self.home):
+            for name in files:
+                path = Path(root) / name
+                if path.is_symlink() or name == ".devkit-install.json":
+                    continue  # the stamp records the upgrade source, which is not a runtime reference
+                scanned += 1
+                self.assertNotIn(needle, path.read_bytes(), str(path))
+        self.assertGreater(scanned, 100)
+
+    def test_everything_still_runs_after_the_checkout_is_deleted(self):
+        self._install()
+        shutil.rmtree(self.checkout)
+        for path, target in self._projections().items():
+            self.assertTrue(Path(path).exists(), f"{path} -> {target} dangles")
+
+        devkit = self.home / ".local" / "bin" / "devkit"
+        for args in (("profile", "list"), ("doctor",)):
+            result = subprocess.run([str(devkit), *args], capture_output=True, text=True,
+                                    env=self._env(), check=False)
+            with self.subTest(command=args):
+                self.assertNotIn("Traceback", result.stderr)
+                self.assertNotIn("legacy:", result.stdout)
+        listed = subprocess.run([str(devkit), "profile", "list"], capture_output=True,
+                                text=True, env=self._env(), check=False)
+        self.assertEqual(listed.returncode, 0, listed.stderr)
+
+        tool = subprocess.run([str(self.home / ".agents-profiles/core/bin/agentctl"), "--help"],
+                              capture_output=True, text=True, env=self._env(), check=False)
+        self.assertEqual(tool.returncode, 0, tool.stderr)
+        hook = self.home / ".agents-profiles/core/claude/hooks/deny-git-push.sh"
+        ran = subprocess.run(["bash", str(hook)], input='{"command": "git push"}',
+                             capture_output=True, text=True, env=self._env(), check=False)
+        self.assertIn('"deny"', ran.stdout, ran.stderr)
+
+        bash = subprocess.run(["bash", "-n", str(self.home / ".local/bin/claude-core")],
+                              capture_output=True, text=True, check=False)
+        self.assertEqual(bash.returncode, 0, bash.stderr)
+        launch = (self.home / ".local/bin/devkit-auth-launch").read_text()
+        python_path = re.search(r'^PYTHONPATH="([^"]+)"', launch, re.MULTILINE).group(1)
+        self.assertEqual(python_path, str(kithome.current_link(self.home)))
+        imported = subprocess.run(
+            [sys.executable, "-c", "import devkit_cli.auth"], capture_output=True, text=True,
+            env={**self._env(), "PYTHONPATH": python_path}, check=False)
+        self.assertEqual(imported.returncode, 0, imported.stderr)
+
+    def test_maintainer_commands_refuse_from_an_installed_release(self):
+        self._install()
+        devkit = self.home / ".local" / "bin" / "devkit"
+        for command in (("export", "--check"), ("docs", "generate", "--check"), ("lint-paths",)):
+            result = subprocess.run([str(devkit), *command], capture_output=True, text=True,
+                                    env=self._env(), check=False)
+            with self.subTest(command=command):
+                self.assertEqual(result.returncode, 1, result.stdout)
+                self.assertIn("needs a checkout", result.stderr)
+                self.assertIn("run it from your checkout", result.stderr)
+        explicit = subprocess.run([str(devkit), "lint-paths", str(self.checkout)],
+                                  capture_output=True, text=True, env=self._env(), check=False)
+        self.assertNotIn("needs a checkout", explicit.stderr)
+
+    def test_repeated_sync_from_an_edited_checkout_keeps_two_releases(self):
+        skill = self._core_skill(self.checkout) / "SKILL.md"
+        for run in range(3):
+            skill.write_text(skill.read_text() + f"\nedit {run}\n")
+            self._install()
+        releases = kithome.releases_dir(self.home)
+        self.assertEqual(len(list(releases.iterdir())), 2)
+        self.assertIn("edit 2", (kithome.current_link(self.home) / "core/skills"
+                                 / skill.parent.name / "SKILL.md").read_text())
+
+    def test_provenance_records_the_installed_commit(self):
+        self._install()
+        prov = instances.read_provenance(self.home / ".agents-profiles/core/claude")
+        stamp = kithome.read_stamp(kithome.current_release(self.home))
+        self.assertEqual(prov["source_commit"], instances.kit_commit(
+            kithome.current_release(self.home)))
+        self.assertEqual(stamp["source"], str(self.checkout.resolve()))
+
+
+class StandaloneUpgradeTests(_HomePatched):
+    """'update apply installs a release, flips current, and rolls back on failure.'"""
+
+    def setUp(self):
+        super().setUp()
+        self._install()
+        self.first = kithome.current_release(self.home)
+        self.skill = self._core_skill(self.checkout).name
+
+    def _variant(self, name: str, text: str) -> Path:
+        copy = self.tmp / name
+        kithome.copy_payload(self.checkout, copy, kithome.payload_files(self.checkout))
+        _put(copy, f"core/skills/{self.skill}/SKILL.md", text)
+        return copy
+
+    def _visible_skill(self) -> str:
+        return (self.home / ".agents-profiles/core/agents/skills" / self.skill
+                / "SKILL.md").read_text()
+
+    def test_apply_from_a_directory_moves_current_and_leaves_links_alone(self):
+        before = self._projections()
+        rc, out = self._apply(self._variant("second", "second release\n"))
+        self.assertEqual(rc, 0, out)
+        second = kithome.current_release(self.home)
+        self.assertNotEqual(second, self.first)
+        self.assertEqual(self._projections(), before)
+        self.assertEqual(self._visible_skill(), "second release\n")
+        self.assertTrue(self.first.is_dir(), "the previous release is kept for rollback")
+
+        self._apply(self._variant("third", "third release\n"))
+        self.assertEqual(self._visible_skill(), "third release\n")
+        remaining = {p.name for p in kithome.releases_dir(self.home).iterdir()}
+        self.assertEqual(remaining, {second.name, kithome.current_release(self.home).name})
+        self.assertNotIn(self.first.name, remaining)
+        prov = instances.read_provenance(self.home / ".agents-profiles/core/claude")
+        self.assertEqual(prov["history"][-1]["to"], prov["source_commit"])
+
+    def test_apply_of_an_identical_payload_installs_nothing(self):
+        rc, out = self._apply(self.checkout)
+        self.assertEqual(rc, 0)
+        self.assertIn("up to date", out)
+        self.assertEqual(kithome.current_release(self.home), self.first)
+        self.assertEqual(len(list(kithome.releases_dir(self.home).iterdir())), 1)
+
+    def test_dry_run_apply_writes_nothing_to_the_kit_home(self):
+        rc, out = self._apply(self._variant("second", "second release\n"), apply=False)
+        self.assertEqual(rc, 0)
+        self.assertIn("Dry run", out)
+        self.assertEqual(kithome.current_release(self.home), self.first)
+        self.assertEqual(len(list(kithome.releases_dir(self.home).iterdir())), 1)
+
+    def test_a_failure_after_the_flip_restores_current_and_the_instance(self):
+        config = self.home / ".agents-profiles/core/claude"
+        before = instances.read_provenance(config)
+        wrapper = (self.home / ".local/bin/claude-core").read_text()
+        source = self._variant("second", "second release\n")
+        with mock.patch("devkit_cli.profiles.materialize", side_effect=RuntimeError("boom")), \
+                self.assertRaises(DevkitError) as caught:
+            self._apply(source)
+        self.assertIn("rolled back", str(caught.exception))
+        self.assertEqual(kithome.current_release(self.home), self.first)
+        self.assertEqual(self._visible_skill(),
+                         (self.checkout / "core/skills" / self.skill / "SKILL.md").read_text())
+        self.assertEqual(instances.read_provenance(config), before)
+        self.assertEqual((self.home / ".local/bin/claude-core").read_text(), wrapper)
+        self.assertFalse(list(config.parent.glob("claude.devkit-backup-*")))
+
+    def test_a_foreign_lineage_is_refused_before_anything_is_installed(self):
+        foreign = self._variant("foreign", "foreign\n")
+        yaml = foreign / "devkit.yaml"
+        yaml.write_text(re.sub(r"lineage_id: \w+", "lineage_id: " + "f" * 40,
+                               yaml.read_text()))
+        with self.assertRaises(DevkitError) as caught:
+            self._apply(foreign)
+        self.assertIn("lineage mismatch", str(caught.exception))
+        self.assertEqual(kithome.current_release(self.home), self.first)
+        self.assertEqual(len(list(kithome.releases_dir(self.home).iterdir())), 1)
+
+    def test_apply_from_a_git_remote(self):
+        remote = self.tmp / "remote-src"
+        shutil.copytree(self.checkout, remote, symlinks=True)
+        _put(remote, f"core/skills/{self.skill}/SKILL.md", "from the remote\n")
+        _git(remote, "init", "-q", "-b", "main")
+        _git(remote, "add", "-A")
+        _git(remote, "commit", "-q", "-m", "root")
+        root = _git(remote, "rev-parse", "HEAD")
+        # This kit's real lineage is its own root commit, which no test history
+        # can share: name the test history's root in the kit, the remote and
+        # the installed instance instead.
+        yaml = remote / "devkit.yaml"
+        yaml.write_text(re.sub(r"lineage_id: \w+", f"lineage_id: {root}", yaml.read_text()))
+        _git(remote, "commit", "-q", "-am", "record lineage")
+        path = self.home / ".agents-profiles/core/claude" / instances.PROVENANCE_NAME
+        prov = json.loads(path.read_text())
+        prov["lineage_id"] = root
+        path.write_text(json.dumps(prov))
+        kit = {**profiles._kit_metadata(), "lineage_id": root}
+        with mock.patch.object(update, "_kit", return_value=kit):
+            rc, out = self._apply(f"file://{remote}")
+        self.assertEqual(rc, 0, out)
+        self.assertEqual(self._visible_skill(), "from the remote\n")
+        stamp = kithome.read_stamp(kithome.current_release(self.home))
+        self.assertEqual(stamp["source"], f"file://{remote}")
+        self.assertEqual(stamp["commit"], _git(remote, "rev-parse", "HEAD"))
+        self.assertFalse(stamp["dirty"])
+
+
+class UninstallKitHomeTests(unittest.TestCase):
+    """'devkit-uninstall.sh removes the kit home, only when it holds release stamps.'"""
+
+    def _kit(self, home: Path, stamped: bool) -> Path:
+        release = home / ".local" / "share" / "devkit" / "releases" / "abc123abc123"
+        release.mkdir(parents=True)
+        (release / ("devkit.py")).write_text("x")
+        if stamped:
+            (release / ".devkit-install.json").write_text("{}")
+        (release.parent.parent / "current").symlink_to("releases/abc123abc123")
+        return release.parent.parent
+
+    def test_dry_run_names_a_stamped_kit_home(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            kit = self._kit(home, stamped=True)
+            result = _run_uninstall(home)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn(f"dir   {kit}", result.stdout)
+            self.assertTrue(kit.is_dir(), "a dry run removes nothing")
+
+    def test_apply_removes_it_and_leaves_an_unstamped_directory(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            kit = self._kit(home, stamped=True)
+            result = _run_uninstall(home, "--apply")
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertFalse(kit.exists())
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            kit = self._kit(home, stamped=False)
+            result = _run_uninstall(home)
+            self.assertNotIn(str(kit), result.stdout)
+            self.assertTrue(kit.is_dir())
+
+    def test_script_stays_static(self):
+        self.assertNotIn("python3", SCRIPT)
+        self.assertNotIn("devkit_cli", SCRIPT)
+
+
+class LegacyDoctorTests(_HomePatched):
+    """'doctor lists profiles still linked into a checkout and names the fix.'"""
+
+    def _doctor(self) -> tuple[int, str]:
+        out = io.StringIO()
+        with redirect_stdout(out):
+            rc = profiles.cmd_doctor(argparse.Namespace(profile=None))
+        return rc, out.getvalue()
+
+    def _make_legacy(self) -> None:
+        self._install()
+        agents = self.home / ".agents-profiles/core/agents"
+        for layer in ("skills", "kb"):
+            for link in list((agents / layer).iterdir()):
+                link.unlink()
+                link.symlink_to(self.checkout / "core" / layer / link.name)
+        (agents / "bin").unlink()
+        (agents / "bin").symlink_to(self.checkout / "core" / "bin")
+        devkit = self.home / ".local" / "bin" / "devkit"
+        devkit.unlink()
+        devkit.symlink_to(self.checkout / "devkit.py")
+
+    def test_a_checkout_linked_profile_is_reported_with_the_fixing_command(self):
+        self._make_legacy()
+        rc, out = self._doctor()
+        self.assertEqual(rc, 1)
+        self.assertIn("legacy: core:", out)
+        self.assertIn("devkit profile sync core --apply", out)
+        self.assertIn("legacy: ~/.local/bin/devkit", out)
+
+    def test_sync_makes_it_standalone_and_doctor_clean_of_legacy(self):
+        self._make_legacy()
+        self._install()
+        _rc, out = self._doctor()
+        self.assertNotIn("legacy:", out)
+        self.assertEqual(os.readlink(self.home / ".local/bin/devkit"),
+                         str(kithome.current_link(self.home) / "devkit.py"))
+        for path, target in self._projections().items():
+            self.assertNotIn(str(self.checkout), target, path)
+
+    def test_update_check_lists_legacy_installs(self):
+        self._make_legacy()
+        out = io.StringIO()
+        with redirect_stdout(out):
+            update.cmd_check(argparse.Namespace(profile=None, from_source=None, ref=None))
+        self.assertIn("legacy: core", out.getvalue())
+        self.assertIn("devkit profile sync core --apply", out.getvalue())
+
+    def test_update_check_against_a_directory_source(self):
+        self._install()
+        newer = self.tmp / "newer"
+        kithome.copy_payload(self.checkout, newer, kithome.payload_files(self.checkout))
+        _put(newer, f"core/skills/{self._core_skill(self.checkout).name}/SKILL.md", "new\n")
+        for source, word in ((self.checkout, "up to date"), (newer, "update available")):
+            out = io.StringIO()
+            with self.subTest(source=source.name), redirect_stdout(out):
+                update.cmd_check(argparse.Namespace(
+                    profile=None, from_source=str(source), ref=None))
+            self.assertIn(f": {word}", out.getvalue().splitlines()[0])
 
 
 if __name__ == "__main__":

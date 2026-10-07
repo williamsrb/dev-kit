@@ -17,7 +17,14 @@ import shutil
 import subprocess
 from pathlib import Path
 
-from .common import Plan, load_json, repo_file, resolve_source, unrender_home
+from .common import (
+    Plan,
+    load_json,
+    repo_file,
+    require_checkout,
+    resolve_source,
+    unrender_home,
+)
 from .errors import DevkitError
 
 # Text files get ${HOME} substitution on the way out; everything else is
@@ -157,6 +164,7 @@ def gitleaks_scan(target: Path) -> tuple[bool, str]:
 
 
 def cmd_export(args) -> int:
+    require_checkout("export")
     allowlist = load_json(repo_file("export-allowlist.json"), "export allowlist")
     source = resolve_source(getattr(args, "source", None), allowlist)
     target = repo_file(allowlist.get("target", "core"))

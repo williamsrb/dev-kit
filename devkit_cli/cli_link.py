@@ -1,8 +1,11 @@
-"""`devkit` itself on PATH: ~/.local/bin/devkit -> <checkout>/devkit.py.
+"""`devkit` itself on PATH: ~/.local/bin/devkit -> <kit-home>/current/devkit.py.
 
-Without it the CLI only works as ./devkit from the checkout. devkit-uninstall.sh
-removes the link when it points at a devkit.py, so keep that test identical to
-the one in uninstaller.SCRIPT.
+Without it the CLI only works as ./devkit from the checkout. The link goes
+through `current`, so an upgrade moves it without touching the link, and
+deleting the checkout does not break it. devkit-uninstall.sh removes the link
+when it points at a devkit.py, so keep that test identical to the one in
+uninstaller.SCRIPT. A link that still points at a checkout's devkit.py is
+relinked, which is how an existing install migrates.
 """
 
 from __future__ import annotations
@@ -10,7 +13,8 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from .common import Plan, repo_file
+from . import kithome
+from .common import Plan
 
 NAME = "devkit"
 TARGET = "devkit.py"
@@ -18,7 +22,7 @@ TARGET = "devkit.py"
 
 def ensure(home: Path, plan: Plan) -> None:
     dest = home / ".local" / "bin" / NAME
-    source = repo_file(TARGET).resolve()
+    source = kithome.current_link(home) / TARGET
     if dest.is_symlink():
         current = Path(os.readlink(dest))
         if current == source:

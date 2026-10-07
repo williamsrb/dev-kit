@@ -400,6 +400,11 @@ fi
 remove_file "$HOME/.local/bin/devkit-auth-launch"
 remove_file "$HOME/.local/bin/devkit-auth-dispatch"
 remove_dir "$HOME/.local/state/devkit"
+kit_home="$HOME/.local/share/devkit"
+[[ "${XDG_DATA_HOME:-}" == "$HOME"/* ]] && kit_home="$XDG_DATA_HOME/devkit"
+if compgen -G "$kit_home/releases/*/.devkit-install.json" >/dev/null; then
+  remove_dir "$kit_home"
+fi
 
 mapfile -t ROOTS < <(root_targets)
 if [[ "$APPLY" -eq 0 ]]; then

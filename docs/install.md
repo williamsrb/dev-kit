@@ -48,8 +48,9 @@ Nothing on Arch requires the AUR.
 ### PATH
 
 `~/.local/bin` must be on your `PATH` for the profile wrappers and the `devkit`
-command to work. `install.py` links `~/.local/bin/devkit` to this checkout's
-`devkit.py` (an existing file or foreign link there is left alone).
+command to work. `install.py` links `~/.local/bin/devkit` to
+`~/.local/share/devkit/current/devkit.py`, the installed kit (an existing file
+or foreign link there is left alone).
 Public wrappers are named `<vendor>-<profile>` (`claude-dummy`), never a stock
 CLI name, and they exec the stock binary by full path. Each profile also has
 `~/.agents-profiles/<name>/bin/` with the unprefixed vendor names so the GUI
@@ -130,6 +131,42 @@ fix:   re-run with --force to back it up and proceed
 
 `--force` makes a timestamped backup beside the file, then proceeds.
 
+## The installed kit
+
+Step 2 copies the kit out of the checkout. Profiles, the `devkit` command and the
+auth launchers point at that copy, so the checkout can be moved or deleted after
+step 2 and everything keeps working. The checkout is only needed as the source
+of an upgrade.
+
+```text
+~/.local/share/devkit/            # ${XDG_DATA_HOME}/devkit when XDG_DATA_HOME is under $HOME
+  releases/<release-id>/          # immutable copy of the runtime payload
+  current -> releases/<release-id>
+```
+
+A release holds `devkit.py`, `devkit`, `devkit_cli/`, `core/`, `templates/`,
+`profiles/`, `devkit.yaml`, `export-allowlist.json` and `path-contract.json`,
+plus a `.devkit-install.json` stamp (commit, whether the working tree was
+dirty, lineage, source, payload digest). It leaves out `.git`, `tests/`,
+`docs/`, `scripts/`, `bootstrap.sh` and `install.py`. The release id is the
+first 12 hex characters of the payload digest, so installing the same payload
+twice copies nothing.
+
+Every link a profile holds goes through `current`. An upgrade installs a new
+release and flips that one link; no profile link is rewritten. The current and
+the previous release are kept for rollback, the rest are pruned.
+
+`devkit export`, `devkit docs generate` and `devkit lint-paths` (without a
+path) need sources an installed release does not have. They refuse and print the
+command to run from your checkout.
+
+An install made before this change links into the checkout and keeps working
+until you re-sync it. `devkit doctor` and `devkit update check` list it:
+
+```bash
+<checkout>/devkit profile sync <name> --apply     # dry run without --apply
+```
+
 ## Verifying
 
 ```bash
@@ -167,6 +204,9 @@ from `sudo`. The next `--apply` of any profile-writing command writes it again.
 Removed:
 
 - `~/.agents-profiles`
+- the installed kit, `~/.local/share/devkit` (only when it holds
+  `releases/*/.devkit-install.json` stamps; `${XDG_DATA_HOME}/devkit` when that
+  is under `$HOME`)
 - `~/.local/bin/devkit`, when it is a link to a `devkit.py`
 - `~/.local/bin/<vendor>-<name>` wrappers and their `.devkit-backup-*` copies
 - any other file in `~/.local/bin` or `~/.local/share/applications` carrying the

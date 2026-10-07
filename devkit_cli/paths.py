@@ -13,7 +13,7 @@ import fnmatch
 import re
 from pathlib import Path
 
-from .common import REPO_ROOT, load_json, repo_file
+from .common import REPO_ROOT, load_json, repo_file, require_checkout
 from .errors import DevkitError
 
 SKIP_DIR_NAMES = {".git", "__pycache__", "node_modules", ".venv"}
@@ -97,6 +97,8 @@ def scan(roots: list[Path], contract: dict) -> list[Violation]:
 
 
 def cmd_lint_paths(args) -> int:
+    if not args.paths:
+        require_checkout("lint-paths")
     contract_path = Path(args.contract) if args.contract else repo_file("path-contract.json")
     contract = load_json(contract_path, "path contract")
 

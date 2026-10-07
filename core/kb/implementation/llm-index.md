@@ -33,6 +33,7 @@ How-to-give-an-argparse-cli-the-bare-equals-help-contract.md	543	give-argparse	r
 How-to-handle-implicit-requirements-examples.md	554	implicit-requirements	plan-implementation validate-plan run-plan validate-impl	handle implicit requirements examples handle-implicit implicit-requirements requirements-examples jot 270 review extras called bugs jot-270 270-review review-extras extras-called called-bugs
 How-to-handle-implicit-requirements.md	1767	implicit-requirements	plan-implementation validate-plan run-plan validate-impl	handle implicit requirements handle-implicit implicit-requirements
 How-to-import-legacy-claude-personal-sessions-into-the-personal-profile.md	1030	import-legacy	run-plan	import legacy claude personal sessions profile import-legacy legacy-claude claude-personal personal-sessions sessions-personal personal-profile
+How-to-install-and-upgrade-the-devkit-kit-home.md	622	install-upgrade	run-plan plan-implementation validate-impl	install upgrade devkit kit home install-upgrade upgrade-devkit devkit-kit kit-home
 How-to-install-cursor-tgrep-rg-hook.md	672	install-cursor	run-plan	install cursor tgrep rg hook install-cursor cursor-tgrep tgrep-rg rg-hook tgrep-hook
 How-to-inventory-xp7-descriptors-from-disk.md	389	inventory-xp7	run-plan plan-implementation develop-xp7-backend	inventory xp7 descriptors disk inventory-xp7 xp7-descriptors descriptors-disk
 How-to-isolate-harness-tests-from-the-host-home.md	592	isolate-harness	validate-impl run-plan	isolate harness tests host home isolate-harness harness-tests tests-host host-home

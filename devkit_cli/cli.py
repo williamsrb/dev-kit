@@ -270,16 +270,29 @@ def build_parser() -> argparse.ArgumentParser:
     # -- update -------------------------------------------------------------
     upd = group("update", "Check, stage, and apply kit updates (one direction).")
 
+    def source_options(parser, *, ref_default=None) -> None:
+        parser.add_argument("--from", dest="from_source", metavar="SRC",
+                            help="Update source: a local directory (its working tree, "
+                                 "payload files only) or a git URL. Default: the source "
+                                 "the installed kit recorded, then devkit.yaml upstream.")
+        parser.add_argument("--ref", default=ref_default, metavar="REF",
+                            help="Ref to take from a git URL (default: HEAD). A local "
+                                 "directory is always read as its working tree.")
+
     u_check = upd.add_parser("check", help="Report available updates. Never writes.")
     u_check.add_argument("--profile", metavar="NAME")
+    source_options(u_check)
     u_check.set_defaults(func=update.cmd_check)
 
-    u_fetch = upd.add_parser("fetch", help="Download and verify into the staging cache.")
-    u_fetch.add_argument("--ref", default="HEAD")
+    u_fetch = upd.add_parser("fetch", help="Verify a source and stage it in the cache.")
+    source_options(u_fetch, ref_default="HEAD")
     u_fetch.set_defaults(func=update.cmd_fetch)
 
-    u_apply = upd.add_parser("apply", help="Install a staged update. Offline.")
+    u_apply = upd.add_parser(
+        "apply", help="Install a staged update as a new kit release. Offline "
+                      "unless --from names a git URL, which is staged first.")
     u_apply.add_argument("--profile", metavar="NAME")
+    source_options(u_apply)
     u_apply.add_argument("--apply", action="store_true", help="Write. Default: dry run.")
     u_apply.set_defaults(func=update.cmd_apply)
 

@@ -18,6 +18,7 @@ from . import (
     cli_link,
     globalignore,
     instances,
+    kithome,
     manifest,
     mcp,
     privilege,
@@ -83,19 +84,21 @@ def _write(plan: Plan, target: Path, content: str, force: bool,
 
 
 def _link_layer(plan: Plan, config_dir: Path, name: str, entries: list[str],
-                core_root: Path) -> None:
+                core_root: Path, link_core: Path) -> None:
     """Project one layer (skills/rules/kb) into the instance as per-entry symlinks.
 
     Symlinks, not copies: this is the contract sync-skill-projections.sh already
     uses, and it means an update to core/ reaches every profile without a re-copy.
+    Existence is checked under `core_root` (the tree being read) while each link
+    names `link_core` (the stable `current` tree), which dry run cannot read.
     """
     dest_root = config_dir / name
     wanted: dict[str, Path] = {}
     for entry in entries:
-        source = core_root / name / entry.split("/")[0].replace("**", "").rstrip("/")
-        if not source.exists():
+        leaf = entry.split("/")[0].replace("**", "").rstrip("/")
+        if not (core_root / name / leaf).exists():
             continue
-        wanted[source.name] = source
+        wanted[leaf] = link_core / name / leaf
     for link_name, source in sorted(wanted.items()):
         link = dest_root / link_name
         if link.is_symlink() and link.readlink() == source:
@@ -121,21 +124,25 @@ def _link_layer(plan: Plan, config_dir: Path, name: str, entries: list[str],
 def materialize(profile: dict, vendors: list[str] | None, home: Path,
                 plan: Plan, force: bool, kit_root: Path | None = None,
                 source_commit: str | None = None) -> None:
-    """Write one profile's instances from a checkout of the kit.
+    """Write one profile's instances from the kit.
 
-    `kit_root` and `source_commit` name which checkout: `update apply` installs
-    from the staged payload rather than from whatever the local tree happens to
-    be at: apply reads the staged payload.
+    The kit is first installed into the kit home (a no-op when `kit_root`, or
+    the running tree, already is `current`). Everything is then read from and
+    linked through `current`, so nothing devkit writes names the checkout. A
+    dry run installs nothing: it reads the source tree and prints the `current`
+    paths the links would have.
     """
-    root = kit_root or REPO_ROOT
+    src = kit_root or REPO_ROOT
+    link_core = kithome.current_link(home) / "core"
+    root = kithome.ensure_installed(src, home, plan)
     kit = _kit_metadata(root)
-    commit = source_commit or instances.kit_commit()
+    commit = source_commit or instances.kit_commit(root)
     core_root = root / "core"
     if not core_root.is_dir():
         raise DevkitError(f"{core_root} has not been exported yet",
                           "run 'devkit export --apply' first")
 
-    _bind_profile_runtime(plan, profile, home, core_root, force, root)
+    _bind_profile_runtime(plan, profile, home, core_root, link_core, force, root)
 
     wrote_desktop = False
     for instance in _instance_vendors(profile, vendors):
@@ -152,7 +159,7 @@ def materialize(profile: dict, vendors: list[str] | None, home: Path,
 
         for layer in ("skills", "rules", "kb"):
             _link_layer(plan, layout["config_dir"], layer,
-                        profile.get(layer, []), core_root)
+                        profile.get(layer, []), core_root, link_core)
         hooks_dir = layout["harness_dir"] / "hooks"
         if hooks_dir.is_dir():
             _symlink(plan, layout["config_dir"] / "hooks", hooks_dir,
@@ -268,8 +275,8 @@ def _wrapper_template(vendor: str) -> str:
     return {"cursor": "cursor-agent"}.get(vendor, vendor)
 
 
-def _bind_profile_runtime(plan: Plan, profile: dict, home: Path,
-                          core_root: Path, force: bool, root: Path) -> None:
+def _bind_profile_runtime(plan: Plan, profile: dict, home: Path, core_root: Path,
+                          link_core: Path, force: bool, root: Path) -> None:
     """Give this profile a ~/.agents-shaped tree and PATH wrappers for harness tools.
 
     PATH prepend is not enough: agentctl hardcodes its data root. Wrappers
@@ -292,12 +299,12 @@ def _bind_profile_runtime(plan: Plan, profile: dict, home: Path,
         if plan.apply:
             ensure_dir(agents_dir)
     for layer in ("skills", "rules", "kb"):
-        _link_layer(plan, agents_dir, layer, profile.get(layer, []), core_root)
+        _link_layer(plan, agents_dir, layer, profile.get(layer, []), core_root,
+                    link_core)
     for name in ("bin", "mcp", "share", "config"):
-        source = core_root / name
-        if source.exists():
-            _symlink(plan, agents_dir / name, source, f"agents/{name}")
-    _project_hooks(plan, harness / "hooks", core_root, tokens, force, root)
+        if (core_root / name).exists():
+            _symlink(plan, agents_dir / name, link_core / name, f"agents/{name}")
+    _project_hooks(plan, harness / "hooks", core_root, link_core, tokens, force, root)
     _symlink(plan, agents_dir / "hooks", harness / "hooks", "agents/hooks")
     for name in ("prds", "plans", "history", ".cache", ".playwright-mcp"):
         dest = agents_dir / name
@@ -320,8 +327,8 @@ def _prune_core_symlink(plan: Plan, harness: Path) -> None:
         core_link.unlink()
 
 
-def _project_hooks(plan: Plan, dest: Path, core_root: Path, tokens: dict,
-                   force: bool, root: Path) -> None:
+def _project_hooks(plan: Plan, dest: Path, core_root: Path, link_core: Path,
+                   tokens: dict, force: bool, root: Path) -> None:
     source = core_root / "hooks"
     if not dest.is_dir():
         plan.record(f"mkdir  {relative_to_home(dest)}")
@@ -333,7 +340,8 @@ def _project_hooks(plan: Plan, dest: Path, core_root: Path, tokens: dict,
         for item in sorted(source.iterdir()):
             if item.name not in wanted:
                 continue
-            _symlink(plan, dest / item.name, item, f"hooks/{item.name}")
+            _symlink(plan, dest / item.name, link_core / "hooks" / item.name,
+                     f"hooks/{item.name}")
         if dest.is_dir():
             for link in sorted(dest.iterdir()):
                 if link.is_symlink() and link.name not in wanted \
@@ -684,6 +692,7 @@ def cmd_doctor(args) -> int:
     checked = 0
 
     installed: list[str] = []
+    seen_legacy: set[str] = set()
 
     for name, vendor, config_dir, prov in instances.discover_instances(home):
         if args.profile and name != args.profile:
@@ -692,7 +701,7 @@ def cmd_doctor(args) -> int:
         if name not in installed:
             installed.append(name)
         label = f"{name}/{vendor}"
-        if prov.get("source_commit") != kit_commit:
+        if _bare_commit(prov.get("source_commit")) != _bare_commit(kit_commit):
             problems.append(
                 f"{label}: stale — installed from {str(prov.get('source_commit'))[:8]}, "
                 f"kit is at {kit_commit[:8]}\n"
@@ -702,6 +711,7 @@ def cmd_doctor(args) -> int:
                 f"{label}: installed by a newer devkit "
                 f"(schema {prov['profile_schema_version']} > {instances.PROFILE_SCHEMA_VERSION})\n"
                 f"    fix: update this kit; there is no override")
+        problems += _legacy_problems(home, name, config_dir, seen_legacy)
         offenders = privilege.find_root_owned(config_dir, uid, limit=5)
         if offenders:
             listed = ", ".join(relative_to_home(p) for p in offenders[:3])
@@ -711,6 +721,12 @@ def cmd_doctor(args) -> int:
                 f"— and stop installing config with sudo")
 
     if installed:
+        stale_cli = kithome.legacy_cli_link(home)
+        if stale_cli:
+            problems.append(
+                f"legacy: {relative_to_home(home / '.local' / 'bin' / 'devkit')} is linked "
+                f"to {stale_cli}, outside the kit home\n"
+                f"    fix: devkit profile sync {installed[0]} --apply")
         undo = home / ".local" / "bin" / uninstaller.DEST_NAME
         if not undo.is_file():
             problems.append(
@@ -733,6 +749,25 @@ def cmd_doctor(args) -> int:
         print(f"  {problem}")
     print(f"\ndoctor: {len(problems)} problem(s).")
     return 1
+
+
+def _bare_commit(commit: object) -> str:
+    return str(commit or "").removesuffix("-dirty")
+
+
+def _legacy_problems(home: Path, name: str, config_dir: Path,
+                     seen: set[str]) -> list[str]:
+    """Projections that still point at a checkout. One report per profile."""
+    if name in seen:
+        return []
+    links = kithome.legacy_links(home, config_dir)
+    if not links:
+        return []
+    seen.add(name)
+    link, target = links[0]
+    return [(f"legacy: {name}: {len(links)} link(s) point outside the kit home, "
+             f"e.g. {relative_to_home(link)} -> {target}\n"
+             f"    fix: devkit profile sync {name} --apply")]
 
 
 # ---------------------------------------------------------- home-root rules

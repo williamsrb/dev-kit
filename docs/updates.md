@@ -21,8 +21,9 @@ devkit update apply  [--from SRC] [--ref REF] --apply
 
 `--from SRC` is a local directory or a git URL (`https://`, `ssh://`,
 `git@host:path`, `file://`). Without it devkit uses, in order, the source the
-installed kit recorded, then `upstream` in `devkit.yaml`. If none resolves it
-refuses and names `--from`.
+installed kit recorded, then `upstream` in `devkit.yaml`. If none resolves,
+`fetch` and `apply` refuse and name `--from`; `check` prints a note and reports
+local state only.
 
 | Source | What is installed | Lineage |
 |--------|-------------------|---------|
@@ -33,8 +34,10 @@ refuses and names `--from`.
 A foreign lineage is refused for every source, with no override, before
 anything is staged or installed.
 
-`apply --from SRC` stages the source first and installs it in one step; without
-`--from` it installs what `fetch` staged last.
+`apply --from SRC` (or `--ref REF`) stages the source first and installs it in
+one step; without either it installs what was staged last. Its dry run stages
+into a temporary directory that it deletes, so it leaves nothing for a later
+bare `apply` to pick up, but for a git URL it still clones.
 
 ## check
 
@@ -50,8 +53,9 @@ It never fails the machine. It reports blockers instead.
 
 ## fetch
 
-The only command that touches the network (for a git URL). It verifies that
-what it downloaded is the commit it asked for, and resolves `lineage_id` from
+It touches the network for a git URL, as `check` (`ls-remote`) and
+`apply --from <git URL>` (a clone) also do. It resolves `--ref` in the fresh
+clone, records that commit, and resolves `lineage_id` from
 the fetched repository's root commit. Only the runtime payload is staged.
 
 A lineage mismatch fails **here**, before anything is staged, so a foreign kit
@@ -70,25 +74,33 @@ to date. After a success the releases other than `current` and the previous one
 are pruned.
 
 The provenance file is never updated before the tree it describes. A failure
-mid-apply flips `current` back to the previous release and restores every
-instance from its backup, so the machine and the provenance describe the
-pre-apply state and the instance is never labelled as something it is not.
+mid-apply flips `current` back to the previous release (when there is one) and
+restores each instance's vendor config directory from its backup, so the
+provenance describes the pre-apply state and the instance is never labelled as
+something it is not. What the re-sync writes outside that directory (the
+profile's `agents/`, `bin/` and `hooks/`, wrappers, launchers, auth dispatchers)
+is not backed up; `devkit profile sync <name> --apply` rewrites it from the
+restored `current`.
 
-After a kit apply, `devkit profile sync <name> --apply` refreshes launchers and
-wrappers. If desktop forks are missing or stale, that command prints the rsync
-plan and asks `sudo`. Apt/dpkg hooks rebuild forks when the original vendor
-package updates; they do not replace this step after a kit-only change.
+`apply` re-materializes each instance, wrappers and launchers included, but does
+not rebuild desktop forks or relink `~/.local/bin/devkit`. After a kit apply,
+`devkit profile sync <name> --apply` does both: if desktop forks are missing or
+stale it prints the rsync plan and asks `sudo`. Apt/dpkg hooks rebuild forks
+when the original vendor package updates; they do not replace this step after a
+kit-only change.
 
 ## Updating from your own checkout (no upstream)
 
 The kit you cloned is its own origin: `devkit.yaml` has `upstream: null`. The
-installed kit records the directory it was installed from, so a bare
-`devkit update` re-reads that directory. Pass `--from` to name another one:
+installed kit records the directory it was installed from, so `devkit update
+check` and `devkit update fetch` without `--from` re-read that directory, and
+`devkit update apply` installs what `fetch` staged. Pass `--from` to name another
+one:
 
 ```bash
 git pull                                    # or edit, or commit your own changes
 devkit update check --from ~/src/devkit     # "update available" when the payload differs
-devkit update apply --from ~/src/devkit     # dry run
+devkit update apply --from ~/src/devkit     # dry run; stages nothing
 devkit update apply --from ~/src/devkit --apply
 devkit doctor
 ```

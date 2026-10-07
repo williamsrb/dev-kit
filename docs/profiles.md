@@ -18,10 +18,13 @@ stock app (its own copy under `/usr/lib/devkit/`, patched `desktopName` /
 and Cursor stay as they are. The fork is rebuilt after apt/dpkg updates of the
 original package.
 
-`create` / `sync` / `install.py --apply` write user-owned files first, then
-print the rsync/asar/hook plan and ask `sudo`. `install.py --apply` with no
-profiles yet offers to create a first one (type, then name) unless you passed
-`--profile` or `--name`.
+`create` / `sync` / `install.py --apply` write user-owned files first. Then, if
+that profile's desktop fork is missing or stale or the apt/dpkg hooks are not
+installed, they print the rsync/asar/hook plan and ask `sudo`; otherwise they
+stop there. `install.py --apply` on a terminal, with no profiles yet, offers to
+create a first one (type, then name) unless you passed `--profile` or `--name`.
+Without a terminal it creates the `--profile` type (default `core`) under that
+same name.
 
 A profile is not the only way to give a repo the harness: `devkit project build`
 links skills and an `AGENTS.md` into the repo itself. See [project.md](project.md).
@@ -48,14 +51,15 @@ devkit profile session-sync --source dummy --target other --agent claude,codex,c
 devkit profile session-sync --source dummy --target other --agent all
 ```
 
-Common rules. A file or row is copied when the target lacks it or the source copy
-is newer. Nothing is deleted and a newer target is never overwritten, but an
-older target is replaced and the old version is not kept. SQLite databases are
-backed up beside themselves (`<name>.devkit-backup-<timestamp>`) before the first
-write, and the command checks there is room for it. Backups are never pruned;
-remove old ones yourself. The dry run prints counts per
-agent and names apps that would block `--apply`: quit the agents' apps on the
-target first. Stock and a profile are often different accounts; the copied chats
+Common rules. A file or row is copied when the target lacks it or the source
+copy is newer. Nothing is deleted and a newer target is never overwritten, but
+an older target is replaced and the old version is not kept (Codex is narrower;
+see below). SQLite databases are backed up beside themselves
+(`<name>.devkit-backup-<timestamp>`) before the first write, and the command
+refuses unless there is free space for 1.1 times the database. Backups are never
+pruned; remove old ones yourself. The dry run prints counts per agent and names
+apps that would block `--apply`: quit the agents' apps on the target first.
+Stock and a profile are often different accounts; copied Claude Desktop chats
 then appear under the target's account, and the command prints a note.
 
 What each agent copies:
@@ -69,20 +73,24 @@ What each agent copies:
   history); it replaces, never merges, keeps the old one beside it, and needs the
   source Desktop quit too. Cookies and `.claude.json` trust flags are not copied.
 - **codex**: rollout files under `sessions/` and `archived_sessions/`, the
-  `threads` rows in `state_N.sqlite` that list them (paths rewritten to the target
-  home; project and section ids left unset), and `session_index.jsonl`. The
-  history projection database is not copied; Codex rebuilds it. When the target
-  has no state database yet, only the files are copied and Codex indexes them on
-  its first start.
+  `threads` rows in `state_N.sqlite` that list them (paths rewritten to the
+  target home; project and section ids left unset), and `session_index.jsonl`.
+  For a thread the target already has, a newer source only moves its
+  `updated_at` columns forward; the rest of the row stays the target's.
+  `session_index.jsonl` gains the ids it lacks and existing lines are never
+  rewritten. The history projection database is not copied; Codex rebuilds it.
+  Threads merge only into a target database with the same `state_N.sqlite` name
+  as the source's newest; without one only the files are copied and Codex
+  indexes them on its first start.
 - **cursor**: IDE chats. For each chat the target lacks or has older, its
   `composerHeaders` row and its `cursorDiskKV` rows (`composerData`, `bubbleId`,
-  `checkpointId`, `codeBlockDiff`, and the other per-chat families) move in one
-  transaction. The target must have started once so its `state.vscdb` exists. The
+  `checkpointId`, `codeBlockDiff`, and the other per-chat families) are copied in
+  one transaction; the source database is opened read-only. The target must have started once so its `state.vscdb` exists. The
   content-addressed rows (`agentKv:blob:*`, `composer.content.*`) and the
   per-workspace databases are not copied, because their keys name no chat. A chat
   may not list under a folder until that folder is opened in the target. The
-  backup copies the whole target database, so stock needs as much free disk as
-  its size.
+  backup copies the whole target database, so the target needs that much free
+  disk again.
 
 ## What gets created
 
@@ -91,13 +99,15 @@ What each agent copies:
 ~/.agents-profiles/<profile>/hooks       # per-file links into kit hooks/ + statusline
 ~/.agents-profiles/<profile>/agents      # AGENTS_HOME: ~/.agents-shaped tree
     skills/  rules/  kb/                 # this profile's subset, not siblings'
-    bin/ mcp/ share/ config              # symlinks into kit core/ (tools only)
-    hooks -> ../hooks
+    bin/ mcp/ share/ config              # symlinks into kit core/ (tools only); a
+                                         # client_overlay profile gets a real config/
+                                         # with client-overlay.json beside the links
+    hooks -> <profile root>/hooks        # absolute link
     prds/ plans/ .playwright-mcp/        # profile-local state
     .auth/                               # profile-local; token YAML may be shared
 ~/.agents-profiles/<profile>/<vendor>/   # the vendor's config dir
     skills/  rules/  kb/                 # per-entry symlinks into kit core/
-    hooks -> ../hooks
+    hooks -> <profile root>/hooks        # absolute link
     .devkit-profile.json                 # provenance
 ~/.config/Claude-<profile>/              # Claude Desktop Chromium profile
 ~/.config/Codex-<profile>/               # ChatGPT Desktop Chromium profile
@@ -123,10 +133,11 @@ gates skip that copy when the fork's version and `desktopName` already match.
 ./devkit profile create dummy --type enonic --apply
 ./devkit profile create enonic --apply
 ./devkit profile sync dummy --apply    # after a manifest change
-./devkit profile adopt core --vendor claude --config-dir ~/.claude --apply
+./devkit profile adopt mine --vendor claude --type core --config-dir ~/.agents-profiles/mine/claude --apply
 ./devkit profile auth restore            # put stock URL handlers back
 ./devkit profile session-sync --source stock --target dummy --agent all --apply   # copy sessions
 ./devkit profile apps-sync --user "$USER" --apply   # prints plan, then sudo
+./devkit profile migrate dummy --to-fork devkit --apply  # re-home onto another fork id
 ```
 
 Every one of these is a dry run without `--apply`.
@@ -153,10 +164,11 @@ list, and the profile names it.
 ## MCP
 
 The profile `mcp` list is the default-alive set, matching the reference
-Cursor / Claude / Codex configs. **Always on:** `context7` (every profile);
-`gitlab` on Enonic and above; `atlassian-rovo-preview` on `client`.
-**Parked** (catalog `parked`, snippets under `$HOME/.agents/.auth/mcp-on-demand/`):
-graft, Slack, the Playwright stub, and browser-control. Graft stays the CLI
+Cursor / Claude / Codex configs. **Always on:** `context7` and `serena` (every
+profile); `gitlab` on Enonic and above; `atlassian-rovo-preview` on
+`client`. **Parked** (catalog `parked`, snippets under
+`$HOME/.agents/.auth/mcp-on-demand/`): Slack, the Playwright stub, and
+browser-control. Graft has no MCP server at all (catalog `skip`): it is the CLI
 plus `graft.mdc`. Playwright is spawned per task id (`playwright.py spawn
 <id> --enable`), not registered as a stub. From a profile, `--enable` writes
 `playwright-<id>` only onto that profile's Cursor/Claude/Codex MCP files
@@ -202,10 +214,15 @@ showing the stock icon. The apt/dpkg hook installs a copy of the emblem at
 one provenance file and relocates nothing:
 
 ```bash
-./devkit profile adopt core --vendor claude --config-dir ~/.claude --apply
+./devkit profile adopt mine --vendor claude --type core \
+    --config-dir ~/.agents-profiles/mine/claude --apply
 ```
 
-Re-running it is a no-op.
+The directory must already sit at `~/.agents-profiles/<name>/<dir>`, because
+that is the only place `profile list`, `doctor`, `sync` and `update` look for
+instances. Anywhere else (a stock `~/.claude`, say) is refused: the provenance
+file would land in a directory devkit never reads again. Re-running it is a
+no-op.
 
 ## Home-root instruction files
 

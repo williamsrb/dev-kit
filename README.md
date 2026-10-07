@@ -12,26 +12,30 @@ Run from the checkout, in this order. Every step has a dry run (omit
 
 ```bash
 ./bootstrap.sh --profile enonic --apply    # 1. dependencies, no config
-./devkit export --apply                    # 2. only if install.py says core/ is not exported
-./install.py --name dummy --profile enonic --apply   # 3. profile, wrappers, `devkit` on PATH
-./install.py --profile enonic --verify     # 4. check
+./install.py --name dummy --profile enonic --apply    # 2. profile, wrappers, `devkit` on PATH
+./install.py --name dummy --profile enonic --verify   # 3. check
 ./devkit doctor
-claude-dummy                               # 5. start the profile
+claude-dummy                               # 4. start the profile
 ```
 
-What step 3 leaves on your machine, all under `~/.local/bin` (which must be on
+`core/` is tracked, so a clone already has it. Run `./devkit export --apply`
+before step 2 only when `install.py` says `core/` is not exported; it needs the
+harness at `~/.agents` as its source.
+
+What step 2 leaves on your machine, all under `~/.local/bin` (which must be on
 `PATH`; pass `--wire-path` to step 1 or edit your shell profile yourself):
 
 | File | Purpose |
 |------|---------|
 | `devkit` | Link to the installed kit's `devkit.py`, so `devkit` runs from any directory. |
 | `<vendor>-<name>` (`claude-dummy`) | The profile's CLI wrappers. |
-| `devkit-uninstall.sh` | Removes everything the kit wrote, except projects built with `devkit project build`: run `devkit project clean` in each repo first. |
+| `devkit-uninstall.sh` | Removes everything the kit wrote, except projects built with `devkit project build` (run `devkit project clean` in each repo first) and the home-root rules `fix-home-rules` moved ([docs/install.md#uninstalling](docs/install.md#uninstalling)). |
 
-The kit is also copied to `~/.local/share/devkit/`, and every profile links into that copy, not into this checkout. Once step 3 has run you can move or delete the checkout; it is only the source of an upgrade (see [docs/updates.md](docs/updates.md)).
+The kit is also copied to `~/.local/share/devkit/`, and every profile links into that copy, not into this checkout. Once step 2 has run you can move or delete the checkout; it is only the source of an upgrade (see [docs/updates.md](docs/updates.md)).
 
 Open a new shell after install so `PATH` changes apply. Without `--name` or
-`--profile`, `install.py` on a terminal asks which first profile to create.
+`--profile`, `install.py --apply` on a terminal with no profiles installed asks
+which first profile to create.
 
 Installing as an assistant rather than reading this: go to
 [docs/install.md#agent-runbook](docs/install.md#agent-runbook) before running
@@ -81,8 +85,8 @@ hooks rebuild those forks after the original package updates.
 | Vendor | Tier 1 mechanism | Tier 2 | Tier 3 fork | Status |
 |--------|------------------|--------|-------------|--------|
 | Claude Code / Desktop | `CLAUDE_CONFIG_DIR` | yes | `/usr/lib/devkit/claude-<profile>/` | verified |
-| Codex CLI / ChatGPT Desktop | `CODEX_HOME` + `CODEX_ELECTRON_USER_DATA_PATH` | yes | `/usr/lib/devkit/codex-<profile>/` | verified |
-| Cursor (IDE) | `--user-data-dir` + `--extensions-dir` | yes | `/usr/lib/devkit/cursor-<profile>/` | verified |
+| Codex CLI / ChatGPT Desktop | `CODEX_HOME` (the launcher adds `CODEX_ELECTRON_USER_DATA_PATH`) | yes | `/usr/lib/devkit/codex-<profile>/` | verified |
+| Cursor (IDE) | none: `cursor-<profile>` is the `cursor-agent` wrapper | yes, with `--user-data-dir` + `--extensions-dir` | `/usr/lib/devkit/cursor-<profile>/` | verified |
 | `cursor-agent` (CLI) | `XDG_CONFIG_HOME` + `CURSOR_DATA_DIR` | n/a | n/a | verified |
 
 Two details worth knowing before you debug something:
@@ -142,7 +146,7 @@ python3 -m unittest discover -s tests       # the acceptance checklist
 
 | Path | Contents |
 |------|----------|
-| `bootstrap.sh` | Step 1. Dependencies only. The one bash file, because it runs before Python is guaranteed. |
+| `bootstrap.sh` | Step 1. Dependencies only. Bash, because it runs before Python is guaranteed. |
 | `install.py` | Step 2. Configuration only. Refuses root. |
 | `devkit` | Profile, export, update and diagnostic CLI. `install.py` links it to `~/.local/bin/devkit`. |
 | `profiles/` | Profile manifests. `core` is the base; the rest extend it. |

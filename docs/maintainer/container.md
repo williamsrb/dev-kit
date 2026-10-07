@@ -12,7 +12,7 @@ It is useful for three things:
 
 ## What it is not
 
-It is not profile isolation. See [design.md](design.md#profile-isolation-is-environment-variables-not-containers).
+It is not profile isolation. See [design.md](design.md#profile-isolation-is-config-plus-a-gui-fork-not-containers).
 
 It deliberately does **not** mount `/var/run/docker.sock`. A mounted socket is
 root-equivalent on the host, which would erase the isolation the container
@@ -25,6 +25,10 @@ exists for. That means the image cannot drive `docker compose` or
 docker build -f Dockerfile.agent -t devkit:core --build-arg PROFILE=core .
 docker run --rm -it -v "$PWD:/work" -w /work devkit:core
 ```
+
+The vendor CLI defaults to Claude Code (`@anthropic-ai/claude-code`, installed
+with npm into the nvm node that `bootstrap.sh` provides). Pick another with
+`--build-arg VENDOR_CLI=@openai/codex`.
 
 The build runs the real `bootstrap.sh`, which is what makes it a useful test
 rather than a parallel install path that drifts.

@@ -1,7 +1,7 @@
 # Projects
 
 `devkit project` applies the harness to a work repo, next to profiles instead of
-instead of them. A **profile** carries how the agent runs: hooks, MCP, auth,
+replacing them. A **profile** carries how the agent runs: hooks, MCP, auth,
 environment, the desktop identity. A **project** carries what the agent knows:
 the skills of the profile types you name, skills the repo owns, and an
 `AGENTS.md`. A project never writes hooks, MCP, settings, auth or `AGENTS_HOME`.
@@ -57,7 +57,9 @@ writes the file (`--force` overwrites) and validates each `--layer` against the
 installed kit.
 
 A client repo that must not carry a `harness/` directory keeps the file
-elsewhere and passes `--config` to `build` and `status`.
+elsewhere and passes `--config` to `build` and `status`. `init` has no
+`--config` and always writes `harness/project.json`, so that file is written by
+hand.
 
 ## Repo-owned layer
 

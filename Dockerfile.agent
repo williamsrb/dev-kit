@@ -9,6 +9,7 @@
 # that drifts from it.
 #
 #   docker build -f Dockerfile.agent -t devkit:core --build-arg PROFILE=core .
+#   docker build -f Dockerfile.agent -t devkit:codex --build-arg VENDOR_CLI=@openai/codex .
 #   docker run --rm -it -v "$PWD:/work" -w /work devkit:core
 
 ARG BASE=debian:stable-slim
@@ -48,6 +49,12 @@ RUN ./install.py --profile ${PROFILE} --apply
 # would silently rot on the next node bump.
 SHELL ["/bin/bash", "-lc"]
 RUN . "$HOME/.nvm/nvm.sh" 2>/dev/null; python3 devkit_cli/bootstrap_plan.py --profile ${PROFILE} --verify
+
+# The vendor CLI the image exists to run. It is not a profile dependency: on a
+# host the vendor CLI is installed by its own installer, which a profile-managed
+# copy would shadow. Pass --build-arg VENDOR_CLI=@openai/codex for Codex.
+ARG VENDOR_CLI=@anthropic-ai/claude-code
+RUN . "$HOME/.nvm/nvm.sh" && npm install -g ${VENDOR_CLI}
 
 WORKDIR /work
 

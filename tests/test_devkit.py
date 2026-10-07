@@ -7,9 +7,11 @@ requirement, not just the code.
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import io
 import json
 import os
+import pwd
 import re
 import shutil
 import sqlite3
@@ -40,7 +42,7 @@ from devkit_cli import (
     session_sync,
     update,
 )
-from devkit_cli.common import Plan
+from devkit_cli.common import Plan, write_json
 from devkit_cli.errors import DevkitError
 from devkit_cli.profiles import (
     choose_first_profile,
@@ -425,6 +427,45 @@ class ProfileCompositionTests(unittest.TestCase):
                 self.assertNotIn(parked, claude["mcpServers"])
                 self.assertNotIn(f"[mcp_servers.{parked}]", toml)
 
+    def test_adopt_refuses_a_directory_discovery_cannot_see(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            stock = home / ".claude"
+            inside = home / ".agents-profiles" / "mine" / "claude"
+            stock.mkdir()
+            inside.mkdir(parents=True)
+            user = argparse.Namespace(pw_dir=str(home))
+            with mock.patch.object(privilege, "refuse_root", lambda *_a: user), \
+                    redirect_stdout(io.StringIO()):
+                adopt = lambda d: profiles.cmd_adopt(argparse.Namespace(
+                    name="mine", type="core", vendor="claude", config_dir=str(d),
+                    apply=True))
+                with self.assertRaises(DevkitError):
+                    adopt(stock)
+                self.assertFalse((stock / instances.PROVENANCE_NAME).exists())
+                self.assertEqual(adopt(inside), 0)
+            self.assertEqual([row[:2] for row in instances.discover_instances(home)],
+                             [("mine", "claude")])
+
+    def test_client_profile_supplies_the_real_overlay(self):
+        """'core/ ships only the .example.json, and the client profile supplies the real file.'"""
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            config = home / ".agents-profiles/acme/agents/config"
+            config.parent.mkdir(parents=True)
+            config.symlink_to(REPO / "core" / "config")  # how older syncs left it
+            profile = load_for_create("acme", "client")
+            with redirect_stdout(io.StringIO()):
+                materialize(profile, ["claude"], home, Plan(apply=True), force=True)
+            self.assertFalse(config.is_symlink())
+            self.assertEqual(json.loads((config / "client-overlay.json").read_text()),
+                             profile["client_overlay"])
+            self.assertTrue((config / "client-overlay.example.json").is_symlink())
+            with redirect_stdout(io.StringIO()):
+                materialize(load_for_create("plain", "core"), ["claude"], home,
+                            Plan(apply=True), force=True)
+            self.assertTrue((home / ".agents-profiles/plain/agents/config").is_symlink())
+
     def test_sync_keeps_claude_state_outside_mcp_servers(self):
         """.claude.json also holds login state and trust flags, which sync must not erase."""
         with tempfile.TemporaryDirectory() as tmp:
@@ -634,6 +675,33 @@ class PrivilegeTests(unittest.TestCase):
             privilege.is_root = original
             if saved:
                 os.environ["SUDO_USER"] = saved
+
+    def test_root_with_user_writes_as_that_account(self):
+        """'Every created path is then owned by that account.'"""
+        entry = pwd.getpwuid(os.getuid())
+        calls = []
+        with mock.patch.object(privilege, "is_root", lambda: True), \
+                mock.patch.dict(os.environ, {}), \
+                mock.patch("os.setgroups", lambda g: calls.append(("groups",))), \
+                mock.patch("os.setresgid", lambda *a: calls.append(("gid", *a))), \
+                mock.patch("os.setresuid", lambda *a: calls.append(("uid", *a))):
+            self.assertEqual(privilege.refuse_root(entry.pw_name), entry)
+            self.assertEqual(os.environ["HOME"], entry.pw_dir)
+        self.assertEqual(calls, [("groups",), ("gid", entry.pw_gid, entry.pw_gid, 0),
+                                 ("uid", entry.pw_uid, entry.pw_uid, 0)])
+
+    def test_regain_root_needs_a_saved_root_uid(self):
+        with mock.patch("os.getresuid", lambda: (1000, 1000, 1000)), \
+                mock.patch("os.geteuid", lambda: 1000):
+            self.assertFalse(privilege.regain_root())
+        calls = []
+        with mock.patch("os.getresuid", lambda: (1000, 1000, 0)), \
+                mock.patch("os.geteuid", lambda: 1000), \
+                mock.patch("os.setresuid", lambda *a: calls.append(a)), \
+                mock.patch("os.setresgid", lambda *a: None), \
+                mock.patch("os.setgroups", lambda g: None):
+            self.assertTrue(privilege.regain_root())
+        self.assertEqual(calls, [(0, 0, 0)])
 
     def test_uid_zero_is_refused(self):
         with self.assertRaises(DevkitError):
@@ -1165,6 +1233,30 @@ class FirstProfileOfferTests(unittest.TestCase):
         self.assertTrue(flag_given("--name", ["--name=dummy"]))
 
 
+class InstallVerifyTests(unittest.TestCase):
+    """'--verify' must check the instance --name names, not the type's directory."""
+
+    @staticmethod
+    def _verify(name: str, type_name: str, home: Path) -> int:
+        spec = importlib.util.spec_from_file_location("install_script", REPO / "install.py")
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        with redirect_stdout(io.StringIO()):
+            return module.verify(load_for_create(name, type_name), home)
+
+    def test_named_instance_is_verified(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            materialize(load_for_create("dummy", "enonic"), ["claude"],
+                        home, Plan(apply=True), force=True)
+            self.assertEqual(self._verify("dummy", "enonic", home), 0)
+            self.assertEqual(self._verify("enonic", "enonic", home), 1)
+
+    def test_missing_instance_is_a_problem(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertEqual(self._verify("nosuch", "enonic", Path(tmp)), 1)
+
+
 class CodexDesktopTests(unittest.TestCase):
     def test_codex_desktop_sets_both_isolation_vars(self):
         profile = load_for_create("dummy", "enonic")
@@ -1218,8 +1310,7 @@ class ProfileCliPathTests(unittest.TestCase):
         codex = (REPO / "templates" / "shell" / "codex.sh").read_text()
         self.assertIn('exec "${PROFILE_CODEX_CLI}" "$@"', codex)
         self.assertIn('AGENTS_HOME="${PROFILE_AGENTS_HOME}"', codex)
-        for name in ("claude.sh", "codex.sh", "cursor.sh", "cursor-agent.sh",
-                     "profile-tool.sh"):
+        for name in ("claude.sh", "codex.sh", "cursor-agent.sh", "profile-tool.sh"):
             text = (REPO / "templates" / "shell" / name).read_text()
             with self.subTest(template=name):
                 self.assertIn("export GRAFT_NO_GITIGNORE GRAFT_NO_IGNORE", text)
@@ -1312,6 +1403,19 @@ class ProfileCliPathTests(unittest.TestCase):
 
 
 class AuthDispatcherTests(unittest.TestCase):
+    def test_dry_run_creates_nothing_in_the_home(self):
+        """'Every one of these is a dry run without --apply.'"""
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            plan = Plan(apply=False)
+            with redirect_stdout(io.StringIO()):
+                materialize(load_for_create("dummy", "enonic"), None, home, plan, False)
+                ensure(home, plan)
+                globalignore.ensure(home, plan)
+                cli_link.ensure(home, plan)
+            self.assertTrue(plan.actions)
+            self.assertEqual(list(home.iterdir()), [])
+
     def test_pending_marker_wins(self):
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp)
@@ -1690,6 +1794,30 @@ class UninstallTests(unittest.TestCase):
 
 
 class LauncherIconTests(unittest.TestCase):
+    def _launcher(self, badged: bool) -> str:
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            stock = home / "claude-desktop.png"
+            stock.write_bytes(b"png")
+            profile = load_for_create("dummy", "enonic")
+            layout = instances.paths_for("dummy", "claude", home)
+            tokens = instances.render_tokens(profile, "claude", home)
+            with mock.patch.object(instances, "first_existing", lambda _c: "/usr/bin/claude"), \
+                    mock.patch("devkit_cli.profiles._find_vendor_icon", lambda _v: stock), \
+                    mock.patch.object(instances, "install_launcher_icons",
+                                      lambda *_a: badged), \
+                    redirect_stdout(io.StringIO()):
+                profiles._write_desktop(Plan(True), "claude", profile, layout, tokens,
+                                        True, REPO)
+            return layout["desktop"].read_text()
+
+    def test_launcher_names_the_badged_icon(self):
+        self.assertIn("\nIcon=claude-dummy\n", self._launcher(badged=True))
+
+    def test_failed_badge_falls_back_to_the_stock_icon(self):
+        """'If Magick or the emblem is missing the launcher falls back to the stock icon.'"""
+        self.assertIn("\nIcon=claude-desktop\n", self._launcher(badged=False))
+
     @unittest.skipUnless(
         instances.imagemagick() and instances.profile_emblem(),
         "needs ImageMagick and the profile emblem",
@@ -2915,6 +3043,16 @@ class StandaloneUpgradeTests(_HomePatched):
         prov = instances.read_provenance(self.home / ".agents-profiles/core/claude")
         self.assertEqual(prov["history"][-1]["to"], prov["source_commit"])
 
+    def test_apply_keeps_the_colour_chosen_at_create(self):
+        config_dir = self.home / ".agents-profiles/core/claude"
+        prov = instances.read_provenance(config_dir)
+        chosen = "#2563eb"
+        self.assertNotEqual(prov["color"], chosen)
+        write_json(config_dir / instances.PROVENANCE_NAME, {**prov, "color": chosen})
+        rc, out = self._apply(self._variant("second", "second release\n"))
+        self.assertEqual(rc, 0, out)
+        self.assertEqual(instances.read_provenance(config_dir)["color"], chosen)
+
     def test_apply_of_an_identical_payload_installs_nothing(self):
         rc, out = self._apply(self.checkout)
         self.assertEqual(rc, 0)
@@ -2928,6 +3066,9 @@ class StandaloneUpgradeTests(_HomePatched):
         self.assertIn("Dry run", out)
         self.assertEqual(kithome.current_release(self.home), self.first)
         self.assertEqual(len(list(kithome.releases_dir(self.home).iterdir())), 1)
+        staged = self.tmp / "staged"
+        self.assertFalse(staged.exists() and any(staged.iterdir()),
+                         "a dry run must not stage a payload a later bare apply installs")
 
     def test_a_failure_after_the_flip_restores_current_and_the_instance(self):
         config = self.home / ".agents-profiles/core/claude"
@@ -3019,6 +3160,18 @@ class UninstallKitHomeTests(unittest.TestCase):
             result = _run_uninstall(home)
             self.assertNotIn(str(kit), result.stdout)
             self.assertTrue(kit.is_dir())
+
+    def test_apply_removes_the_update_staging_cache(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            staged = home / ".cache" / "devkit" / "staged" / "dir-abc123abc123"
+            staged.mkdir(parents=True)
+            (staged / ".devkit-staged.json").write_text("{}")
+            self.assertIn(f"dir   {home / '.cache/devkit'}", _run_uninstall(home).stdout)
+            result = _run_uninstall(home, "--apply")
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertFalse((home / ".cache" / "devkit").exists())
+            self.assertTrue((home / ".cache").is_dir())
 
     def test_script_stays_static(self):
         self.assertNotIn("python3", SCRIPT)

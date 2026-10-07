@@ -405,6 +405,9 @@ kit_home="$HOME/.local/share/devkit"
 if compgen -G "$kit_home/releases/*/.devkit-install.json" >/dev/null; then
   remove_dir "$kit_home"
 fi
+if compgen -G "$HOME/.cache/devkit/staged/*/.devkit-staged.json" >/dev/null; then
+  remove_dir "$HOME/.cache/devkit"
+fi
 
 mapfile -t ROOTS < <(root_targets)
 if [[ "$APPLY" -eq 0 ]]; then

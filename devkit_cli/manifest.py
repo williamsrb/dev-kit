@@ -26,6 +26,11 @@ LAYER_KEYS = ("skills", "rules", "kb")
 OVERRIDE_KEYS = ("instances", "color", "settings", "client_overlay", "todo")
 
 
+def layer_leaf(entry: str) -> str:
+    """The top-level name a skills/rules/kb entry projects as (`x/**` -> `x`)."""
+    return entry.split("/")[0].replace("**", "").rstrip("/")
+
+
 def profile_path(name: str, kit_root: Path | None = None) -> Path:
     return (kit_root or REPO_ROOT) / "profiles" / f"{name}.json"
 

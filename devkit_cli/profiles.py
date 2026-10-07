@@ -95,7 +95,7 @@ def _link_layer(plan: Plan, config_dir: Path, name: str, entries: list[str],
     dest_root = config_dir / name
     wanted: dict[str, Path] = {}
     for entry in entries:
-        leaf = entry.split("/")[0].replace("**", "").rstrip("/")
+        leaf = manifest.layer_leaf(entry)
         if not (core_root / name / leaf).exists():
             continue
         wanted[leaf] = link_core / name / leaf

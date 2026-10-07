@@ -15,7 +15,16 @@ import argparse
 import sys
 from typing import Callable
 
-from . import bootstrap_plan, docsgen, export, paths, profiles, session_sync, update
+from . import (
+    bootstrap_plan,
+    docsgen,
+    export,
+    paths,
+    profiles,
+    project,
+    session_sync,
+    update,
+)
 from .errors import DevkitError
 
 DESCRIPTION = """\
@@ -37,6 +46,7 @@ Common examples:
   devkit profile apps-sync --apply   # prints the fork plan, then asks sudo
   devkit profile auth restore
   devkit profile session-sync --source stock --target dummy   # dry run
+  devkit project init . --layer core --apply   # then: devkit project build . --apply
   devkit update check
   devkit doctor
   devkit deps --profile enonic       # are the declared binaries on PATH?
@@ -266,6 +276,91 @@ def build_parser() -> argparse.ArgumentParser:
     p_sessions.add_argument("--apply", action="store_true",
                             help="Write. Default: dry run.")
     p_sessions.set_defaults(func=session_sync.cmd_session_sync)
+
+    # -- project ------------------------------------------------------------
+    proj = group("project",
+                 "Apply the harness (skills, instructions) to a work repo, "
+                 "alongside profiles.")
+
+    def project_path(parser) -> None:
+        parser.add_argument("path", nargs="?", default=".", metavar="PATH",
+                            help="Root of the git work tree (default: .).")
+
+    p_init = proj.add_parser(
+        "init",
+        help="Write harness/project.json naming the layers.",
+        description=(
+            "Write harness/project.json in the repo. Each --layer is a profile "
+            "type of the installed kit (core, enonic, ...); the build links the "
+            "union of their skills. Dry run without --apply."
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    project_path(p_init)
+    p_init.add_argument("--layer", action="append", metavar="TYPE",
+                        help="Profile type to apply (repeatable, at least one).")
+    p_init.add_argument("--force", action="store_true",
+                        help="Overwrite an existing harness/project.json.")
+    p_init.add_argument("--apply", action="store_true",
+                        help="Write. Default: dry run.")
+    p_init.set_defaults(func=project.cmd_init)
+
+    p_build = proj.add_parser(
+        "build",
+        help="Link the layers' skills into the repo and exclude them from git.",
+        description=(
+            "Link the skills of the layers in harness/project.json into "
+            ".agents/skills (Codex, Cursor) and .claude/skills (Claude Code), "
+            "link repo-owned skills from harness/skills, write AGENTS.md and a "
+            "CLAUDE.md link when the repo has neither, and list every generated "
+            "path in .git/info/exclude. Tracked files are never modified. "
+            "Reads the installed kit; never installs one. Dry run without "
+            "--apply."
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    project_path(p_build)
+    p_build.add_argument("--config", metavar="FILE",
+                         help="Project config. Default: <PATH>/harness/project.json.")
+    p_build.add_argument("--rules", action=argparse.BooleanOptionalAction,
+                         help="Also embed the kit's rules (core, plus client for "
+                              "client layers) in the generated AGENTS.md. "
+                              "Default: the choice the last build recorded.")
+    p_build.add_argument("--apply", action="store_true",
+                         help="Write. Default: dry run.")
+    p_build.set_defaults(func=project.cmd_build)
+
+    p_status = proj.add_parser(
+        "status",
+        help="Check a built project for drift and broken links.",
+        description=(
+            "Compare the repo with what a build would write now. Exit 1 on a "
+            "missing or dangling link or a changed entry set; a newer kit "
+            "release alone is informational. Warns when the active profile "
+            "provides a skill of the same name. Writes nothing."
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    project_path(p_status)
+    p_status.add_argument("--config", metavar="FILE",
+                          help="Project config. Default: <PATH>/harness/project.json.")
+    p_status.set_defaults(func=project.cmd_status)
+
+    p_clean = proj.add_parser(
+        "clean",
+        help="Remove what the build wrote.",
+        description=(
+            "Remove the links and files the stamp lists (only while they still "
+            "point where the build put them), this worktree's exclude block, "
+            "the stamp, and the directories left empty. Repo-owned links and "
+            "tracked files stay. Dry run without --apply."
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    project_path(p_clean)
+    p_clean.add_argument("--apply", action="store_true",
+                         help="Write. Default: dry run.")
+    p_clean.set_defaults(func=project.cmd_clean)
 
     # -- update -------------------------------------------------------------
     upd = group("update", "Check, stage, and apply kit updates (one direction).")

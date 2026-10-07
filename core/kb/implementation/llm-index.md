@@ -39,6 +39,7 @@ How-to-inventory-xp7-descriptors-from-disk.md	389	inventory-xp7	run-plan plan-im
 How-to-isolate-harness-tests-from-the-host-home.md	592	isolate-harness	validate-impl run-plan	isolate harness tests host home isolate-harness harness-tests tests-host host-home
 How-to-keep-harness-git-lean.md	1175	keep-harness	run-plan	keep harness git lean keep-harness harness-git git-lean
 How-to-keep-harness-scripts-in-bin-and-bin-vendor.md	574	keep-harness		keep harness scripts bin vendor keep-harness harness-scripts scripts-bin bin-bin bin-vendor
+How-to-link-skills-into-a-client-repo-without-touching-tracked-files.md	766	link-skills	run-plan plan-implementation validate-impl	link skills client repo touching tracked files link-skills skills-client client-repo repo-touching touching-tracked tracked-files
 How-to-make-a-hand-maintained-instruction-file-generated.md	871	make-hand	run-plan plan-implementation	make hand maintained instruction file generated make-hand hand-maintained maintained-instruction instruction-file file-generated
 How-to-mirror-a-devkit-core-change-into-the-harness.md	504	mirror-devkit	run-plan validate-impl	mirror devkit core change harness mirror-devkit devkit-core core-change change-harness
 How-to-name-an-xp8-app-without-colliding-with-system-apps.md	919	name-xp8	run-plan	name xp8 app colliding system apps name-xp8 xp8-app app-colliding colliding-system system-apps name-app system-app

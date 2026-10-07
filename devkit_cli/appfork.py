@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """Per-profile Electron app forks.
 
 Stock packages own /usr/lib/claude-desktop, /usr/lib/chatgpt and
@@ -143,19 +144,23 @@ def pickle_string(payload: bytes) -> bytes:
     return struct.pack("<I", len(body)) + body
 
 
+def _read_asar_header(f, path: Path) -> tuple[dict, int]:
+    size_buf = f.read(8)
+    if len(size_buf) < 8:
+        raise ValueError(f"asar too small: {path}")
+    header_buf_len = struct.unpack_from("<I", size_buf, 4)[0]
+    header_buf = f.read(header_buf_len)
+    if len(header_buf) != header_buf_len:
+        raise ValueError(f"asar header truncated: {path}")
+    json_len = struct.unpack_from("<I", header_buf, 4)[0]
+    return json.loads(header_buf[8 : 8 + json_len]), 8 + header_buf_len
+
+
 def read_asar(path: Path) -> tuple[dict, bytes, int]:
     with path.open("rb") as f:
-        size_buf = f.read(8)
-        if len(size_buf) < 8:
-            raise ValueError(f"asar too small: {path}")
-        header_buf_len = struct.unpack_from("<I", size_buf, 4)[0]
-        header_buf = f.read(header_buf_len)
-        if len(header_buf) != header_buf_len:
-            raise ValueError(f"asar header truncated: {path}")
-        json_len = struct.unpack_from("<I", header_buf, 4)[0]
-        header = json.loads(header_buf[8 : 8 + json_len])
+        header, data_start = _read_asar_header(f, path)
         data = f.read()
-    return header, data, 8 + header_buf_len
+    return header, data, data_start
 
 
 def write_asar(path: Path, header: dict, data: bytes, mode: int) -> None:
@@ -192,17 +197,23 @@ def integrity_for(blob: bytes, block_size: int) -> dict:
     }
 
 
-def asar_desktop_name(path: Path) -> str:
+def asar_package_field(path: Path, key: str) -> str:
+    # Seek to package.json: the gate runs on every apt/dpkg call and the
+    # Codex asar is over 500MB.
     if not path.is_file():
         return ""
-    header, data, _ = read_asar(path)
-    meta = header.get("files", {}).get("package.json")
-    if not isinstance(meta, dict) or "offset" not in meta:
-        return ""
-    offset = int(meta["offset"])
-    size = int(meta["size"])
-    pkg = json.loads(data[offset : offset + size])
-    return str(pkg.get("desktopName") or "")
+    with path.open("rb") as f:
+        header, data_start = _read_asar_header(f, path)
+        meta = header.get("files", {}).get("package.json")
+        if not isinstance(meta, dict) or "offset" not in meta:
+            return ""
+        f.seek(data_start + int(meta["offset"]))
+        pkg = json.loads(f.read(int(meta["size"])))
+    return str(pkg.get(key) or "")
+
+
+def asar_desktop_name(path: Path) -> str:
+    return asar_package_field(path, "desktopName")
 
 
 def _replace_json_string(blob: bytes, key: str, new_value: str) -> bytes:
@@ -283,28 +294,29 @@ def read_version(tree: Path) -> str:
         return ""
 
 
-def stock_version(spec: Vendor) -> str:
-    if spec.version_rel:
-        return read_version(spec.stock_lib)
+def _tree_version(spec: Vendor, tree: Path) -> str:
+    # The `version` file is the Electron version, which stays put across app
+    # releases; the app version lives in the asar's package.json.
+    if spec.asar_rel:
+        try:
+            return asar_package_field(tree / spec.asar_rel, "version")
+        except (OSError, ValueError):
+            return ""
     if spec.package_json_rel:
-        path = spec.stock_lib / spec.package_json_rel
+        path = tree / spec.package_json_rel
         try:
             return str(json.loads(path.read_text(encoding="utf-8")).get("version") or "")
         except (OSError, ValueError):
             return ""
-    return ""
+    return read_version(tree) if spec.version_rel else ""
+
+
+def stock_version(spec: Vendor) -> str:
+    return _tree_version(spec, spec.stock_lib)
 
 
 def fork_version(spec: Vendor, dest: Path) -> str:
-    if spec.version_rel:
-        return read_version(dest)
-    if spec.package_json_rel:
-        path = dest / spec.package_json_rel
-        try:
-            return str(json.loads(path.read_text(encoding="utf-8")).get("version") or "")
-        except (OSError, ValueError):
-            return ""
-    return ""
+    return _tree_version(spec, dest)
 
 
 def fork_desktop_name(spec: Vendor, dest: Path) -> str:

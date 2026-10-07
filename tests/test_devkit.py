@@ -21,6 +21,7 @@ import tempfile
 import unittest
 from contextlib import redirect_stdout
 from pathlib import Path
+from typing import ClassVar
 from unittest import mock
 
 REPO = Path(__file__).resolve().parent.parent
@@ -86,7 +87,7 @@ class HelpContractTests(unittest.TestCase):
     the same for every group. An unknown subcommand must write usage to stderr
     and exit 2."""
 
-    GROUPS = ["profile", "update", "origin", "docs"]
+    GROUPS: ClassVar[list[str]] = ["profile", "update", "origin", "docs"]
 
     def test_bare_equals_help(self):
         bare, helped = run(), run("--help")
@@ -255,7 +256,7 @@ class ExportBoundaryTests(unittest.TestCase):
     def test_agentctl_group_modules_are_exported(self):
         """Listing only the entrypoint after a split exports a broken CLI."""
         entry = (REPO / "core" / "bin" / "agentctl").read_text(encoding="utf-8")
-        needed = sorted(set(re.findall(r"^(?:import|from) (agentctl_\w+)", entry, re.M)))
+        needed = sorted(set(re.findall(r"^(?:import|from) (agentctl_\w+)", entry, re.MULTILINE)))
         self.assertTrue(needed, "agentctl must import agentctl_* group modules")
         allowlist = json.loads((REPO / "export-allowlist.json").read_text())
         listed = set(allowlist["bin"]["core"])
@@ -1463,9 +1464,9 @@ class AppForkTests(unittest.TestCase):
     """Per-profile Electron forks rsync stock, patch identity, never write
     the stock tree, and survive via apt and dpkg hooks."""
 
-    def _asar(self, path: Path, desktop: str) -> None:
+    def _asar(self, path: Path, desktop: str, version: str = "1.0.0") -> None:
         blob = (json.dumps({"name": "app", "desktopName": desktop,
-                            "productName": "Claude"}) + "\n").encode()
+                            "productName": "Claude", "version": version}) + "\n").encode()
         header = {
             "files": {
                 "package.json": {
@@ -1550,6 +1551,14 @@ class AppForkTests(unittest.TestCase):
             appfork.rsync_stock(spec, spec.stock_lib, dry_run=True)
         self.assertIn("stock", str(caught.exception))
 
+    def _claude_spec(self, stock: Path) -> appfork.Vendor:
+        return appfork.Vendor(
+            name="claude", package="claude-desktop", stock_lib=stock,
+            binary="claude-desktop",
+            stock_desktop_name="com.anthropic.Claude.desktop",
+            asar_rel="resources/app.asar",
+        )
+
     def test_cheap_gate_skips_when_version_and_desktop_name_match(self):
         with tempfile.TemporaryDirectory() as tmp:
             stock = Path(tmp) / "stock"
@@ -1557,16 +1566,22 @@ class AppForkTests(unittest.TestCase):
             for tree in (stock, dest):
                 tree.mkdir()
                 (tree / "version").write_text("42.0.0\n", encoding="utf-8")
-                self._asar(tree / "resources" / "app.asar", "Claude-dummy.desktop")
-            spec = appfork.Vendor(
-                name="claude", package="claude-desktop", stock_lib=stock,
-                binary="claude-desktop",
-                stock_desktop_name="com.anthropic.Claude.desktop",
-                asar_rel="resources/app.asar",
-            )
+                self._asar(tree / "resources" / "app.asar", "Claude-dummy.desktop", "2.5.0")
             with self.assertRaises(appfork.Skip) as caught:
-                appfork.cheap_gates(spec, dest, "dummy")
-            self.assertIn("already at 42.0.0", str(caught.exception))
+                appfork.cheap_gates(self._claude_spec(stock), dest, "dummy")
+            self.assertIn("already at 2.5.0", str(caught.exception))
+
+    def test_cheap_gate_rebuilds_when_only_the_app_version_moved(self):
+        # The `version` file is Electron's and does not change between app
+        # releases; a gate on it alone left forks stale across upgrades.
+        with tempfile.TemporaryDirectory() as tmp:
+            stock = Path(tmp) / "stock"
+            dest = Path(tmp) / "fork"
+            for tree, app in ((stock, "2.6.0"), (dest, "2.5.0")):
+                tree.mkdir()
+                (tree / "version").write_text("42.0.0\n", encoding="utf-8")
+                self._asar(tree / "resources" / "app.asar", "Claude-dummy.desktop", app)
+            appfork.cheap_gates(self._claude_spec(stock), dest, "dummy")
 
     def test_install_hook_writes_apt_and_dpkg_snippets(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -1589,6 +1604,12 @@ class AppForkTests(unittest.TestCase):
             self.assertIn("post-invoke", dpkg)
             self.assertIn("does not run for bare dpkg", dpkg)
             self.assertTrue(env.worker.is_file())
+            # apt execs the worker directly; without a shebang sh runs it.
+            ran = subprocess.run(
+                [str(env.worker), "--help"], capture_output=True, text=True, cwd=root,
+                check=False)
+            self.assertEqual(ran.returncode, 0, ran.stderr)
+            self.assertIn("usage:", ran.stdout)
             self.assertTrue((env.fork_root / appfork.EMBLEM_NAME).is_file())
             self.assertNotIn("99-cursor-recolor", apt)
 

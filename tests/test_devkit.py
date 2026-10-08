@@ -40,6 +40,7 @@ from devkit_cli import (
     paths,
     privilege,
     profiles,
+    scrub,
     session_sync,
     update,
 )
@@ -159,9 +160,12 @@ class ExportBoundaryTests(unittest.TestCase):
         block = allowlist["bin"]
         listed = set(block["core"]) | (set(block.get("excluded") or {}) - {"_comment"})
         source = export_source()
+        rules = scrub.load(source)
         on_disk = {
             p.name for p in (source / "bin").iterdir()
             if p.name != "__pycache__" and (p.is_file() or p.is_dir())
+            # what the private scrub rules drop is classified by those rules
+            and not (rules is not None and rules.dropped(f"bin/{p.name}"))
         }
         self.assertEqual(on_disk - listed, set(), "unclassified bin entries would ship or vanish silently")
 
@@ -466,6 +470,22 @@ class ProfileCompositionTests(unittest.TestCase):
                 materialize(load_for_create("plain", "core"), ["claude"], home,
                             Plan(apply=True), force=True)
             self.assertTrue((home / ".agents-profiles/plain/agents/config").is_symlink())
+
+    def test_sync_keeps_an_overlay_the_operator_edited(self):
+        """The profile writes placeholders once; the operator's real hosts survive a sync."""
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            profile = load_for_create("acme", "client")
+            with redirect_stdout(io.StringIO()):
+                materialize(profile, ["claude"], home, Plan(apply=True), force=True)
+            overlay = home / ".agents-profiles/acme/agents/config/client-overlay.json"
+            overlay.write_text('{"git_host": "git.corp.test"}\n', encoding="utf-8")
+            with redirect_stdout(io.StringIO()):
+                materialize(profile, ["claude"], home, Plan(apply=True), force=False)
+            self.assertEqual(json.loads(overlay.read_text()), {"git_host": "git.corp.test"})
+            with redirect_stdout(io.StringIO()):
+                materialize(profile, ["claude"], home, Plan(apply=True), force=True)
+            self.assertEqual(json.loads(overlay.read_text()), profile["client_overlay"])
 
     def test_sync_keeps_claude_state_outside_mcp_servers(self):
         """.claude.json also holds login state and trust flags, which sync must not erase."""

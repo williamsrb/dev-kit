@@ -66,6 +66,35 @@ When you find a client identifier in a core skill, sort it before fixing it:
 With no overlay config present, a check that depends on it must be **skipped**,
 not guessed at. A fallback heuristic fires on legitimate input.
 
+## Names the kit must not track
+
+Some names cannot be tracked at all, because the operator does not own them. The
+export keeps them out of `core/` with scrub rules that live in the export source,
+at `<source>/config/export-scrub.json`, and never in this repository: rules have
+to name what they remove, so a copy here would track it.
+
+The file is JSON and every key is optional:
+
+| Key | Effect |
+|---|---|
+| `drop_paths` | Regexes on the export-relative path. A match is not exported. |
+| `path_rewrites` | `[regex, replacement]` pairs applied to the exported path. |
+| `rewrites` | `[regex, replacement, optional path regex]`, applied in order and multiline to every file that decodes as UTF-8, whatever its suffix. |
+| `no_rewrite_paths` | Paths whose text is copied untouched, for vendored code. |
+| `forbidden` | `{"pattern", "exempt"}` entries, case insensitive. A match left after the rewrites fails `--check` and `--apply` and is listed as `file:line`. |
+
+Patterns that must also match a path inside this repository start with
+`(?:core/)?`, so the same file can drive a history rewrite.
+
+`--check` compares `core/` with the scrubbed export, so it stays green while the
+source keeps its real names. With no rules file the export copies as before. The
+rules file is listed under `config.excluded`, and the "every entry is classified"
+tests count what the rules drop as classified.
+
+`tests/test_scrub.py` is the second line of defence: it fails on any tracked path
+or file that carries a name the kit must not track, however it got in, so a
+machine without the rules file cannot reintroduce one unnoticed.
+
 ## The secret gate
 
 `gitleaks` runs over the result on every `--apply` unless you pass `--no-scan`.

@@ -101,7 +101,8 @@ What each agent copies:
     skills/  rules/  kb/                 # this profile's subset, not siblings'
     bin/ mcp/ share/ config              # symlinks into kit core/ (tools only); a
                                          # client_overlay profile gets a real config/
-                                         # with client-overlay.json beside the links
+                                         # with client-overlay.json beside the links;
+                                         # written once with placeholders, kept by sync
     hooks -> <profile root>/hooks        # absolute link
     prds/ plans/ .playwright-mcp/        # profile-local state
     .auth/                               # profile-local; token YAML may be shared

@@ -10,13 +10,13 @@ Direction is one-way by design. Editing core/ directly is drift, which is what
 
 from __future__ import annotations
 
-import filecmp
 import fnmatch
 import json
 import shutil
 import subprocess
 from pathlib import Path
 
+from . import scrub
 from .common import (
     Plan,
     load_json,
@@ -108,37 +108,71 @@ def selected_files(source: Path, allowlist: dict, layers: set[str]) -> dict[str,
     return chosen
 
 
-def _copy(src: Path, dest: Path) -> None:
-    dest.parent.mkdir(parents=True, exist_ok=True)
+def _render(src: Path, rel: str, rules: scrub.Rules | None) -> bytes | None:
+    """The bytes core/ should hold for this file, or None for a symlink."""
     if src.is_symlink():
+        return None
+    if src.suffix in TEXT_SUFFIXES:
+        try:
+            text = unrender_home(src.read_text(encoding="utf-8"))
+        except UnicodeDecodeError:
+            return src.read_bytes()
+    else:
+        raw = src.read_bytes()
+        if rules is None:
+            return raw
+        try:
+            text = raw.decode("utf-8")
+        except UnicodeDecodeError:
+            return raw
+    if rules is not None:
+        text = rules.text(text, rel)
+    return text.encode("utf-8")
+
+
+def _copy(src: Path, dest: Path, rendered: bytes | None) -> None:
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    if rendered is None:
         link = src.readlink()
         if dest.exists() or dest.is_symlink():
             dest.unlink()
         dest.symlink_to(link)
         return
-    if src.suffix in TEXT_SUFFIXES:
-        try:
-            text = src.read_text(encoding="utf-8")
-        except UnicodeDecodeError:
-            shutil.copy2(src, dest)
-            return
-        dest.write_text(unrender_home(text), encoding="utf-8")
-        shutil.copystat(src, dest)
-        return
-    shutil.copy2(src, dest)
+    dest.write_bytes(rendered)
+    shutil.copystat(src, dest)
 
 
-def _same(src: Path, dest: Path) -> bool:
-    if not dest.exists():
-        return False
-    if src.is_symlink() or dest.is_symlink():
-        return src.is_symlink() and dest.is_symlink() and src.readlink() == dest.readlink()
-    if src.suffix in TEXT_SUFFIXES:
-        try:
-            return unrender_home(src.read_text(encoding="utf-8")) == dest.read_text(encoding="utf-8")
-        except UnicodeDecodeError:
-            pass
-    return filecmp.cmp(src, dest, shallow=False)
+def _same(src: Path, dest: Path, rendered: bytes | None) -> bool:
+    if rendered is None or dest.is_symlink():
+        return (rendered is None and dest.is_symlink()
+                and src.readlink() == dest.readlink())
+    return dest.is_file() and dest.read_bytes() == rendered
+
+
+def scrubbed_paths(chosen: dict[str, Path],
+                   rules: scrub.Rules | None) -> dict[str, tuple[str, Path]]:
+    """Destination path -> (source path, file), after the scrub drops and renames."""
+    files: dict[str, tuple[str, Path]] = {}
+    for rel, path in chosen.items():
+        if rules is not None and rules.dropped(rel):
+            continue
+        dest = rules.rename(rel) if rules is not None else rel
+        if dest in files:
+            raise DevkitError(f"{files[dest][0]} and {rel} both export to {dest}",
+                              "adjust the scrub rules so the paths stay distinct")
+        files[dest] = (rel, path)
+    return files
+
+
+def scrub_leaks(rules: scrub.Rules | None, rendered: dict[str, bytes | None]) -> list[str]:
+    """`path:line: excerpt` for each forbidden name the rules left in the export."""
+    if rules is None:
+        return []
+    found: list[str] = []
+    for dest, data in sorted(rendered.items()):
+        text = data.decode("utf-8", errors="ignore") if data is not None else ""
+        found += [f"{dest}:{line}: {excerpt}" for line, excerpt in rules.leaks(text, dest)]
+    return found
 
 
 def gitleaks_scan(target: Path) -> tuple[bool, str]:
@@ -170,12 +204,21 @@ def cmd_export(args) -> int:
     target = repo_file(allowlist.get("target", "core"))
     layers = {"core", "enonic", "client"}
 
+    rules = scrub.load(source)
     chosen = selected_files(source, allowlist, layers)
     if not chosen:
         raise DevkitError(f"the allowlist selected nothing under {source}",
                           "check 'source' in export-allowlist.json")
+    files = scrubbed_paths(chosen, rules)
+    rendered = {dest: _render(path, rel, rules) for dest, (rel, path) in files.items()}
+    leaks = scrub_leaks(rules, rendered)
+    if leaks:
+        print("\n".join(f"  leak: {line}" for line in leaks[:20]))
+        raise DevkitError(f"the export would ship {len(leaks)} name(s) the scrub rules forbid",
+                          f"extend {scrub.RULES_PATH} under {source} so they are rewritten or dropped")
 
-    stale = [rel for rel, src in chosen.items() if not _same(src, target / rel)]
+    stale = [dest for dest, (_, src) in files.items()
+             if not _same(src, target / dest, rendered[dest])]
     existing = {
         str(p.relative_to(target)) for p in target.rglob("*")
         if p.is_file() or p.is_symlink()
@@ -184,13 +227,13 @@ def cmd_export(args) -> int:
     # Hard-excluded paths (e.g. __pycache__) must not ship, but they also must
     # not fail --check when an import regenerates them under core/. --apply still
     # sweeps them so the tree stays tidy.
-    extras = sorted(existing - set(chosen))
+    extras = sorted(existing - set(files))
     orphans = [rel for rel in extras if not _excluded(rel, hard)]
     noise = [rel for rel in extras if _excluded(rel, hard)]
 
     if args.check:
         if not stale and not orphans:
-            print(f"{target} matches {source}: {len(chosen)} files.")
+            print(f"{target} matches {source}: {len(files)} files.")
             return 0
         shown = 0
         for rel in stale[:20]:
@@ -217,7 +260,7 @@ def cmd_export(args) -> int:
 
     if args.apply:
         for rel in stale:
-            _copy(chosen[rel], target / rel)
+            _copy(files[rel][1], target / rel, rendered[rel])
         for rel in orphans + noise:
             (target / rel).unlink()
         for directory in sorted((p for p in target.rglob("*") if p.is_dir()),

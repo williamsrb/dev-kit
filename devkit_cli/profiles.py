@@ -305,7 +305,7 @@ def _bind_profile_runtime(plan: Plan, profile: dict, home: Path, core_root: Path
     for name in ("bin", "mcp", "share", "config"):
         if name == "config" and profile.get("client_overlay"):
             _write_client_config(plan, agents_dir / name, profile["client_overlay"],
-                                 core_root, link_core)
+                                 core_root, link_core, force)
         elif (core_root / name).exists():
             _symlink(plan, agents_dir / name, link_core / name, f"agents/{name}")
     _project_hooks(plan, harness / "hooks", core_root, link_core, tokens, force, root)
@@ -381,11 +381,13 @@ def _isolate_auth(plan: Plan, agents_dir: Path, home: Path) -> None:
 
 
 def _write_client_config(plan: Plan, config_dir: Path, overlay: dict,
-                         core_root: Path, link_core: Path) -> None:
+                         core_root: Path, link_core: Path, force: bool) -> None:
     """A real config/ holding the client overlay beside links into core/config.
 
     Skills read `$AGENTS_HOME/config/client-overlay.json`; `core/` ships only the
     example, and a link to the read-only release could not hold the real file.
+    The profile only creates that file with placeholders: the real hosts are the
+    operator's, so a later sync keeps an existing file unless --force.
     """
     if config_dir.is_symlink():
         plan.record(f"unlink {relative_to_home(config_dir)} (becomes a directory)")
@@ -395,6 +397,8 @@ def _write_client_config(plan: Plan, config_dir: Path, overlay: dict,
         if (core_root / "config").is_dir() else []
     _link_layer(plan, config_dir.parent, config_dir.name, entries, core_root, link_core)
     target = config_dir / CLIENT_OVERLAY_NAME
+    if target.is_file() and not force:
+        return
     _write(plan, target, json.dumps(overlay, indent=2) + "\n", force=True,
            label=relative_to_home(target))
 

@@ -338,8 +338,9 @@ positional arguments:
 options:
   -h, --help           show this help message and exit
   --config FILE        Project config. Default: <PATH>/harness/project.json.
-  --rules, --no-rules  Also embed the kit's rules (core, plus client for client layers) in the generated AGENTS.md. Default: the
-                       choice the last build recorded.
+  --rules, --no-rules  Also embed the kit's rules (core, plus client for client
+                       layers) in the generated AGENTS.md. Default: the choice
+                       the last build recorded.
   --apply              Write. Default: dry run.
 ```
 

@@ -281,7 +281,8 @@
       "client-overlay.example.json"
     ],
     "excluded": {
-      "client-overlay.json": "the real client overlay; the client profile ships its own"
+      "client-overlay.json": "the real client overlay; the client profile ships its own",
+      "export-scrub.json": "private scrub rules; they name what the kit must not track, so they stay out of it"
     }
   },
   "agents": {

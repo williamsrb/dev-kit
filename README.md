@@ -1,4 +1,4 @@
-# devkit
+# Dev kit
 
 An AI-tooling kit that installs on a fresh machine in two steps, with profile
 isolation so several agent harnesses run side by side on one box without

@@ -39,5 +39,5 @@ past one concern.
 needed to execute the procedure (e.g. review base URL, one bookable tour slug, one
 test email). Never the focus of the document.
 
-See [kb-format.md](kb-format.md) for the How-To template. KB write-back instructions
-belong in the plan file’s **Execution** section (filled from [templates.md](templates.md)).
+See [kb-format.md](../kb-format.md) for the How-To template. KB write-back instructions
+belong in the plan file’s **Execution** section (filled from [templates.md](../templates.md)).

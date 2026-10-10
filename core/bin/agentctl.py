@@ -23,6 +23,7 @@ from typing import Any
 _BIN_DIR = Path(__file__).resolve().parent
 if str(_BIN_DIR) not in sys.path:
     sys.path.insert(0, str(_BIN_DIR))
+import agentctl_bench
 import agentctl_code
 import agentctl_docs
 import agentctl_image
@@ -474,6 +475,7 @@ def build_parser() -> argparse.ArgumentParser:
             "  agentctl logs extract server.log --limit 20\n"
             "  agentctl evidence inspect screenshot.png --ocr --expected-text 'Saved'\n"
             "  agentctl jira fetch PROJ-1\n"
+            "  agentctl bench collect && agentctl bench gaps\n"
             "  agentctl playwright spawn JOT-101 --enable\n"
             "  agentctl playwright revive --default\n"
             "  agentctl security detect --cwd .\n"
@@ -658,6 +660,12 @@ def build_parser() -> argparse.ArgumentParser:
         "Call Jira and Confluence Cloud REST with the local API token (no MCP/model loop).",
     )
     agentctl_jira.add_jira_parsers(jira)
+
+    bench = group(
+        "bench",
+        "Collect model benchmarks into benchmarks/latest.yaml and compare with ROLES.md.",
+    )
+    agentctl_bench.add_bench_parsers(bench)
     return parser
 
 
@@ -683,6 +691,7 @@ def main() -> int:
         subprocess.SubprocessError,
         agentctl_jira.JiraError,
         agentctl_kb.KbError,
+        agentctl_bench.BenchError,
     ) as exc:
         emit({"status": "error", "error": str(exc), "type": type(exc).__name__})
         return 1

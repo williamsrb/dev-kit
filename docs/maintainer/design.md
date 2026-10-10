@@ -152,9 +152,12 @@ accumulate.
 
 ## Generated files say so
 
-`core/`, `rules/AGENTS.md` and `docs/reference.md` are generated, and each says
-so in its own text. A generated file that still reads like a source file will be
-edited, and the edit will be lost.
+`core/` (written by `devkit export`), the marked blocks in `docs/*.md` and
+`README.md` (written by `devkit docs generate`) and the `AGENTS.md` that
+`devkit project build` writes into a repo are generated. The marked blocks and
+the project `AGENTS.md` say so in their own text; `core/` has no banner of its
+own, so this page and `export.md` are where that is stated. A generated file
+that still reads like a source file will be edited, and the edit will be lost.
 
 `AGENTS.md` in particular was hand-maintained beside the Cursor `.mdc` rules,
 guarded only by a "keep in sync" note. It drifted: the aggregate told the agent
@@ -176,10 +179,13 @@ profiles. The decisions that outlive the plan it was built from:
   (hooks, MCP, auth, env, GUI identity). Putting those in a repo would lose
   auth, session and tool isolation and the desktop forks, so the project mode
   writes none of them.
-- **Layers are profile types.** `harness/project.json` names types and the
-  build unions their skills. That gives stack composition (`core` + `enonic`)
-  without changing the manifest format; a list-valued `extends` stays deferred
-  until something needs it.
+- **Layers are flavors or profile types.** `harness/project.json` names layers
+  and the build unions their skills. A flavor is a skills-only JSON file in the
+  kit's `flavors/` or a repo's `harness/flavors/`; it never becomes a profile
+  type (no colour, deps, MCP or instances). A name resolves to a repo flavor,
+  then a kit flavor, then a profile type. That gives stack composition
+  (`core` + `enonic-xp8`) without changing the manifest format; a list-valued
+  `extends` stays deferred until something needs it.
 - **The build only reads an installed kit.** `ensure_installed` writes the kit
   home, and a smoke run of a write command with a temp `HOME` once created a
   real profile because those commands take the home from the passwd entry. A
@@ -215,10 +221,11 @@ inconvenience of stopping.
 ## Dry run is the default
 
 Every command that writes the machine plans first and prints what it would do.
-`--apply` is the exception, not the default. Two commands write without it,
-because what they write is inside the kit: `docs generate` regenerates
-`docs/` in a checkout (`--check` is its dry run), and `update fetch` writes only
-the staging cache. This matches the contract the harness's existing
+`--apply` is the exception, not the default. Two commands write without it:
+`docs generate` regenerates the marked blocks in `docs/` and `README.md` in a
+checkout (`--check` is its dry run), and `update fetch` writes only the staging
+cache. `export` also writes inside the kit but stays a dry run by default,
+because it can delete files. This matches the contract the harness's existing
 projection scripts already use, so the kit does not introduce a second
 convention.
 

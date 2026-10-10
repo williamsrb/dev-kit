@@ -92,8 +92,10 @@ def selected_files(source: Path, allowlist: dict, layers: set[str]) -> dict[str,
                 chosen[rel] = path
 
     for section, prefix in (("skills", "skills"), ("rules", "rules"), ("bin", "bin"),
-                            ("hooks", "hooks"), ("mcp", "mcp"), ("config", "config"),
-                            ("agents", "agents"), ("kb", "kb"), ("vendor", "vendor")):
+                            ("bin_vendor", "bin-vendor"), ("hooks", "hooks"),
+                            ("benchmarks", "benchmarks"), ("mcp", "mcp"),
+                            ("config", "config"), ("agents", "agents"), ("kb", "kb"),
+                            ("vendor", "vendor")):
         block = allowlist.get(section) or {}
         for layer in layers:
             entries = block.get(layer)
@@ -103,7 +105,7 @@ def selected_files(source: Path, allowlist: dict, layers: set[str]) -> dict[str,
 
     vendor = allowlist.get("skills_vendor") or {}
     for layer in layers:
-        add("skills-vendor", vendor.get(layer, []))
+        add("skills-vendor", vendor.get(layer, []), vendor.get(f"{layer}_excludes"))
     add("skills-vendor", vendor.get("files", []))
     return chosen
 

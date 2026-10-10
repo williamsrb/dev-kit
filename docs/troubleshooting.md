@@ -23,6 +23,9 @@ which always backs up and replaces). Look at the file. If you want it replaced,
 
 ## `core/ has not been exported yet`
 
+`install.py` prints it as above; `devkit profile create` and `sync` print the
+absolute path of `core` in front of `has not been exported yet`. The fix is the same.
+
 ```bash
 ./devkit export --apply
 ```
@@ -80,7 +83,7 @@ write the command back:
 ./devkit profile sync <profile> --apply
 ```
 
-## `N path(s) not owned by you`
+## `N+ path(s) not owned by you`
 
 Something was installed with `sudo` that should not have been. Fix the
 ownership, then stop doing that:
@@ -191,8 +194,12 @@ Close the extras, or start login again from one profile's launcher.
 No pending marker and no running profile GUI for that vendor. Open the
 profile's desktop launcher (or CLI) and start login from there.
 
-## `sudo is not on PATH`
+## `sudo is not on PATH` / `pkexec and sudo are not on PATH`
 
+Desktop forks and the uninstaller print these two messages: the first when stdin
+and stdout are terminals and `sudo` is missing, the second when they are not and
+neither `pkexec` nor `sudo` exists. `bootstrap.sh` prints neither; without
+`sudo` or `pkexec` its package step stops with the shell's `command not found`.
 Desktop forks and package installs need `sudo` on a terminal, or `pkexec` /
 `sudo -A` when stdin and stdout are not terminals. Install one of those, or
 re-run the printed commands as root. The plan is always printed before that

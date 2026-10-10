@@ -1,0 +1,18 @@
+{
+  "_comment": [
+    "Skills common to XP 7 and XP 8 work. Not meant to be used alone; pick enonic-xp7 or enonic-xp8.",
+    "debug-xp-app and set-up-enonic-react4xp live here until their XP 8 coverage is verified."
+  ],
+  "name": "enonic-base",
+  "description": "Shared Enonic skills: CLI, tests, debugging, upgrade and React4XP setup, for either XP version.",
+  "includes": [
+    "core"
+  ],
+  "skills": [
+    "use-enonic-cli",
+    "test-xp-apps",
+    "debug-xp-app",
+    "upgrade-xp-app",
+    "set-up-enonic-react4xp"
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "_comment": [
+    "Skills for an Enonic XP 7 project."
+  ],
+  "name": "enonic-xp7",
+  "description": "Enonic XP 7: shared Enonic skills plus the XP 7 backend and React4XP 5/6 skills.",
+  "includes": [
+    "enonic-base"
+  ],
+  "skills": [
+    "develop-xp7-backend",
+    "develop-react4xp-v5",
+    "develop-react4xp-v6",
+    "apply-react4xp-practices"
+  ]
+}

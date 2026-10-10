@@ -1,8 +1,12 @@
 # Roles → vendor model / effort
 
-Human lookup only. Not a routing signal for agents. Defaults follow
-`~/.agents/benchmarks/2026-08-deepswe.yaml` (closest score under ~2× cost;
-roles collapse when a vendor has no Luna/Terra/Sol ladder).
+Human lookup only. Not a routing signal for agents. The table is
+`agentctl bench place` output (2026-10-09, `~/.agents/benchmarks/placement.yaml`):
+every benchmark in `latest.yaml` (Terminal-Bench 4.0, DeepSWE, Artificial
+Analysis) converted to Terminal-Bench points, then each vendor gets the cheapest
+config whose score minus one standard error clears the role's absolute floor in
+`benchmarks/bands.yaml`. Spawnable configs: `benchmarks/harness.yaml`. Refresh with
+`agentctl bench collect`, then `agentctl bench place --markdown`.
 
 When you explicitly call a skill, read `metadata.recommendedRole` in that
 skill’s `SKILL.md`, then pick the row below for the harness you are in.
@@ -15,12 +19,15 @@ Sorted cheapest/simplest first.
 
 | Role | Codex | Claude | Cursor |
 |---|---|---|---|
-| `deterministic` | `gpt-5.6-luna` `high` | `claude-haiku-4-5-20251001` default | `auto` |
-| `explore` | `gpt-5.6-luna` `xhigh` | `claude-opus-5-5` `low` | `composer-2.5-fast` |
-| `follow` | `gpt-5.6-luna` `xhigh` | `claude-opus-5-5` `low` | `composer-2.5-fast` |
-| `implement` | `gpt-5.6-luna` `max` | `claude-opus-5-5` `medium` | `cursor-grok-4.7-medium` |
-| `task-owner` | `gpt-5.6-terra` `xhigh` | `claude-opus-5-5` `medium` | `cursor-grok-4.7-medium` |
-| `quality-gate` | `gpt-5.6-sol` `medium` | `claude-opus-5-5` `high` | `cursor-grok-4.7-high` |
+| `deterministic` | `gpt-6-luna` `max` | `claude-haiku-5-5` `high` † | `cursor-grok-4.7-low` † |
+| `explore` | `gpt-6.1-sol` `medium` † | `claude-haiku-5-5` `max` † | `cursor-grok-4.7-xhigh` |
+| `follow` | `gpt-6.1-sol` `medium` † | `claude-haiku-5-5` `max` † | `cursor-grok-4.7-xhigh` |
+| `implement` | `gpt-6.1-sol` `high` † | `claude-opus-5-5` `medium` † | `cursor-grok-4.7-xhigh` ‡ |
+| `task-owner` | `gpt-6.1-sol` `max` | `claude-opus-5-5` `xhigh` † | `cursor-grok-4.7-xhigh` ‡ |
+| `quality-gate` | `gpt-6-astra` `max` ‡ | `claude-opus-5-5` `max` | `cursor-grok-4.7-xhigh` ‡ |
+
+† Provisional: one evidence source (mostly Artificial Analysis) or an estimated cost.
+‡ Below band: the vendor has no config at the role's floor; this is its best one.
 
 ### What each role is
 
@@ -37,18 +44,21 @@ Sorted cheapest/simplest first.
 
 ### Notes
 
-- **Cursor** has no Luna/Terra/Sol product ladder. Route like Claude’s
-  effort split: `composer-2.5-fast` for `explore`/`follow`,
-  `cursor-grok-4.7-medium` for `implement`/`task-owner`,
-  `cursor-grok-4.7-high` for `quality-gate`, `auto` for `deterministic`.
-  Grok 4.7 has no DeepSWE rows yet — provisional until a new benchmark file.
-- **Claude** collapses Luna max, Terra xhigh, and Sol medium coding into Opus
-  `medium`. `quality-gate` is Opus `high` (DeepSWE High already matches Sol xhigh).
-- **Codex** `deterministic` is Luna `high` only (Haiku analogue). Do not use
-  Luna medium or low for SWE.
-- **`quality-gate` (Codex):** bump to Sol `xhigh` only when consequence is extreme
-  (architecture, security, payment, release-risk). Cursor uses
-  `cursor-grok-4.7-high` for that slot.
+- **Bands** (fraction of the frontier, Opus 5.5 `max` at 65.2 Terminal-Bench
+  points): `quality-gate` within 2 SE of the frontier (62.1), `task-owner` 0.85
+  (55.4), `implement` 0.75 (48.9), `explore`/`follow` 0.45 (29.4),
+  `deterministic` 0.20 (13.0). One floor for all vendors.
+- **Claude**: Haiku 5.5 replaces Haiku 4.5 (4.5 converts to ~0, below the
+  `deterministic` floor). Sonnet 5.5 and Fable 5.1 are never the cheapest config
+  in any band.
+- **Codex**: GPT-6.1 Sol covers `explore` through `task-owner`; GPT-6 Luna `max`
+  is the `deterministic` slot. Nothing Codex offers reaches the `quality-gate`
+  floor; GPT-6 Astra `max` (58.0) is the best it has. GPT-5.6 Luna/Terra/Sol are
+  never the cheapest config in any band.
+- **Cursor** (Composer + Grok only): Grok 4.7 `xhigh` (37.8) is below the
+  `implement` floor, so `implement`, `task-owner`, and `quality-gate` are below
+  band. Composer 2.5 (hand guess) and `auto` (no data) fall below the
+  `deterministic` floor.
 
 ## Skills
 

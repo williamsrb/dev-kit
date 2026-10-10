@@ -280,6 +280,7 @@ def _apply(args, staging_root: Path) -> int:
             profile = instances.bind_instance(
                 manifest.load(type_name, kit_root=current), name, type_name)
             instances.apply_provenance_color(profile, prov)
+            instances.apply_headless(profile, None, home)
             materialize(profile, [vendor], home, Plan(apply=True), force=True,
                         kit_root=current)
             updated = instances.read_provenance(config_dir) or prov

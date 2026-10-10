@@ -12,7 +12,7 @@ import argparse
 import difflib
 import re
 
-from . import manifest
+from . import flavors, manifest
 from .common import repo_file, require_checkout
 from .errors import DevkitError
 
@@ -84,9 +84,21 @@ def _profile_table() -> str:
     return "\n".join(rows)
 
 
+def _flavor_table() -> str:
+    rows = ["| Flavor | Tier | Includes | Skills |",
+            "|--------|------|----------|--------|"]
+    cat, _ = flavors.catalog(repo_file("."))
+    for name, flavor in sorted(cat.items()):
+        count = len(flavors.expand(name, cat, repo_file(".")).skills)
+        includes = ", ".join(f"`{i}`" for i in flavor.includes) or "—"
+        rows.append(f"| `{name}` | {flavor.tier} | {includes} | {count} |")
+    return "\n".join(rows)
+
+
 GENERATORS = {
     "cli-reference": _cli_reference,
     "profile-table": _profile_table,
+    "flavor-table": _flavor_table,
 }
 
 

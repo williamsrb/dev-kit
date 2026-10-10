@@ -194,6 +194,42 @@ class ExportBoundaryTests(unittest.TestCase):
         on_disk = {p.name for p in root.iterdir() if p.name != "__pycache__"}
         self.assertEqual(on_disk - listed, set(), "unclassified vendor trees would ship or vanish silently")
 
+    def test_benchmark_monthly_fetches_are_hard_excluded(self):
+        allowlist = json.loads((REPO / "export-allowlist.json").read_text())
+        hard = allowlist["hard_excludes"]
+        self.assertTrue(export._excluded("benchmarks/2026-10/aa.yaml", hard))
+        self.assertTrue(export._excluded("benchmarks/2026-10-deepswe.yaml", hard))
+        self.assertFalse(export._excluded("benchmarks/harness.yaml", hard))
+
+    def test_skills_vendor_layer_excludes_apply(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            source = Path(tmp)
+            for rel in ("skills-vendor/claude/graphify/SKILL.md",
+                        "skills-vendor/claude/orchestrate/SKILL.md"):
+                (source / rel).parent.mkdir(parents=True)
+                (source / rel).write_text("x")
+            allowlist = {"skills_vendor": {"core": ["claude"],
+                                           "core_excludes": ["claude/graphify/**"]}}
+            chosen = export.selected_files(source, allowlist, {"core"})
+        self.assertEqual(set(chosen), {"skills-vendor/claude/orchestrate/SKILL.md"})
+
+    @NEEDS_SOURCE
+    def test_every_bin_vendor_on_disk_is_classified(self):
+        self._assert_top_level_classified("bin_vendor", "bin-vendor", ("core",))
+
+    @NEEDS_SOURCE
+    def test_every_benchmark_on_disk_is_classified(self):
+        allowlist = json.loads((REPO / "export-allowlist.json").read_text())
+        hard = allowlist["hard_excludes"]
+        listed = set(allowlist["benchmarks"]["core"])
+        root = export_source() / "benchmarks"
+        if not root.is_dir():
+            return
+        on_disk = {p.name for p in root.iterdir()
+                   if not export._excluded(f"benchmarks/{p.name}", hard)}
+        self.assertEqual(on_disk - listed, set(),
+                         "unclassified benchmark inputs would ship or vanish silently")
+
     @NEEDS_SOURCE
     def test_every_rules_on_disk_is_classified(self):
         self._assert_top_level_classified(
@@ -400,6 +436,7 @@ class ProfileCompositionTests(unittest.TestCase):
         expected = {
             "core": ["context7", "serena"],
             "php": ["context7", "serena"],
+            "extract": ["serena"],
             "enonic": ["context7", "serena", "gitlab"],
             "client": ["context7", "serena", "gitlab", "atlassian-rovo-preview"],
         }
@@ -431,6 +468,22 @@ class ProfileCompositionTests(unittest.TestCase):
                 self.assertNotIn(parked, cursor["mcpServers"])
                 self.assertNotIn(parked, claude["mcpServers"])
                 self.assertNotIn(f"[mcp_servers.{parked}]", toml)
+
+    def test_profile_mcp_commands_use_the_profile_agents_home(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            materialize(load_for_create("dummy", "enonic"),
+                        ["cursor", "claude", "codex"],
+                        home, Plan(apply=True), force=True)
+            wanted = str(home / ".agents-profiles/dummy/agents/bin/serena-mcp")
+            base = home / ".agents-profiles/dummy"
+            cursor = json.loads((base / "cursor/mcp.json").read_text())
+            claude = json.loads((base / "claude/.claude.json").read_text())
+            self.assertEqual(cursor["mcpServers"]["serena"]["command"], wanted)
+            self.assertEqual(claude["mcpServers"]["serena"]["command"], wanted)
+            toml = (base / "codex/config.toml").read_text()
+            self.assertIn(f'command = "{wanted}"', toml)
+            self.assertNotIn(f"{home}/.agents/", toml)
 
     def test_adopt_refuses_a_directory_discovery_cannot_see(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -3233,6 +3286,8 @@ class LegacyDoctorTests(_HomePatched):
         agents = self.home / ".agents-profiles/core/agents"
         for layer in ("skills", "kb"):
             for link in list((agents / layer).iterdir()):
+                if not link.is_symlink():  # a nested projection dir, e.g. kb/offline-reference
+                    continue
                 link.unlink()
                 link.symlink_to(self.checkout / "core" / layer / link.name)
         (agents / "bin").unlink()
@@ -3278,6 +3333,250 @@ class LegacyDoctorTests(_HomePatched):
                 update.cmd_check(argparse.Namespace(
                     profile=None, from_source=str(source), ref=None))
             self.assertIn(f": {word}", out.getvalue().splitlines()[0])
+
+
+class HeadlessTests(unittest.TestCase):
+    """Headless installs leave no GUI artifacts and stay headless across sync/update."""
+
+    def setUp(self):
+        self._env = mock.patch.dict(os.environ)
+        self._env.start()
+        os.environ.pop(instances.HEADLESS_ENV, None)
+        self.addCleanup(self._env.stop)
+
+    def _user(self, home: Path):
+        return mock.patch.object(
+            privilege, "refuse_root",
+            lambda *_a, **_kw: argparse.Namespace(pw_dir=str(home), pw_name="tester"))
+
+    def _materialize(self, home: Path, headless: bool, name: str = "dummy") -> dict:
+        stock = home / "claude-desktop.png"
+        stock.write_bytes(b"png")
+        profile = load_for_create(name, "enonic")
+        instances.apply_headless(profile, headless, home)
+        with mock.patch.object(instances, "first_existing", lambda _c: "/usr/bin/claude"), \
+                mock.patch("devkit_cli.profiles._find_vendor_icon", lambda _v: stock), \
+                mock.patch.object(instances, "install_launcher_icons") as badge, \
+                mock.patch.object(instances, "refresh_hicolor_cache") as cache, \
+                mock.patch.object(instances, "imagemagick") as magick, \
+                redirect_stdout(io.StringIO()):
+            materialize(profile, ["claude"], home, Plan(apply=True), force=True)
+        self.badge_calls = (badge.called, cache.called, magick.called)
+        return instances.read_provenance(
+            instances.paths_for(name, "claude", home)["config_dir"])
+
+    def test_headless_materialize_writes_no_gui_artifacts(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            prov = self._materialize(home, True)
+            self.assertFalse((home / ".local" / "share" / "applications").exists())
+            self.assertFalse((home / ".local" / "share" / "icons").exists())
+            auth_paths = instances.auth_paths(home)
+            self.assertFalse(auth_paths["launch"].exists())
+            self.assertFalse(auth_paths["dispatch"].exists())
+        self.assertIs(prov["headless"], True)
+        self.assertNotIn("color", prov)
+        self.assertNotIn("appfork", prov)
+        self.assertEqual(self.badge_calls, (False, False, False))
+
+    def test_desktop_materialize_still_writes_launcher(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            prov = self._materialize(home, False)
+            self.assertTrue(instances.paths_for("dummy", "claude", home)["desktop"].is_file())
+            self.assertTrue(instances.auth_paths(home)["launch"].is_file())
+        self.assertIn("color", prov)
+        self.assertIn("appfork", prov)
+        self.assertNotIn("headless", prov)
+
+    def test_extract_profile_shape(self):
+        profile = manifest.load("extract")
+        self.assertEqual(profile["lineage"], ["extract"])
+        for skill in profile["skills"]:
+            self.assertTrue((REPO / "core" / "skills" / skill).is_dir(), skill)
+        for entry in profile["kb"]:
+            leaf = manifest.layer_leaf(entry)
+            self.assertTrue((REPO / "core" / "kb" / leaf).is_dir(), entry)
+        provided = [name for dep in profile["deps"] for name in dep["provides"]]
+        self.assertEqual(
+            provided,
+            ["git", "python3", "cc", "make", "node", "npm", "graft", "serena",
+             "graphify", "playwright-cli", "7z"])
+        for dep in profile["deps"]:
+            if set(dep["provides"]) & {"graft", "serena", "graphify", "node"}:
+                self.assertTrue(
+                    dep.get("version") or "@" in dep.get("package", "")
+                    or "==" in dep.get("package", ""), dep["provides"])
+
+    def test_extract_headless_materialize(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            profile = load_for_create("x", "extract")
+            instances.apply_headless(profile, True, home)
+            with mock.patch.object(instances, "first_existing", lambda _c: "/usr/bin/vendor"), \
+                    mock.patch.object(instances, "install_launcher_icons"), \
+                    mock.patch.object(instances, "refresh_hicolor_cache"), \
+                    mock.patch.object(instances, "imagemagick"), \
+                    redirect_stdout(io.StringIO()):
+                materialize(profile, ["claude", "codex", "cursor"], home,
+                            Plan(apply=True), force=True)
+            bindir = home / ".local" / "bin"
+            for vendor in ("claude", "codex", "cursor"):
+                self.assertTrue((bindir / f"{vendor}-x").exists(), vendor)
+            claude = instances.paths_for("x", "claude", home)["config_dir"]
+            self.assertTrue((claude / "skills" / "graft").is_symlink())
+            self.assertFalse((home / ".local" / "share" / "applications").exists())
+            servers = json.loads((claude / ".claude.json").read_text())["mcpServers"]
+            self.assertEqual(list(servers), ["serena"])
+
+    def test_apply_headless_precedence(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            self._materialize(home, True)
+
+            def resolved(flag):
+                profile = load_for_create("dummy", "enonic")
+                instances.apply_headless(profile, flag, home)
+                return profile["headless"]
+
+            self.assertTrue(resolved(None))
+            os.environ[instances.HEADLESS_ENV] = "0"
+            self.assertFalse(resolved(None))
+            self.assertTrue(resolved(True))
+            os.environ[instances.HEADLESS_ENV] = "1"
+            self.assertFalse(resolved(False))
+            os.environ[instances.HEADLESS_ENV] = "maybe"
+            self.assertTrue(resolved(None))
+
+    def test_finish_appforks_skips_escalation_when_headless(self):
+        profile = load_for_create("dummy", "enonic")
+        profile["headless"] = True
+        with mock.patch.object(profiles, "escalate_appforks") as escalate:
+            profiles.finish_appforks(Path("/nonexistent"), profile, "tester")
+        escalate.assert_not_called()
+
+    def test_discover_desktop_instances_skips_headless(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            self._materialize(home, True, name="quiet")
+            self._materialize(home, False, name="loud")
+            names = [row[0] for row in appfork.discover_desktop_instances(home)]
+            self.assertEqual(names, ["loud"])
+
+    def test_sync_homes_on_headless_only_home_never_syncs(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            self._materialize(home, True)
+            out = io.StringIO()
+            with mock.patch.object(appfork, "sync_one") as sync_one, redirect_stdout(out):
+                appfork.sync_homes([home], appfork.Env(), dry_run=True)
+            sync_one.assert_not_called()
+            self.assertIn("no desktop profile instances found", out.getvalue())
+
+    def test_apps_sync_is_a_noop_under_env(self):
+        os.environ[instances.HEADLESS_ENV] = "1"
+        for apply in (False, True):
+            args = argparse.Namespace(apply=apply, install_hook=True, icons_only=True,
+                                      user=None, profile=None, vendor=None)
+            with mock.patch.object(privilege, "run_privileged") as run, \
+                    redirect_stdout(io.StringIO()) as out:
+                rc = profiles.cmd_apps_sync(args)
+            self.assertEqual(rc, 0)
+            run.assert_not_called()
+            self.assertIn("skip: headless devkit", out.getvalue())
+
+    def test_create_headless_has_no_color_and_refuses_color_flag(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            base = {"name": "dummy", "type": "enonic", "vendor": ["claude"],
+                    "apply": True, "force": False, "headless": True, "color": None}
+            with self._user(home), mock.patch.object(instances, "first_existing", lambda _c: None), \
+                    mock.patch.object(instances, "assign_profile_color") as assign, \
+                    mock.patch.object(profiles, "finish_appforks"), \
+                    redirect_stdout(io.StringIO()):
+                with self.assertRaises(DevkitError):
+                    profiles.cmd_create(argparse.Namespace(**{**base, "color": "#112233"}))
+                self.assertEqual(profiles.cmd_create(argparse.Namespace(**base)), 0)
+            assign.assert_not_called()
+            prov = instances.read_provenance(
+                instances.paths_for("dummy", "claude", home)["config_dir"])
+            self.assertIs(prov["headless"], True)
+            self.assertNotIn("color", prov)
+            out = io.StringIO()
+            with mock.patch.object(Path, "home", staticmethod(lambda: home)), \
+                    redirect_stdout(out):
+                profiles.cmd_show(argparse.Namespace(name="dummy"))
+            shown = json.loads(out.getvalue())
+        self.assertNotIn("colors", shown)
+        self.assertIs(shown["headless"], True)
+
+    def test_sync_keeps_headless_and_no_headless_switches_to_color(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            self._materialize(home, True)
+            config = instances.paths_for("dummy", "claude", home)["config_dir"]
+
+            def sync(**kw):
+                with self._user(home), \
+                        mock.patch.object(instances, "first_existing", lambda _c: None), \
+                        mock.patch.object(profiles, "finish_appforks"), \
+                        redirect_stdout(io.StringIO()):
+                    profiles.cmd_sync(argparse.Namespace(name="dummy", apply=True, **kw))
+                return instances.read_provenance(config)
+
+            kept = sync(headless=None)
+            self.assertIs(kept["headless"], True)
+            self.assertNotIn("color", kept)
+            flipped = sync(headless=False)
+        self.assertNotIn("headless", flipped)
+        self.assertRegex(flipped["color"], r"^#[0-9A-Fa-f]{6}$")
+
+    def test_update_apply_keeps_headless(self):
+        helper = UpdateApplyTests()
+        commit = "e" * 40
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp) / "home"
+            home.mkdir()
+            helper._stage(Path(tmp) / "staged", commit)
+            profile = load_for_create("core", "core")
+            instances.apply_headless(profile, True, home)
+            materialize(profile, ["claude"], home, Plan(apply=True), force=True)
+            staging, home_fn = update.STAGING_ROOT, Path.home
+            update.STAGING_ROOT = Path(tmp) / "staged"
+            Path.home = staticmethod(lambda: home)
+            try:
+                with self._user(home), redirect_stdout(io.StringIO()):
+                    rc = update.cmd_apply(argparse.Namespace(profile="core", apply=True))
+            finally:
+                update.STAGING_ROOT, Path.home = staging, home_fn
+            prov = instances.read_provenance(
+                instances.paths_for("core", "claude", home)["config_dir"])
+            self.assertFalse(instances.auth_paths(home)["launch"].exists())
+        self.assertEqual(rc, 0)
+        self.assertIs(prov["headless"], True)
+        self.assertNotIn("color", prov)
+
+    def test_doctor_skips_auth_lines_for_all_headless_home(self):
+        want = "x-scheme-handler/claude (want devkit)"
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            self._materialize(home, True, name="quiet")
+
+            def doctor() -> str:
+                out = io.StringIO()
+                with mock.patch.object(Path, "home", staticmethod(lambda: home)), \
+                        mock.patch.object(auth, "doctor_lines", lambda _h: [want]), \
+                        mock.patch.object(instances, "kit_commit",
+                                          lambda *_a: prov_commit), \
+                        redirect_stdout(out):
+                    profiles.cmd_doctor(argparse.Namespace(profile=None))
+                return out.getvalue()
+
+            prov_commit = instances.read_provenance(
+                instances.paths_for("quiet", "claude", home)["config_dir"])["source_commit"]
+            self.assertNotIn(want, doctor())
+            self._materialize(home, False, name="loud")
+            self.assertIn(want, doctor())
 
 
 if __name__ == "__main__":

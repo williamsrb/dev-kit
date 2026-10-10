@@ -149,7 +149,8 @@ def build_parser() -> argparse.ArgumentParser:
             "skills/rules/kb, AGENTS_HOME tree, CLI wrappers, and desktop "
             "launchers. Wrappers pin DEVKIT_PROFILE and AGENTS_HOME so "
             "agentctl sees only this profile. --apply writes user-owned "
-            "config, then prints the desktop-fork plan and asks sudo."
+            "config, then prints the desktop-fork plan and asks sudo "
+            "(--headless skips launchers, forks, badges and that sudo step)."
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
@@ -162,6 +163,11 @@ def build_parser() -> argparse.ArgumentParser:
                           help="Badge colour (#RRGGBB). Must be unique across "
                                "profiles. Default: type colour if free, else a "
                                "random free palette colour.")
+    p_create.add_argument("--headless", action=argparse.BooleanOptionalAction,
+                          default=None,
+                          help="Headless: write no launchers, URL handlers, app forks, "
+                               "badges or colour, and never ask sudo for forks. "
+                               "Default: DEVKIT_HEADLESS, else off.")
     p_create.add_argument("--apply", action="store_true",
                           help="Write user-owned config, then print the desktop-fork "
                                "plan and ask sudo. Default: dry run.")
@@ -177,11 +183,17 @@ def build_parser() -> argparse.ArgumentParser:
             "core/ symlink, refresh AGENTS_HOME projections, restore a missing "
             "devkit-uninstall.sh, keep spawned playwright-<id> MCP entries. "
             "--apply writes user-owned config, "
-            "then prints the desktop-fork plan and asks sudo."
+            "then prints the desktop-fork plan and asks sudo "
+            "(not for a headless instance)."
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     p_sync.add_argument("name")
+    p_sync.add_argument("--headless", action=argparse.BooleanOptionalAction,
+                        default=None,
+                        help="Headless: write no launchers, URL handlers, app forks, "
+                             "badges or colour, and never ask sudo for forks. "
+                             "Default: DEVKIT_HEADLESS, else the stored value.")
     p_sync.add_argument("--apply", action="store_true",
                         help="Write user-owned config, then print the desktop-fork "
                              "plan and ask sudo. Default: dry run.")
@@ -290,15 +302,15 @@ def build_parser() -> argparse.ArgumentParser:
         "init",
         help="Write harness/project.json naming the layers.",
         description=(
-            "Write harness/project.json in the repo. Each --layer is a profile "
-            "type of the installed kit (core, enonic, ...); the build links the "
-            "union of their skills. Dry run without --apply."
+            "Write harness/project.json in the repo. Each --layer is a flavor "
+            "or a profile type (see `devkit project flavors`); the build links "
+            "the union of their skills. Dry run without --apply."
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     project_path(p_init)
     p_init.add_argument("--layer", action="append", metavar="TYPE",
-                        help="Profile type to apply (repeatable, at least one).")
+                        help="Flavor or profile type to apply (repeatable, at least one).")
     p_init.add_argument("--force", action="store_true",
                         help="Overwrite an existing harness/project.json.")
     p_init.add_argument("--apply", action="store_true",
@@ -361,6 +373,23 @@ def build_parser() -> argparse.ArgumentParser:
     p_clean.add_argument("--apply", action="store_true",
                          help="Write. Default: dry run.")
     p_clean.set_defaults(func=project.cmd_clean)
+
+    p_flavors = proj.add_parser(
+        "flavors",
+        help="List the flavors and profile types usable as layers.",
+        description=(
+            "Without NAME, list every valid layer name with its tier (kit, repo "
+            "or profile) and skill count. With NAME, print its includes and the "
+            "resolved skills in order. Repo flavors are read from "
+            "<PATH>/harness/flavors when that folder exists. Writes nothing."
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    p_flavors.add_argument("name", nargs="?", metavar="NAME",
+                           help="Flavor or profile type to resolve.")
+    p_flavors.add_argument("--path", default=".", metavar="PATH",
+                           help="Repo whose harness/flavors to read (default: .).")
+    p_flavors.set_defaults(func=project.cmd_flavors)
 
     # -- update -------------------------------------------------------------
     upd = group("update", "Check, stage, and apply kit updates (one direction).")

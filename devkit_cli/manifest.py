@@ -7,7 +7,9 @@ by the child.
 `skills`, `rules` and `kb` accept an `@allowlist:<section>.<layer>` reference
 instead of a literal list, so the export boundary and the profile manifest
 cannot disagree about what a layer contains — there is one list, in
-export-allowlist.json, and the profile names it.
+export-allowlist.json, and the profile names it. The layer's `<layer>_excludes`
+land in the composed profile as `<key>_excludes` (e.g. `kb_excludes`); a child
+entry that covers an inherited exclude adds that path back.
 """
 
 from __future__ import annotations
@@ -31,11 +33,21 @@ def layer_leaf(entry: str) -> str:
     return entry.split("/")[0].replace("**", "").rstrip("/")
 
 
+def entry_parts(entry: str) -> tuple[str, ...]:
+    """The path an entry names, as parts (`a/b/**` -> `("a", "b")`).
+
+    Excludes are read as path prefixes, not globs: the allowlist only uses
+    `dir/**` and exact files.
+    """
+    path = entry.replace("**", "")
+    return tuple(part for part in path.split("/") if part)
+
+
 def profile_path(name: str, kit_root: Path | None = None) -> Path:
     return (kit_root or REPO_ROOT) / "profiles" / f"{name}.json"
 
 
-def _resolve_allowlist_ref(ref: str, allowlist: dict) -> list[str]:
+def _resolve_allowlist_ref(ref: str, allowlist: dict) -> tuple[list[str], list[str]]:
     spec = ref[len(ALLOWLIST_PREFIX):]
     try:
         section, layer = spec.split(".", 1)
@@ -47,7 +59,22 @@ def _resolve_allowlist_ref(ref: str, allowlist: dict) -> list[str]:
         raise DevkitError(f"{ref} does not exist in export-allowlist.json",
                           f"add a {layer!r} key under {section!r}, or fix the reference")
     value = block[layer]
-    return list(value) if isinstance(value, list) else []
+    excludes = block.get(f"{layer}_excludes")
+    return (list(value) if isinstance(value, list) else [],
+            list(excludes) if isinstance(excludes, list) else [])
+
+
+def _compose_excludes(composed: dict, key: str, entries: list[str],
+                      excludes: list[str]) -> None:
+    """Drop inherited excludes a child entry covers, then add the child's own."""
+    added = [entry_parts(e) for e in entries]
+    kept = [ex for ex in composed.get(key, [])
+            if not any(entry_parts(ex)[:len(parts)] == parts for parts in added)]
+    kept += [ex for ex in excludes if ex not in kept]
+    if kept:
+        composed[key] = kept
+    else:
+        composed.pop(key, None)
 
 
 def load(name: str, _seen: set[str] | None = None,
@@ -80,10 +107,13 @@ def load(name: str, _seen: set[str] | None = None,
     for key, value in profile.items():
         if key in ("_comment", "extends"):
             continue
+        excludes: list[str] = []
         if key in LAYER_KEYS and isinstance(value, str) and value.startswith(ALLOWLIST_PREFIX):
             if allowlist is None:
                 allowlist = load_json(root / "export-allowlist.json", "export allowlist")
-            value = _resolve_allowlist_ref(value, allowlist)
+            value, excludes = _resolve_allowlist_ref(value, allowlist)
+        if key in LAYER_KEYS and isinstance(value, list):
+            _compose_excludes(composed, f"{key}_excludes", value, excludes)
         if key in OVERRIDE_KEYS:
             composed[key] = value
         elif isinstance(value, list) and isinstance(composed.get(key), list):

@@ -621,7 +621,7 @@ def iter_homes(env: Env | None = None) -> list[Path]:
 
 
 def discover_desktop_instances(home: Path) -> list[tuple[str, str, dict]]:
-    """(profile, vendor, provenance) for instances that have a desktop kind."""
+    """(profile, vendor, provenance) for installed instances that are not headless."""
     root = home / ".agents-profiles"
     rows: list[tuple[str, str, dict]] = []
     if not root.is_dir():
@@ -638,6 +638,8 @@ def discover_desktop_instances(home: Path) -> list[tuple[str, str, dict]]:
             try:
                 prov = json.loads(path.read_text(encoding="utf-8"))
             except ValueError:
+                continue
+            if prov.get("headless"):
                 continue
             vendor = str(prov.get("vendor") or child.name)
             if vendor not in VENDORS:

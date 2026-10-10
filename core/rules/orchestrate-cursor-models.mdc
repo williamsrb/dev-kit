@@ -1,7 +1,7 @@
 ---
 description: >-
-  Cursor Task/orchestrate/`mult` may spawn only composer-2.5-fast,
-  cursor-grok-4.7-medium/high, or auto. Cursor indexes ~/.claude/skills,
+  Cursor Task/orchestrate/`mult` may spawn only cursor-grok-4.7-low or
+  cursor-grok-4.7-xhigh. Cursor indexes ~/.claude/skills,
   which would otherwise load the Opus table.
 alwaysApply: true
 ---
@@ -11,16 +11,14 @@ When using the Task tool — including `mult`, `orchestrate`, or any subagent sp
 
 The role list applies only when the spawn runs a skill (`metadata.recommendedRole`):
 
-- `composer-2.5-fast` for `explore` / `follow`
-- `cursor-grok-4.7-medium` for `implement` / `task-owner`
-- `cursor-grok-4.7-high` for `quality-gate`
-- `auto` for `deterministic`
+- `cursor-grok-4.7-low` for `deterministic`
+- `cursor-grok-4.7-xhigh` for `explore` / `follow` / `implement` / `task-owner` / `quality-gate`
 - `inherit` if the parent is already that model
 
-When freely orchestrating, with no skill role, the default general-purpose model is `cursor-grok-4.7-medium`.
+When freely orchestrating, with no skill role, the default general-purpose model is `cursor-grok-4.7-xhigh`.
 
-Never pass `claude-opus-5-thinking-high`, `claude-opus-5`, other `claude-*`, `gpt-5.6-*`, `gpt-5.3-codex`, `gemini-3.1-pro`, `glm-5.2-high`, `kimi-k3-max`, `cursor-grok-4.6-high`, or `cursor-grok-4.5-high`, even if Task lists them.
+Never pass `composer-2.5-fast`, `auto`, `cursor-grok-4.7-medium`, `cursor-grok-4.7-high`, `claude-opus-5-thinking-high`, `claude-opus-5`, other `claude-*`, `gpt-5.6-*`, `gpt-6*`, `gpt-5.3-codex`, `gemini-3.1-pro`, `glm-5.2-high`, `kimi-k3-max`, `cursor-grok-4.6-high`, or `cursor-grok-4.5-high`, even if Task lists them.
 
-If the `orchestrate` SKILL.md you opened names Opus, Luna, Terra, or Sol, you opened the Claude or Codex copy. Read `${HOME}/.cursor/skills/orchestrate/SKILL.md` and follow that instead.
+If the `orchestrate` SKILL.md you opened names Opus, Haiku, Luna, Sol, or Astra, you opened the Claude or Codex copy. Read `${HOME}/.cursor/skills/orchestrate/SKILL.md` and follow that instead.
 
 Do not add this rule to `AGENTS.md` (Claude/Codex must keep their own spawn tables).

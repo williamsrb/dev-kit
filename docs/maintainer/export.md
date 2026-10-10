@@ -28,9 +28,13 @@ real skill from the export.
 
 **A section's exclusions record their reason.** The `excluded` blocks are maps,
 not lists, so `"ppt-master": "gitignored multi-hundred-MB asset trees"` survives
-as an auditable decision rather than becoming a mystery. `hard_excludes` and
-`kb.core_excludes` are plain lists; their entries explain themselves (caches,
-credentials) or are covered by the file's `_comment`.
+as an auditable decision rather than becoming a mystery. They are records only:
+`export` never reads an `excluded` map, and the classification tests use it to
+check that every entry on disk is accounted for. What actually keeps a path out
+is `hard_excludes` or a `<layer>_excludes` list such as `kb.core_excludes`
+(carving a path out of an included glob needs the latter). Those are plain
+lists; their entries explain themselves (caches, credentials) or are covered by
+the file's `_comment`.
 
 ## Adding a skill
 
@@ -43,8 +47,10 @@ installs the kit.
    the client overlay described below.
 2. `./devkit export --apply` and read the gitleaks output.
 3. `./devkit lint-paths` — a new skill often brings `~/` in a link target.
-4. `python3 -m unittest discover -s tests` — one test asserts every skill on
-   disk is classified, so an unlisted skill fails rather than vanishing quietly.
+4. `python3 -m unittest discover -s tests` — tests assert that every entry on
+   disk in each exported section (skills, bin, bin-vendor, benchmarks, mcp,
+   vendor, rules, hooks, config, skills-vendor, kb) is classified, so an unlisted skill fails rather than
+   vanishing quietly.
    It reads the export source at `~/.agents`, so it runs on a maintainer machine
    and skips in CI.
 
@@ -98,7 +104,10 @@ machine without the rules file cannot reintroduce one unnoticed.
 ## The secret gate
 
 `gitleaks` runs over the result on every `--apply` unless you pass `--no-scan`.
-Verified false positives go
+The scan runs after the files are written, and a missing `gitleaks` fails the
+run with `the export did not pass the secret gate` while the export is already
+on disk. CI's `secrets` job scans the committed `core/` again with the same
+config. Verified false positives go
 in `.gitleaks.toml`, scoped by path *and* by pattern.
 
 The current entry covers Enonic's own API documentation, which uses content and

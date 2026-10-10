@@ -28,7 +28,7 @@ from .errors import DevkitError
 
 # The runtime allowlist. Bootstrap and install stay checkout-only, docs and
 # tests stay in the repo, and `core/` ships whole so a release matches `export`.
-PAYLOAD = ("devkit.py", "devkit", "devkit_cli", "core", "templates", "profiles",
+PAYLOAD = ("devkit.py", "devkit", "devkit_cli", "core", "templates", "profiles", "flavors",
            "devkit.yaml", "export-allowlist.json", "path-contract.json")
 SKIP_PARTS = frozenset({".git", "__pycache__"})
 RETAIN = 2  # current plus the previous release
@@ -316,7 +316,8 @@ def ensure_installed(src: Path, home: Path, plan: Plan,
 
 # Where a profile holds links into the kit. Data and session dirs are never
 # walked: they are large and hold nothing the kit wrote as a projection.
-_PROJECTION_DIRS = ("skills", "rules", "kb", "hooks", "bin", "mcp", "share", "config")
+_PROJECTION_DIRS = ("skills", "rules", "kb", "hooks", "bin", "bin-vendor", "mcp",
+                    "share", "config", "benchmarks")
 
 
 def _outside_kit(link: Path, home: Path) -> Path | None:
@@ -342,7 +343,7 @@ def legacy_links(home: Path, config_dir: Path) -> list[tuple[Path, Path]]:
         roots += [base / name for name in _PROJECTION_DIRS]
     found: list[tuple[Path, Path]] = []
     for root in roots:
-        # agents/bin|mcp|share|config are links themselves; skills/rules/kb/hooks
+        # agents/bin|bin-vendor|benchmarks|mcp|share|config are links themselves; skills/rules/kb/hooks
         # are directories of per-entry links.
         entries = [root] if root.is_symlink() else (
             sorted(root.iterdir()) if root.is_dir() else [])

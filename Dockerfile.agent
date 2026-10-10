@@ -1,7 +1,9 @@
 # Headless CLI-agent image.
 #
 # A vendor CLI plus agentctl plus the core skills, with the project bind-mounted.
-# No GUI. No Docker socket: a mounted socket is root-equivalent on the host,
+# No GUI: installed with --headless, so no launchers, URL handlers, app forks,
+# badges or colour, and DEVKIT_HEADLESS=1 keeps later sync/update headless.
+# No Docker socket: a mounted socket is root-equivalent on the host,
 # which would erase the isolation this image exists for.
 #
 # It runs the real bootstrap.sh rather than a parallel install path, which is
@@ -36,19 +38,25 @@ COPY --chown=${USERNAME}:${USERNAME} . /opt/devkit
 
 USER ${USERNAME}
 ENV PATH="/home/${USERNAME}/.local/bin:${PATH}"
+ENV DEVKIT_HEADLESS=1
 
 # Step 1: dependencies. Third-party repositories are declined, so this also
 # proves a decline is a skip and not a hard failure.
 RUN ./bootstrap.sh --profile ${PROFILE} --apply --third-party no
 
 # Step 2: configuration, as the unprivileged user.
-RUN ./install.py --profile ${PROFILE} --apply
+RUN ./install.py --profile ${PROFILE} --headless --apply
 
 # nvm installs node outside PATH for non-login shells, so the check sources it
 # the same way a user's shell startup does. Baking the version into ENV instead
 # would silently rot on the next node bump.
 SHELL ["/bin/bash", "-lc"]
 RUN . "$HOME/.nvm/nvm.sh" 2>/dev/null; python3 devkit_cli/bootstrap_plan.py --profile ${PROFILE} --verify
+
+# Headless means no GUI artifacts, and a clean doctor.
+RUN test ! -e "$HOME/.local/share/applications" \
+    && test ! -e /etc/apt/apt.conf.d/99-devkit-profile-apps \
+    && ./devkit doctor
 
 # The vendor CLI the image exists to run. It is not a profile dependency: on a
 # host the vendor CLI is installed by its own installer, which a profile-managed

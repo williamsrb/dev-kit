@@ -76,8 +76,10 @@ path nobody wrote.
 
 ## Rendering
 
-`${HOME}` and `${PROFILE_*}` are rendered at install time, per context, by every
-command that materializes a profile (`install.py`, `devkit profile create` and
-`sync`, `devkit update apply`). Going the other way, `devkit export` rewrites
+`${HOME}` and `${PROFILE_*}` are rendered at install time, per context, in the
+kit's `templates/`, the MCP catalog and the auth scripts, by every command that
+materializes a profile (`install.py`, `devkit profile create` and `sync`,
+`devkit update apply`). Skills, rules, kb and hooks are linked, not rendered, so
+a `${HOME}` token inside them stays literal in an installed profile. Going the other way, `devkit export` rewrites
 literal home paths back to `${HOME}` as files leave the harness, so a path that
 leaks into the source gets normalised on the way out rather than shipping.

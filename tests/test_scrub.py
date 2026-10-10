@@ -183,7 +183,7 @@ class NoUntrackedNamesTests(unittest.TestCase):
     FIRST = "9" "9x"
     SECOND = "see" "ds"
     # Vendored third-party code uses the second word in its ordinary sense.
-    SECOND_EXEMPT = "core/skills-vendor/"
+    SECOND_EXEMPT = ("core/skills-vendor/", "core/skills/archify/assets/")
 
     def _tracked(self) -> list[str]:
         try:

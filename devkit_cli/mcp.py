@@ -31,7 +31,11 @@ def live_names(profile: dict, catalog: dict) -> list[str]:
     return names
 
 
-def _expand(value: str, home: Path) -> str:
+def _expand(value: str, home: Path, agents_home: Path | None = None) -> str:
+    """`${HOME}/.agents/...` is the harness; in a profile it is the profile's AGENTS_HOME,
+    because a headless install has no ~/.agents/bin or ~/.agents/mcp."""
+    if agents_home is not None:
+        value = value.replace("${HOME}/.agents/", f"{agents_home}/")
     return value.replace("${HOME}", str(home))
 
 
@@ -42,10 +46,11 @@ def _overlay(spec: dict, vendor: str) -> dict:
     return out
 
 
-def server_entry(catalog: dict, name: str, vendor: str, home: Path) -> dict:
+def server_entry(catalog: dict, name: str, vendor: str, home: Path,
+                 agents_home: Path | None = None) -> dict:
     spec = _overlay(catalog["servers"][name], vendor)
     if spec["transport"] == "http":
-        url = _expand(spec["url"], home)
+        url = _expand(spec["url"], home, agents_home)
         if vendor == "cursor":
             built = {"url": url}
             if name == "atlassian-rovo-preview":
@@ -54,8 +59,8 @@ def server_entry(catalog: dict, name: str, vendor: str, home: Path) -> dict:
         return {"type": "http", "url": url}
 
     built: dict = {
-        "command": _expand(spec["command"], home),
-        "args": [_expand(a, home) for a in spec.get("args") or []],
+        "command": _expand(spec["command"], home, agents_home),
+        "args": [_expand(a, home, agents_home) for a in spec.get("args") or []],
     }
     if vendor == "claude":
         built = {"type": "stdio", **built}
@@ -77,9 +82,10 @@ def keep_dynamic(existing: dict, desired: dict, catalog: dict) -> dict:
 
 
 def cursor_payload(profile: dict, catalog: dict, home: Path,
-                   comment: list[str], existing: dict | None = None) -> dict:
+                   comment: list[str], existing: dict | None = None,
+                   agents_home: Path | None = None) -> dict:
     servers = {
-        name: server_entry(catalog, name, "cursor", home)
+        name: server_entry(catalog, name, "cursor", home, agents_home)
         for name in live_names(profile, catalog)
         if "cursor" in catalog["servers"][name].get("vendors", [])
     }
@@ -89,9 +95,10 @@ def cursor_payload(profile: dict, catalog: dict, home: Path,
 
 
 def claude_payload(profile: dict, catalog: dict, home: Path,
-                   vendor: str = "claude", existing: dict | None = None) -> dict:
+                   vendor: str = "claude", existing: dict | None = None,
+                   agents_home: Path | None = None) -> dict:
     servers = {
-        name: server_entry(catalog, name, vendor, home)
+        name: server_entry(catalog, name, vendor, home, agents_home)
         for name in live_names(profile, catalog)
         if vendor in catalog["servers"][name].get("vendors", [])
     }
@@ -108,7 +115,7 @@ def _toml_str(value: str) -> str:
 
 
 def codex_toml_sections(profile: dict, catalog: dict, home: Path,
-                        existing_text: str = "") -> str:
+                        existing_text: str = "", agents_home: Path | None = None) -> str:
     chunks: list[str] = []
     live: set[str] = set()
     for name in live_names(profile, catalog):
@@ -116,7 +123,7 @@ def codex_toml_sections(profile: dict, catalog: dict, home: Path,
         if "codex" not in spec.get("vendors", []):
             continue
         live.add(name)
-        entry = server_entry(catalog, name, "codex", home)
+        entry = server_entry(catalog, name, "codex", home, agents_home)
         chunks.append(f"[mcp_servers.{name}]")
         if "url" in entry:
             chunks.append(f"url = {_toml_str(entry['url'])}")

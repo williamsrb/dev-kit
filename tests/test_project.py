@@ -26,7 +26,7 @@ from unittest import mock
 REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO))
 
-from devkit_cli import kithome, manifest, privilege, project
+from devkit_cli import flavors, kithome, manifest, privilege, project
 from devkit_cli.common import Plan
 from devkit_cli.errors import DevkitError
 
@@ -380,7 +380,7 @@ class ErrorTests(ProjectCase):
         repo = self.make_repo()
         with self.assertRaises(DevkitError) as caught:
             self.build(repo, "nope")
-        self.assertIn("no profile named 'nope'", str(caught.exception))
+        self.assertIn("no flavor or profile type named 'nope'", str(caught.exception))
         self.assertIn("core", caught.exception.fix)
 
         for text in ("not json", '{"schema": 2, "layers": ["core"]}',
@@ -635,7 +635,7 @@ class ContractTests(ProjectCase):
         bare, helped = run_devkit("project"), run_devkit("project", "--help")
         self.assertEqual(bare.returncode, 0, bare.stderr)
         self.assertEqual(bare.stdout, helped.stdout)
-        for command in ("init", "build", "status", "clean"):
+        for command in ("init", "build", "status", "clean", "flavors"):
             self.assertIn(command, bare.stdout)
         for command in ("init", "build", "clean"):
             self.assertIn("Dry run without --apply", run_devkit("project", command, "-h").stdout)
@@ -660,6 +660,167 @@ class ContractTests(ProjectCase):
         existing = [p for p in ("devkit_cli/project.py", "tests/test_project.py",
                                 "docs/project.md") if (REPO / p).exists()]
         self.assertEqual(run_devkit("lint-paths", *existing).returncode, 0)
+
+
+class FlavorTests(ProjectCase):
+    XP7_ONLY = frozenset({"develop-xp7-backend", "develop-react4xp-v5",
+                          "develop-react4xp-v6", "apply-react4xp-practices"})
+    XP8_ONLY = frozenset({"develop-xp8", "develop-react4xp-v7"})
+
+    def repo_flavor(self, repo: Path, name: str, **body) -> Path:
+        path = repo / "harness/flavors" / f"{name}.json"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps({"name": name, **body}))
+        return path
+
+    def refusal(self, repo: Path, *layers: str) -> DevkitError:
+        with self.assertRaises(DevkitError) as caught:
+            self.build(repo, *layers)
+        return caught.exception
+
+    def test_T23_enonic_flavors_split_by_xp_version(self):
+        """T23 · US-005"""
+        core = set(self.skills("core"))
+        base = set(flavors.expand("enonic-base", *self._cat()).skills)
+        for layer, own, other in (("enonic-xp8", self.XP8_ONLY, self.XP7_ONLY),
+                                  ("enonic-xp7", self.XP7_ONLY, self.XP8_ONLY)):
+            with self.subTest(layer=layer):
+                repo = self.make_repo(name=layer)
+                self.build(repo, layer)
+                linked = {p.name for p in (repo / ".agents/skills").iterdir()}
+                self.assertEqual(linked, core | base | own)
+                self.assertFalse(linked & other)
+
+    def _cat(self):
+        return flavors.catalog(self.kit_root)[0], self.kit_root
+
+    def test_T24_repo_flavor_builds_overrides_the_kit_and_drifts(self):
+        """T24 · US-002, FR-9"""
+        repo = self.make_repo()
+        path = self.repo_flavor(repo, "mine", skills=["develop-xp8"])
+        cfg = str(self.config("core", "mine", name="flavors.json"))
+        rc, _ = self.build(repo, config=cfg)
+        self.assertEqual(rc, 0)
+        self.assertTrue((repo / ".agents/skills/develop-xp8").is_dir())
+        self.assertEqual(self.status(repo, config=cfg)[0], 0)
+        path.write_text(json.dumps({"name": "mine", "skills": ["develop-xp7-backend"]}))
+        self.assertEqual(self.status(repo, config=cfg)[0], 1)
+        rc, _ = self.call(project.cmd_init, repo, layer=["mine", "enonic-xp8"], force=False)
+        self.assertEqual(rc, 0)
+        self.assertEqual(json.loads((repo / "harness/project.json").read_text())["layers"],
+                         ["mine", "enonic-xp8"])
+
+        self.repo_flavor(repo, "enonic-xp8", skills=["develop-xp8"])
+        rc, out = self.build(repo, "enonic-xp8")
+        self.assertIn("warn", out)
+        self.assertIn("overrides the kit flavor", out)
+        self.assertEqual(
+            {p.name for p in (repo / ".agents/skills").iterdir()}, {"develop-xp8"})
+
+    def test_T25_bad_flavors_are_refused_with_flavor_file_and_fix(self):
+        """T25 · US-004"""
+        cases = {
+            "unknown-skill": {"skills": ["no-such-skill"]},
+            "unknown-include": {"includes": ["no-such-layer"]},
+            "unknown-key": {"skils": []},
+            "bad-skill-name": {"skills": ["../x"]},
+            "bad-exclude": {"exclude": ["develop-xp8"]},
+            "loop-a": {"includes": ["loop-b"]},
+        }
+        for name, body in cases.items():
+            with self.subTest(name=name):
+                repo = self.make_repo(name=f"r-{name}")
+                self.repo_flavor(repo, name, **body)
+                if name == "loop-a":
+                    self.repo_flavor(repo, "loop-b", includes=["loop-a"])
+                err = self.refusal(repo, name)
+                self.assertIn(name, str(err))
+                self.assertIn(f"{name}.json", str(err))
+                self.assertTrue(err.fix)
+        repo = self.make_repo(name="r-rename")
+        (repo / "harness/flavors").mkdir(parents=True)
+        (repo / "harness/flavors/one.json").write_text('{"name": "two"}')
+        err = self.refusal(repo, "one")
+        self.assertIn("one.json", str(err))
+        self.assertTrue(err.fix)
+        repo = self.make_repo(name="r-profile")
+        self.repo_flavor(repo, "enonic", skills=[])
+        err = self.refusal(repo, "enonic")
+        self.assertIn("profile type", str(err))
+        self.assertIn("rename", err.fix)
+
+    def test_T26_exclude_removes_and_a_later_layer_adds_back(self):
+        """T26"""
+        repo = self.make_repo()
+        self.repo_flavor(repo, "lean", includes=["enonic-xp8"], exclude=["develop-react4xp-v7"])
+        cat, _ = flavors.catalog(self.kit_root, repo)
+        self.assertNotIn("develop-react4xp-v7", flavors.expand("lean", cat, self.kit_root).skills)
+        resolved = project.resolve_layers(("lean",), self.kit_root, repo)
+        self.assertNotIn("develop-react4xp-v7", resolved.skills)
+        back = project.resolve_layers(("lean", "enonic-xp8"), self.kit_root, repo)
+        self.assertIn("develop-react4xp-v7", back.skills)
+
+    def test_T27_flavors_command_is_read_only(self):
+        """T27 · FR-7"""
+        repo = self.make_repo()
+        self.repo_flavor(repo, "mine", skills=["develop-xp8"])
+        before, repo_before = snapshot(MASTER_HOME), snapshot(repo)
+        rc, out = self.call(project.cmd_flavors, repo, name=None)
+        self.assertEqual(rc, 0)
+        for name in ("enonic-xp7", "enonic-xp8", "mine", "core", "enonic"):
+            self.assertIn(name, out)
+        rc, out = self.call(project.cmd_flavors, repo, name="enonic-xp8")
+        self.assertIn("develop-react4xp-v7", out)
+        self.assertNotIn("develop-react4xp-v6", out)
+        with self.assertRaises(DevkitError) as caught:
+            self.call(project.cmd_flavors, repo, name="nope")
+        self.assertIn("core", caught.exception.fix)
+        outside = self.tmp / "not-a-repo"
+        outside.mkdir()
+        self.assertEqual(self.call(project.cmd_flavors, outside, name=None)[0], 0)
+        self.assertEqual(snapshot(MASTER_HOME), before)
+        self.assertEqual(snapshot(repo), repo_before)
+
+    def test_T28_every_kit_flavor_is_valid(self):
+        """T28"""
+        cat, _ = flavors.catalog(REPO)
+        self.assertTrue(cat)
+        types = set(flavors.profile_types(REPO))
+        for name, flavor in cat.items():
+            with self.subTest(flavor=name):
+                self.assertEqual(flavor.path.stem, name)
+                self.assertNotIn(name, types)
+                flavors.expand(name, cat, REPO)
+
+    def test_T29_xp_flavors_cover_the_enonic_profile(self):
+        """T29 · FR-10"""
+        cat, _ = flavors.catalog(REPO)
+        union = (set(flavors.expand("enonic-xp7", cat, REPO).skills)
+                 | set(flavors.expand("enonic-xp8", cat, REPO).skills))
+        enonic = set(flavors.expand("enonic", cat, REPO).skills)
+        self.assertEqual(
+            union, enonic,
+            "enonic-xp7 and enonic-xp8 must together equal the enonic profile: "
+            "classify the new skill into enonic-base, enonic-xp7 or enonic-xp8")
+
+    def test_T30_profile_type_layers_resolve_as_before(self):
+        """T30 · FR-6"""
+        legacy: list[str] = []
+        for layer in ("core", "enonic", "client"):
+            for entry in manifest.load(layer, kit_root=self.kit_root).get("skills", []):
+                leaf = manifest.layer_leaf(entry)
+                if leaf and leaf not in legacy and (self.kit_root / "core/skills" / leaf).exists():
+                    legacy.append(leaf)
+        self.assertEqual(list(self.skills("core", "enonic", "client")), legacy)
+        repo = self.make_repo()
+        self.build(repo, "core", "enonic")
+        stamp = json.loads((repo / ".devkit-project.json").read_text())
+        self.assertEqual(sorted(stamp), ["agents_md", "agents_md_sha256", "entries",
+                                         "layers", "release", "rules", "schema"])
+
+    def test_T31_the_installed_kit_carries_flavors(self):
+        """T31 · FR-1"""
+        self.assertTrue((self.kit_root / "flavors/enonic-xp8.json").is_file())
 
 
 class ProfileUnchangedTests(unittest.TestCase):

@@ -288,6 +288,32 @@ def assign_profile_color(profile: dict, home: Path,
     return pair
 
 
+HEADLESS_ENV = "DEVKIT_HEADLESS"
+
+
+def env_headless() -> bool | None:
+    """DEVKIT_HEADLESS as a tri-state: None (unset or unrecognized) never overrides."""
+    raw = os.environ.get(HEADLESS_ENV, "").strip().lower()
+    if raw in ("1", "true", "yes"):
+        return True
+    if raw in ("0", "false", "no"):
+        return False
+    return None
+
+
+def apply_headless(profile: dict, flag: bool | None, home: Path) -> None:
+    """Set profile["headless"]: flag, then DEVKIT_HEADLESS, then stored provenance."""
+    if flag is None:
+        flag = env_headless()
+    if flag is None:
+        flag = False
+        for name, _vendor, _dir, prov in discover_instances(home):
+            if name == profile["name"] and prov.get("headless"):
+                flag = True
+                break
+    profile["headless"] = bool(flag)
+
+
 def apply_provenance_color(profile: dict, provenance: dict | None) -> None:
     """Keep sync/show on the colour written at create, not a re-roll.
 
@@ -537,7 +563,7 @@ def render(text: str, tokens: dict[str, str]) -> str:
 def provenance(profile: dict, vendor: str, home: Path, kit: dict,
                source_commit: str, history: list | None = None) -> dict:
     layout = paths_for(profile["name"], vendor, home)
-    return {
+    prov = {
         "_comment": "Written by devkit. Describes the tree beside it; never edit by hand.",
         "profile": profile["name"],
         "type": profile.get("type") or profile["name"],
@@ -550,14 +576,18 @@ def provenance(profile: dict, vendor: str, home: Path, kit: dict,
         "source_commit": source_commit,
         "installed_at": timestamp(),
         "config_dir": str(layout["config_dir"]),
-        "color": profile_colors(profile)[0],
-        "appfork": {
+    }
+    if profile.get("headless"):
+        prov["headless"] = True
+    else:
+        prov["color"] = profile_colors(profile)[0]
+        prov["appfork"] = {
             "lib": str(appfork.fork_dir(vendor, profile["name"])),
             "desktopName": appfork.desktop_name(vendor, profile["name"]),
             "wmClass": appfork.wm_class(vendor, profile["name"]),
-        },
-        "history": history or [],
-    }
+        }
+    prov["history"] = history or []
+    return prov
 
 
 def read_provenance(config_dir: Path) -> dict | None:

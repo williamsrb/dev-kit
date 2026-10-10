@@ -3,7 +3,7 @@
 `devkit project` applies the harness to a work repo, next to profiles instead of
 replacing them. A **profile** carries how the agent runs: hooks, MCP, auth,
 environment, the desktop identity. A **project** carries what the agent knows:
-the skills of the profile types you name, skills the repo owns, and an
+the skills of the flavors and profile types you name, skills the repo owns, and an
 `AGENTS.md`. A project never writes hooks, MCP, settings, auth or `AGENTS_HOME`.
 
 Use a project when a team should get the same skills in a repo without each
@@ -14,7 +14,7 @@ profile can also build a project (see [Duplicates](#duplicates-with-the-active-p
 ```bash
 cd <repo>
 devkit project init . --layer core --layer enonic --apply   # writes harness/project.json
-devkit project build .                                      # dry run: lists every link, file and exclude entry
+devkit project build .                                      # dry run: lists every link and file, and the exclude file with an entry count
 devkit project build . --apply
 devkit project status .
 devkit project clean . --apply                              # removes what the build wrote
@@ -49,17 +49,67 @@ so).
 { "schema": 1, "layers": ["core", "enonic"] }
 ```
 
-`layers` is a non-empty list of profile types of the installed kit. Each goes
-through the profile loader, so `extends` still composes inside a type (`enonic`
-brings `core`). The skills of all layers are unioned in layer order. An unknown
-type fails with the list of the kit's profile types. `devkit project init`
-writes the file (`--force` overwrites) and validates each `--layer` against the
-installed kit.
+`layers` is a non-empty list of flavors or profile types. A name resolves to a
+repo flavor, then a kit flavor, then a profile type (see [Flavors](#flavors)).
+A profile type goes through the profile loader, so `extends` still composes
+inside it (`enonic` brings `core`). The skills of all layers are unioned in
+layer order. An unknown name fails with the lists of flavors and profile types.
+`devkit project init` writes the file (`--force` overwrites) and validates each
+`--layer` the same way.
 
 A client repo that must not carry a `harness/` directory keeps the file
 elsewhere and passes `--config` to `build` and `status`. `init` has no
 `--config` and always writes `harness/project.json`, so that file is written by
 hand.
+
+## Flavors
+
+A flavor is a named, skills-only set: one JSON file per flavor in the kit's
+`flavors/` folder, or in the repo's `harness/flavors/`. It carries no colour,
+deps, MCP or instances, so it is not a profile type and `devkit profile create`
+does not offer it.
+
+```json
+{
+  "_comment": ["Skills for an Enonic XP 8 project."],
+  "name": "enonic-xp8",
+  "description": "Enonic XP 8: shared Enonic skills plus the XP 8 docs and React4XP 7 skills.",
+  "includes": ["enonic-base"],
+  "skills": ["develop-xp8", "develop-react4xp-v7"],
+  "exclude": []
+}
+```
+
+- `name` is required and equals the file name without `.json`. Any key other
+  than `_comment`, `name`, `description`, `includes`, `skills`, `exclude` and
+  `detect` is refused. `detect` must be an object; it is otherwise ignored for now.
+- `includes` names flavors or profile types, resolved recursively; a loop or an
+  unknown name is refused. `skills` are kit skill names (`core/skills`), never
+  repo-owned ones: `harness/skills/` is linked by every build anyway.
+- The skills of a flavor are its includes in order, then its own `skills`, minus
+  `exclude`. An `exclude` entry the flavor does not hold is refused.
+- A repo flavor with the same name as a kit flavor wins, and build and `status`
+  print a `warn` line. A repo flavor named like a profile type is refused.
+  Changing a repo flavor so the skill set changes shows up in `status` as drift.
+  The whole `harness/flavors/` folder is loaded on every command, so one invalid
+  file there makes `flavors`, `build`, `status` and `init` fail, even for layers
+  that do not use it.
+
+```
+devkit project flavors                  # every valid layer name, tier, skill count
+devkit project flavors enonic-xp8       # includes and resolved skills, in order
+devkit project flavors --path ~/work/app   # also reads ~/work/app/harness/flavors
+```
+
+<!-- devkit:generated:flavor-table -->
+
+| Flavor | Tier | Includes | Skills |
+|--------|------|----------|--------|
+| `enonic-base` | kit | `core` | 41 |
+| `enonic-xp7` | kit | `enonic-base` | 45 |
+| `enonic-xp8` | kit | `enonic-base` | 43 |
+
+<!-- /devkit:generated:flavor-table -->
 
 ## Repo-owned layer
 
@@ -67,10 +117,12 @@ Anything under `harness/` is the repo's:
 
 - `harness/skills/<name>/` become relative links, so a teammate who clones the
   repo gets them without devkit. They are not excluded, so the repo can commit
-  them. A repo-owned skill with the same name as a base skill wins; the build
-  reports the base skill as skipped.
-- `harness/AGENTS.md` is the text of the generated `AGENTS.md`. With `--rules`
-  the build appends the kit's rules (`core`, plus `client` when a layer's
+  them. A repo-owned skill with the same name as a base skill wins; the build and
+  every `status` print `warn  .agents/skills/<name>: harness/skills/<name> wins
+  over the base skill of the same name`. Directories starting with `.` are ignored.
+- `harness/AGENTS.md` is the text of the generated `AGENTS.md`, after a
+  generated-header line. With `--rules` the build appends the kit's rules,
+  separated by a `---` line, (`core`, plus `client` when a layer's
   lineage includes `client`). Without `--rules` the rules are left out on
   purpose: a profile already projects them, and loading them twice costs tokens.
   `status` and later builds reuse the choice the stamp recorded; pass
@@ -105,9 +157,17 @@ no-devkit path.
 `devkit project status` compares the repo with what a build would write now and
 exits 1 on a missing or dangling link, or an entry set that changed (a skill
 added or removed in the kit, a changed layer, a stale `AGENTS.md`). A newer kit
-release with the same entry set is printed as informational and exits 0.
+release with the same entry set is printed as informational and exits 0. On a
+repo that was never built it prints `not built` and exits 1.
 
-`devkit project clean` removes the links and files the stamp lists, only while
+A rebuild also prunes links in `.agents/skills` and `.claude/skills` that the
+stamp lists, or that point into the kit's `core/skills` or the repo's
+`harness/skills`, and are no longer wanted. The build owns `AGENTS.md` only while
+its content still matches the stamp: after you edit it, a build warns that
+instructions were not written, and `clean` leaves it.
+
+`devkit project clean` on a repo with no stamp prints `nothing to clean` and exits 0.
+Otherwise it removes the links and files the stamp lists, only while
 they still point where the build put them, then this worktree's exclude block,
 the stamp, and the `.agents` / `.claude` directories left empty. Repo-owned
 links and tracked files stay. A project is not removed by `devkit-uninstall.sh`;

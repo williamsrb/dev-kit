@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import sys
 from pathlib import Path
 
@@ -85,41 +86,140 @@ def _write(plan: Plan, target: Path, content: str, force: bool,
 
 
 def _link_layer(plan: Plan, config_dir: Path, name: str, entries: list[str],
-                core_root: Path, link_core: Path) -> None:
-    """Project one layer (skills/rules/kb) into the instance as per-entry symlinks.
+                core_root: Path, link_core: Path,
+                excludes: list[str] | None = None) -> None:
+    """Project one layer (skills/rules/kb) into the instance as symlinks.
 
     Symlinks, not copies: this is the contract sync-skill-projections.sh already
     uses, and it means an update to core/ reaches every profile without a re-copy.
     Existence is checked under `core_root` (the tree being read) while each link
     names `link_core` (the stable `current` tree), which dry run cannot read.
+
+    A path is linked whole unless an entry names something below it (a deeper
+    entry, or an exclude); then it becomes a real directory of finer links, so
+    `offline-reference/scripts/**` does not expose the rest of offline-reference.
     """
     dest_root = config_dir / name
-    wanted: dict[str, Path] = {}
-    for entry in entries:
-        leaf = manifest.layer_leaf(entry)
-        if not (core_root / name / leaf).exists():
-            continue
-        wanted[leaf] = link_core / name / leaf
-    for link_name, source in sorted(wanted.items()):
-        link = dest_root / link_name
+    source_root = link_core / name
+    links, dirs = _projection(entries, excludes or [], core_root / name)
+    for rel in sorted(dirs):
+        _projection_dir(plan, dest_root.joinpath(*rel), "/".join((name, *rel)))
+    wanted = {rel: source_root.joinpath(*rel) for rel in links}
+    for rel, source in sorted(wanted.items()):
+        link = dest_root.joinpath(*rel)
         if link.is_symlink() and link.readlink() == source:
             continue
-        plan.record(f"link   {name}/{link_name}")
+        plan.record(f"link   {'/'.join((name, *rel))}")
         if plan.apply:
-            ensure_dir(dest_root)
-            if link.is_symlink() or link.exists():
-                if link.is_dir() and not link.is_symlink():
+            ensure_dir(link.parent)
+            if link.is_dir() and not link.is_symlink():
+                if not _projection_owned(link, source_root):
                     raise DevkitError(f"{link} is a real directory, not a projection",
                                       "move it aside by hand, then re-run")
+                shutil.rmtree(link)
+            elif link.is_symlink() or link.exists():
                 link.unlink()
             link.symlink_to(source)
-    # Prune projections the profile no longer names.
-    if dest_root.is_dir():
-        for link in sorted(dest_root.iterdir()):
-            if link.is_symlink() and link.name not in wanted:
-                plan.record(f"prune  {name}/{link.name}")
-                if plan.apply:
-                    link.unlink()
+    _prune_layer(plan, dest_root, name, (), set(wanted), dirs, source_root)
+
+
+def _projection(entries: list[str], excludes: list[str], layer_root: Path
+                ) -> tuple[list[tuple[str, ...]], set[tuple[str, ...]]]:
+    """The paths to link and the real directories that hold them.
+
+    The most specific rule covering a path decides it; an exclude wins a tie.
+    A rule naming nothing under `layer_root` (an exclude the export already
+    dropped) splits nothing.
+    """
+    rules = [(parts, include)
+             for group, include in ((entries, True), (excludes, False))
+             for parts in map(manifest.entry_parts, group)
+             if layer_root.joinpath(*parts).exists()]
+
+    def included(rel: tuple[str, ...]) -> bool:
+        best: tuple[int, bool] | None = None
+        for parts, include in rules:
+            if rel[:len(parts)] == parts and (best is None or len(parts) >= best[0]):
+                best = (len(parts), include)
+        return bool(best and best[1])
+
+    def split(rel: tuple[str, ...]) -> bool:
+        return any(len(parts) > len(rel) and parts[:len(rel)] == rel
+                   for parts, _ in rules)
+
+    links: list[tuple[str, ...]] = []
+
+    def walk(rel: tuple[str, ...]) -> None:
+        path = layer_root.joinpath(*rel)
+        if rel and not split(rel):
+            if included(rel) and path.exists():
+                links.append(rel)
+            return
+        if path.is_dir():
+            for child in sorted(path.iterdir()):
+                walk((*rel, child.name))
+
+    walk(())
+    dirs = {rel[:depth] for rel in links for depth in range(1, len(rel))}
+    return links, dirs
+
+
+def _projection_dir(plan: Plan, path: Path, label: str) -> None:
+    if path.is_dir() and not path.is_symlink():
+        return
+    if path.is_symlink():
+        plan.record(f"unlink {label} (becomes a directory)")
+        if plan.apply:
+            path.unlink()
+    elif path.exists():
+        raise DevkitError(f"{path} is a real file, not a projection",
+                          "move it aside by hand, then re-run")
+    plan.record(f"mkdir  {label}")
+    if plan.apply:
+        ensure_dir(path)
+
+
+def _projection_owned(directory: Path, source_root: Path) -> bool:
+    """True when the directory holds only links into the layer, so devkit made it."""
+    def links_below(path: Path) -> int | None:
+        count = 0
+        for entry in path.iterdir():
+            if entry.is_symlink():
+                if not Path(os.readlink(entry)).is_relative_to(source_root):
+                    return None
+                count += 1
+            elif entry.is_dir() and (found := links_below(entry)) is not None:
+                count += found
+            else:
+                return None
+        return count
+    return bool(links_below(directory))
+
+
+def _prune_layer(plan: Plan, dest_root: Path, name: str, rel: tuple[str, ...],
+                 wanted: set[tuple[str, ...]], dirs: set[tuple[str, ...]],
+                 source_root: Path) -> None:
+    """Prune projections the profile no longer names. Real files and directories
+    devkit did not make stay."""
+    directory = dest_root.joinpath(*rel)
+    if not directory.is_dir() or directory.is_symlink():
+        return
+    for entry in sorted(directory.iterdir()):
+        child = (*rel, entry.name)
+        if child in wanted:
+            continue
+        if child in dirs:
+            _prune_layer(plan, dest_root, name, child, wanted, dirs, source_root)
+            continue
+        label = "/".join((name, *child))
+        if entry.is_symlink():
+            plan.record(f"prune  {label}")
+            if plan.apply:
+                entry.unlink()
+        elif entry.is_dir() and _projection_owned(entry, source_root):
+            plan.record(f"prune  {label}/")
+            if plan.apply:
+                shutil.rmtree(entry)
 
 
 def materialize(profile: dict, vendors: list[str] | None, home: Path,
@@ -160,7 +260,8 @@ def materialize(profile: dict, vendors: list[str] | None, home: Path,
 
         for layer in ("skills", "rules", "kb"):
             _link_layer(plan, layout["config_dir"], layer,
-                        profile.get(layer, []), core_root, link_core)
+                        profile.get(layer, []), core_root, link_core,
+                        profile.get(f"{layer}_excludes"))
         hooks_dir = layout["harness_dir"] / "hooks"
         if hooks_dir.is_dir():
             _symlink(plan, layout["config_dir"] / "hooks", hooks_dir,
@@ -169,6 +270,7 @@ def materialize(profile: dict, vendors: list[str] | None, home: Path,
         _write_vendor_config(plan, vendor, profile, layout, tokens, force, root)
         _write_wrapper(plan, vendor, layout, tokens, force, root)
         if ("desktop" in instance.get("kind", "")
+                and not profile.get("headless")
                 and _write_desktop(plan, vendor, profile, layout, tokens,
                                  force, root)):
             wrote_desktop = True
@@ -185,7 +287,8 @@ def materialize(profile: dict, vendors: list[str] | None, home: Path,
             if plan.apply:
                 write_json(target, prov)
 
-    auth.install_dispatchers(plan, home, kit_root=root)
+    if not profile.get("headless"):
+        auth.install_dispatchers(plan, home, kit_root=root)
     if wrote_desktop:
         plan.record(f"icon-cache {relative_to_home(instances.hicolor_root(home))}")
         if plan.apply and not instances.refresh_hicolor_cache(home):
@@ -205,17 +308,17 @@ def _write_vendor_config(plan: Plan, vendor: str, profile: dict, layout: dict,
         target = layout["config_dir"] / template.name
         if template.name == "mcp.json" and vendor == "cursor":
             rendered = _fill_cursor_mcp(
-                rendered, profile, root, Path(tokens["HOME"]), target)
+                rendered, profile, root, Path(tokens["HOME"]), target, layout["agents_dir"])
         elif template.name == "config.toml" and vendor == "codex":
             rendered = _fill_codex_mcp(
-                rendered, profile, root, Path(tokens["HOME"]), target)
+                rendered, profile, root, Path(tokens["HOME"]), target, layout["agents_dir"])
         _write(plan, target, rendered, force, label=f"{vendor}/{template.name}")
     if vendor == "claude":
         _write_claude_mcp(plan, profile, layout, force, root, Path(tokens["HOME"]))
 
 
 def _fill_cursor_mcp(rendered: str, profile: dict, root: Path, home: Path,
-                     target: Path) -> str:
+                     target: Path, agents_home: Path) -> str:
     catalog = mcp.load_catalog(root)
     data = json.loads(rendered)
     comment = data.get("_comment") or []
@@ -225,15 +328,15 @@ def _fill_cursor_mcp(rendered: str, profile: dict, root: Path, home: Path,
             existing = json.loads(target.read_text()).get("mcpServers") or {}
         except json.JSONDecodeError:
             existing = {}
-    payload = mcp.cursor_payload(profile, catalog, home, comment, existing)
+    payload = mcp.cursor_payload(profile, catalog, home, comment, existing, agents_home)
     return json.dumps(payload, indent=2) + "\n"
 
 
 def _fill_codex_mcp(rendered: str, profile: dict, root: Path, home: Path,
-                    target: Path) -> str:
+                    target: Path, agents_home: Path) -> str:
     catalog = mcp.load_catalog(root)
     existing = target.read_text(encoding="utf-8") if target.is_file() else ""
-    extra = mcp.codex_toml_sections(profile, catalog, home, existing)
+    extra = mcp.codex_toml_sections(profile, catalog, home, existing, agents_home)
     if not extra:
         return rendered
     body = rendered.rstrip() + "\n\n" + extra
@@ -254,7 +357,8 @@ def _write_claude_mcp(plan: Plan, profile: dict, layout: dict, force: bool,
             loaded = None
         current = loaded if isinstance(loaded, dict) else {}
     merged = {**current, **mcp.claude_payload(
-        profile, catalog, home, existing=current.get("mcpServers") or {})}
+        profile, catalog, home, existing=current.get("mcpServers") or {},
+        agents_home=layout["agents_dir"])}
     if merged == current:
         return
     _write(plan, target, json.dumps(merged, indent=2) + "\n", force,
@@ -301,8 +405,8 @@ def _bind_profile_runtime(plan: Plan, profile: dict, home: Path, core_root: Path
             ensure_dir(agents_dir)
     for layer in ("skills", "rules", "kb"):
         _link_layer(plan, agents_dir, layer, profile.get(layer, []), core_root,
-                    link_core)
-    for name in ("bin", "mcp", "share", "config"):
+                    link_core, profile.get(f"{layer}_excludes"))
+    for name in ("bin", "bin-vendor", "benchmarks", "mcp", "share", "config"):
         if name == "config" and profile.get("client_overlay"):
             _write_client_config(plan, agents_dir / name, profile["client_overlay"],
                                  core_root, link_core, force)
@@ -578,8 +682,8 @@ def load_for_create(name: str, type_name: str | None,
                                    name, chosen)
 
 
-def load_for_instance(name: str, home: Path,
-                      kit_root: Path | None = None) -> dict:
+def load_for_instance(name: str, home: Path, kit_root: Path | None = None,
+                      headless: bool | None = None) -> dict:
     """Load the type manifest for a materialized instance on disk."""
     instances.validate_instance_name(name)
     matches = [row for row in instances.discover_instances(home) if row[0] == name]
@@ -591,6 +695,7 @@ def load_for_instance(name: str, home: Path,
     profile = instances.bind_instance(manifest.load(type_name, kit_root=kit_root),
                                       name, type_name)
     instances.apply_provenance_color(profile, matches[0][3])
+    instances.apply_headless(profile, headless, home)
     return profile
 
 
@@ -608,10 +713,16 @@ def cmd_create(args) -> int:
     home = Path(user.pw_dir)
     profile = load_for_create(args.name, getattr(args, "type", None))
     _refuse_duplicate(home, profile["name"])
-    pair = instances.assign_profile_color(
-        profile, home, explicit=getattr(args, "color", None))
+    instances.apply_headless(profile, getattr(args, "headless", None), home)
     plan = Plan(args.apply)
-    plan.record(f"color  {pair['light']}")
+    if profile["headless"]:
+        if getattr(args, "color", None):
+            raise DevkitError("--color has no meaning for a headless profile",
+                              "drop --color, or drop --headless")
+    else:
+        pair = instances.assign_profile_color(
+            profile, home, explicit=getattr(args, "color", None))
+        plan.record(f"color  {pair['light']}")
     materialize(profile, args.vendor, home, plan, args.force)
     uninstaller.ensure(home, plan)
     globalignore.ensure(home, plan)
@@ -626,7 +737,13 @@ def cmd_create(args) -> int:
 def cmd_sync(args) -> int:
     user = privilege.refuse_root(getattr(args, "user", None))
     home = Path(user.pw_dir)
-    profile = load_for_instance(args.name, home)
+    profile = load_for_instance(args.name, home,
+                                headless=getattr(args, "headless", None))
+    if not profile["headless"]:
+        prov = next(row[3] for row in instances.discover_instances(home)
+                    if row[0] == args.name)
+        if not prov.get("color"):
+            instances.assign_profile_color(profile, home)
     plan = Plan(args.apply)
     materialize(profile, None, home, plan, force=True)
     uninstaller.ensure(home, plan)
@@ -655,8 +772,11 @@ def cmd_list(args) -> int:
 def cmd_show(args) -> int:
     home = Path.home()
     installed = [row for row in instances.discover_instances(home) if row[0] == args.name]
+    stored_headless = False
     if installed:
-        profile = load_for_instance(args.name, home)
+        # Judge from the stored value: DEVKIT_HEADLESS must not misreport a desktop profile.
+        stored_headless = bool(installed[0][3].get("headless"))
+        profile = load_for_instance(args.name, home, headless=stored_headless)
     elif manifest.profile_path(args.name).is_file():
         profile = manifest.load(args.name)
         profile = instances.bind_instance(profile, args.name, args.name)
@@ -668,7 +788,12 @@ def cmd_show(args) -> int:
         "name": profile["name"],
         "type": profile.get("type") or profile["name"],
         "lineage": profile.get("lineage"),
-        "colors": list(instances.profile_colors(profile)),
+    }
+    if stored_headless:
+        summary["headless"] = True
+    else:
+        summary["colors"] = list(instances.profile_colors(profile))
+    summary |= {
         "skills": len(profile.get("skills", [])),
         "rules": len(profile.get("rules", [])),
         "kb": len(profile.get("kb", [])),
@@ -734,12 +859,14 @@ def cmd_doctor(args) -> int:
     checked = 0
 
     installed: list[str] = []
+    desktop_seen = False
     seen_legacy: set[str] = set()
 
     for name, vendor, config_dir, prov in instances.discover_instances(home):
         if args.profile and name != args.profile:
             continue
         checked += 1
+        desktop_seen = desktop_seen or not prov.get("headless")
         if name not in installed:
             installed.append(name)
         label = f"{name}/{vendor}"
@@ -777,7 +904,8 @@ def cmd_doctor(args) -> int:
                 f"    fix: devkit profile sync {installed[0]} --apply")
 
     problems += _home_root_problems(home)
-    auth_lines = auth.doctor_lines(home)
+    headless_only = instances.env_headless() or (checked > 0 and not desktop_seen)
+    auth_lines = [] if headless_only else auth.doctor_lines(home)
     auth_ok = [line for line in auth_lines if "(want " not in line]
     problems += [line for line in auth_lines if "(want " in line]
     problems += appfork.doctor_lines(home)
@@ -859,6 +987,8 @@ def _devkit_cmd(*args: str) -> list[str]:
 
 
 def finish_appforks(home: Path, profile: dict, user: str) -> None:
+    if profile.get("headless"):
+        return
     rc = escalate_appforks(home, profile, user)
     if rc:
         print(
@@ -902,6 +1032,9 @@ def escalate_appforks(home: Path, profile: dict | None, user: str) -> int:
 
 def cmd_apps_sync(args) -> int:
     """Rebuild per-profile app forks. --apply prints the plan, then sudo."""
+    if instances.env_headless():
+        print("skip: headless devkit, no desktop forks or badges")
+        return 0
     env = appfork.Env()
     user = getattr(args, "user", None) or pwd_name()
     dry_run = not args.apply

@@ -35,10 +35,16 @@ release. A tool is satisfied when the binaries it *provides* are on `PATH`,
 whatever rung supplied them — which is what lets apt, dnf and pacman disagree
 about package names while the check still answers one question.
 
+Two rungs run remote installers: nvm (v0.40.1) and `uv` are fetched with
+`curl … | bash` and `curl … | sh`. The release-binary rung takes the latest
+GitHub release asset by file-name pattern and does not verify a checksum or
+signature. On Arch the package step uses `pacman -Sy` without `-u`.
+
 ### Third-party repositories
 
 On RHEL derivatives some packages, `ffmpeg` in particular, are not in the base
-repositories. `bootstrap.sh` asks before enabling anything, and a decline is
+repositories. `bootstrap.sh` asks before enabling anything (the enable commands run before
+the package plan is printed), and a decline is
 recorded as skipped rather than failing the run. Answer up front with
 `--third-party yes` or `--third-party no`; in a non-interactive shell it
 declines by default.
@@ -67,7 +73,11 @@ edit them unless you pass `--wire-path`. On a box with both `.bash_profile` and
 On a TTY, `./install.py --apply` with no profiles yet **offers to create a
 first one** (type, then instance name). Passing `--profile TYPE` skips the
 offer and uses the type as the name. Non-interactive runs do the same
-(default type `core`).
+(default type `core`). The offer is made only when no profile is installed. With
+profiles already present, a bare `./install.py --apply` does not ask: it writes
+(or rewrites) an instance named `core` of type `core`, so always pass `--name`
+and `--profile`. `install.py` does not refuse a name that is already taken
+(`devkit profile create` does); it rebinds that instance.
 
 ```bash
 ./install.py                               # dry run; notes the offer
@@ -79,19 +89,27 @@ offer and uses the type as the name. Non-interactive runs do the same
 
 This creates the profile's config directories, projects its skills, rules and
 knowledge base as per-entry symlinks (the profile's subset, not the whole kit
-`core/` tree), renders the vendor configs, writes the Tier 1 wrappers (with
+`core/` tree; `<layer>_excludes` carve paths out, so a narrowed entry becomes a
+real directory of finer links), renders the vendor configs, writes the Tier 1 wrappers (with
 `DEVKIT_PROFILE` / `AGENTS_HOME`) and desktop launchers, badges the icons with a
-coloured shield emblem, and records a provenance file. Wrappers and launchers
+coloured shield emblem, and records a provenance file. Desktop launchers are
+written only for a vendor whose stock GUI is installed and only for a profile
+that is not headless. `install.py` badges with the type's colour; it does not
+pick a unique one, so two instances of one type installed this way share a badge.
+Use `devkit profile create NAME --type TYPE [--color HEX]` for the second one. Wrappers and launchers
 also export `GRAFT_NO_GITIGNORE=1` and `GRAFT_NO_IGNORE=1`, so graft stops
 writing `.gitignore` and `.ignore` into every repo it builds in. Instead, the
 kit's ignore block (graft, graphify and agentctl security-scan output, at any
 depth) is appended to your global git ignore: the file `core.excludesFile`
-names, or `~/.config/git/ignore`. It is skipped when every pattern is already
+names, or `$XDG_CONFIG_HOME/git/ignore` (`~/.config/git/ignore` when that is
+unset). It is skipped when every pattern is already
 there, or when git is not installed. Desktop identity forks (patched asar /
 `WM_CLASS`) rsync into `/usr/lib/devkit/`. When the profile's fork is missing or
 stale, or the apt/dpkg hooks are not installed, `install.py --apply` prints that
 plan and then asks for administrator privileges (`sudo` on a terminal, `pkexec`
-or `sudo -A` without one). Re-run later with:
+or `sudo -A` without one). If that step fails or is cancelled, `install.py`
+still prints `Installed.` and exits 0, with `note: desktop forks were not
+applied`; `devkit doctor` is what reports it. Re-run later with:
 
 ```bash
 ./devkit profile apps-sync --user "$USER" --install-hook --apply
@@ -124,6 +142,34 @@ and groups before writing anything, and takes root back only for the
 desktop-fork step at the end. Resolution to uid 0 or a `/root` home is refused
 outright, with or without `--user`.
 
+### Headless and containers
+
+On a terminal-only machine, such as a container built from a Dockerfile, pass
+`--headless` (or set `DEVKIT_HEADLESS=1`):
+
+```bash
+./install.py --profile core --headless --apply
+```
+
+A headless instance writes no `.desktop` launchers, no launcher or fork icon
+badges, no URL-scheme handlers, no app-fork apt/dpkg hooks, and no profile
+colour, and it never asks sudo for forks. The mode is stored in the instance's
+provenance (`"headless": true`), so `devkit profile sync` and
+`devkit update apply` keep it. Precedence: flag, then `DEVKIT_HEADLESS`, then
+the stored value; `--no-headless` or `DEVKIT_HEADLESS=0` switches back. The mode
+is never auto-detected. `--headless` on an installed desktop profile only stops
+maintaining its launchers and forks; remove them with `devkit-uninstall.sh`.
+
+`devkit doctor` skips the auth-handler check when `DEVKIT_HEADLESS` is on or
+every installed instance is headless, and `devkit profile show` reports
+`headless: true` in place of `colors`.
+
+`install.py` still refuses to run as root, so a Dockerfile creates a non-root
+user with passwordless sudo for `bootstrap.sh`, as `Dockerfile.agent` does. A
+root-only image is not supported: bootstrap installs node, uv and release
+binaries into `$HOME`, which as root is `/root` and not usable by the
+unprivileged user.
+
 ### When a path already exists
 
 Writing a file over an existing one that devkit did not write (it carries no
@@ -154,7 +200,7 @@ of an upgrade.
 ```
 
 A release holds `devkit.py`, `devkit`, `devkit_cli/`, `core/`, `templates/`,
-`profiles/`, `devkit.yaml`, `export-allowlist.json` and `path-contract.json`,
+`profiles/`, `flavors/`, `devkit.yaml`, `export-allowlist.json` and `path-contract.json`,
 plus a `.devkit-install.json` stamp (commit, whether the working tree was
 dirty, lineage, source, payload digest). It leaves out `.git`, `tests/`,
 `docs/`, `scripts/`, `bootstrap.sh` and `install.py`. The release id is the
@@ -169,8 +215,8 @@ the previous release are kept for rollback, the rest are pruned.
 path) need sources an installed release does not have. They refuse and print the
 command to run from your checkout.
 
-An install made before this change links into the checkout and keeps working
-until you re-sync it. `devkit doctor` and `devkit update check` list it:
+A profile created before the kit home existed links into the checkout and keeps
+working until you re-sync it. `devkit doctor` and `devkit update check` list it:
 
 ```bash
 <checkout>/devkit profile sync <name> --apply     # dry run without --apply
@@ -194,8 +240,9 @@ before `devkit` is guaranteed to work.
 `install.py`, `devkit profile create` and `devkit profile sync` write
 `~/.local/bin/devkit-uninstall.sh`. Every command that creates or syncs a profile
 leaves one (`devkit update apply` re-syncs instances that already have it), so
-there is no order of commands that produces a profile you cannot remove,
-and `devkit doctor` reports an installed machine that has lost it. That shell
+no sequence of create and sync commands produces a profile you cannot remove.
+`devkit profile adopt` writes none, and `devkit doctor` reports an installed
+machine that has lost it. That shell
 file is not in this checkout. It does not import the kit and does not call
 `devkit`.
 
@@ -224,7 +271,8 @@ Removed:
 - any other file in `~/.local/bin` or `~/.local/share/applications` carrying the
   `Generated by devkit` marker
 - desktop launchers, badge icons, and `~/.config/Claude-<name>`,
-  `Codex-<name>`, and `Cursor-<name>` data directories
+  `Codex-<name>` data directories, and `Cursor-<name>` when one exists (the kit
+  keeps Cursor data under `~/.agents-profiles/<name>/cursor`)
 - auth dispatchers (`~/.local/bin/devkit-auth-launch`,
   `~/.local/bin/devkit-auth-dispatch`, and the `devkit-auth-*.desktop`
   handlers), with stock URL handlers put back, and the state they kept in
@@ -232,15 +280,17 @@ Removed:
 - the PATH block `bootstrap.sh --wire-path` added, from `.bash_profile`,
   `.profile`, `.zshrc` and `.bashrc`
 - the kit's block in the global git ignore file, between its
-  `# Added by devkit` and `# End of devkit block.` lines
+  `# Added by devkit: regenerable harness output, any depth.` and
+  `# End of devkit block.` lines
 - with sudo: `/usr/lib/devkit`, `/usr/local/bin/sync-devkit-profile-apps.py`,
   `/etc/apt/apt.conf.d/99-devkit-profile-apps`,
   `/etc/dpkg/dpkg.cfg.d/60devkit-profile-apps`,
   `/var/log/devkit-profile-apps.log`, and any `/etc/apparmor.d/devkit-*`
   profile, unloaded with `apparmor_parser -R` before it is deleted
 
-Left in place: this checkout, `~/.agents`, and packages `bootstrap.sh`
-installed. Bootstrap does not record which packages it added. What
+Left in place: this checkout, `~/.agents`, the files `devkit project build`
+wrote into your repos (run `devkit project clean` there first), and packages
+`bootstrap.sh` installed. Bootstrap does not record which packages it added. What
 `devkit fix-home-rules` (or `install.py --fix-home-rules`) did is also left: the
 rules it moved into `~/.claude/CLAUDE.md` or `~/.codex/AGENTS.md` are your
 content in the stock vendor directories, and the 1-byte mode-000 stubs at
@@ -283,7 +333,9 @@ Standing rules for the whole run:
    ./bootstrap.sh --profile enonic
    ```
 
-   Exit 0 ok, 1 a dependency could not be resolved, 2 bad invocation.
+   Exit 0 ok, 1 a dependency could not be resolved, 2 an unknown option. A
+   missing value (`--profile` alone) and an unknown profile name also exit 1,
+   and an unrecognised `--third-party` value is treated as a decline.
 
 2. Dependencies, apply. Prints every root command, then asks for administrator
    privileges.

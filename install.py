@@ -13,7 +13,8 @@ created owned by that account.
 After user-owned config is written, `--apply` prints the desktop-fork plan
 (rsync into /usr/lib/devkit, asar identity, apt/dpkg hooks) and then asks
 sudo. That elevation is a separate step from configuration, with the plan
-visible before the password prompt.
+visible before the password prompt. --headless (or DEVKIT_HEADLESS=1) skips
+that step and every other GUI artifact, for terminal-only containers.
 
 Usage:
     ./install.py                            # dry run; offers a first profile on --apply
@@ -104,6 +105,11 @@ def main() -> int:
     parser.add_argument("--apply", action="store_true",
                         help="Write user-owned config, then print the desktop-fork "
                              "plan and ask sudo. Without it this is a dry run.")
+    parser.add_argument("--headless", action=argparse.BooleanOptionalAction,
+                        default=None,
+                        help="Headless: write no launchers, URL handlers, app forks, "
+                             "badges or colour, and never ask sudo for forks. "
+                             "Default: DEVKIT_HEADLESS, else off.")
     parser.add_argument("--force", action="store_true",
                         help="Proceed past a collision, after a timestamped backup.")
     parser.add_argument("--user", metavar="NAME",
@@ -146,6 +152,7 @@ def main() -> int:
             return 0
         name, type_name = chosen
         profile = load_for_create(name, type_name)
+        instances.apply_headless(profile, args.headless, home)
 
         plan = Plan(args.apply)
         materialize(profile, args.vendor, home, plan, args.force)

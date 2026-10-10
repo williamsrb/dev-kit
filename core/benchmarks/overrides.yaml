@@ -1,0 +1,15 @@
+# Hand estimates for models no source measures. Merged into latest.yaml as the
+# `guess_*` columns, never into a source column. Scale: DeepSWE pass_rate * 100.
+rows:
+- vendor: "cursor"
+  model: "composer-2.5"
+  effort: "DEFAULT"
+  score: 27.77
+  cost_usd: 0.5
+  method: "midpoint of gpt-5.6-luna HIGH (44.25, $0.78) and MEDIUM (11.28, $0.22) on DeepSWE"
+- vendor: "claude"
+  model: "claude-haiku-4.5"
+  effort: "DEFAULT"
+  score: 11.28
+  cost_usd: 0.22
+  method: "clone of gpt-5.6-luna MEDIUM on DeepSWE"

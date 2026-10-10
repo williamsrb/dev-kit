@@ -11,8 +11,11 @@ other profile — of any type — may reuse that name.
 ```
 
 Creating one gives you a config directory, a projected skill set, a uniquely
-named CLI wrapper, a launcher, an icon colour, and a name that shows up in the
-status line. Several profiles can run at once. Each desktop is a fork of the
+named CLI wrapper, a launcher, an icon colour, and (in Claude Code) a name that
+shows up in the status line. Launchers and forks are written only for a vendor
+whose stock GUI is installed (otherwise `create` prints `skip   desktop <vendor>
+(GUI not installed)` and the instance stays CLI-only) and only when the profile
+is not headless. Several profiles can run at once. Each desktop is a fork of the
 stock app (its own copy under `/usr/lib/devkit/`, patched `desktopName` /
 `WM_CLASS`, stock icons badged with a coloured shield). Stock Claude, ChatGPT,
 and Cursor stay as they are. The fork is rebuilt after apt/dpkg updates of the
@@ -20,8 +23,11 @@ original package.
 
 `create` / `sync` / `install.py --apply` write user-owned files first. Then, if
 that profile's desktop fork is missing or stale or the apt/dpkg hooks are not
-installed, they print the rsync/asar/hook plan and ask `sudo`; otherwise they
-stop there. `install.py --apply` on a terminal, with no profiles yet, offers to
+installed, they print the rsync/asar/hook plan and ask `sudo` (on a terminal;
+without one, `pkexec`, else `sudo -A`; with none of them the step fails with
+`pkexec and sudo are not on PATH`); otherwise they stop there. A failed or
+cancelled elevation does not fail the command: it prints `note: desktop forks
+were not applied (exit N)` and exits 0, so run `devkit doctor` to see it. `install.py --apply` on a terminal, with no profiles yet, offers to
 create a first one (type, then name) unless you passed `--profile` or `--name`.
 Without a terminal it creates the `--profile` type (default `core`) under that
 same name.
@@ -99,7 +105,8 @@ What each agent copies:
 ~/.agents-profiles/<profile>/hooks       # per-file links into kit hooks/ + statusline
 ~/.agents-profiles/<profile>/agents      # AGENTS_HOME: ~/.agents-shaped tree
     skills/  rules/  kb/                 # this profile's subset, not siblings'
-    bin/ mcp/ share/ config              # symlinks into kit core/ (tools only); a
+    bin/ bin-vendor/ benchmarks/         # symlinks into kit core/ (tools and the
+    mcp/ share/ config                   # bench inputs, read-only); a
                                          # client_overlay profile gets a real config/
                                          # with client-overlay.json beside the links;
                                          # written once with placeholders, kept by sync
@@ -107,22 +114,31 @@ What each agent copies:
     prds/ plans/ .playwright-mcp/        # profile-local state
     .auth/                               # profile-local; token YAML may be shared
 ~/.agents-profiles/<profile>/<vendor>/   # the vendor's config dir
-    skills/  rules/  kb/                 # per-entry symlinks into kit core/
+    skills/  rules/  kb/                 # per-entry symlinks into the kit home's core/;
+                                         # an entry narrowed by a deeper entry or a
+                                         # <layer>_excludes path is a real dir of finer links
     hooks -> <profile root>/hooks        # absolute link
     .devkit-profile.json                 # provenance
+    settings.json hooks.json config.toml mcp.json   # per vendor, as that vendor uses them
+    .claude.json                         # Claude only: MCP servers, merged not replaced
+~/.agents-profiles/<profile>/<vendor>-data/   # vendor data dir (Cursor extensions, ...)
 ~/.config/Claude-<profile>/              # Claude Desktop Chromium profile
 ~/.config/Codex-<profile>/               # ChatGPT Desktop Chromium profile
 ~/.agents-profiles/<profile>/cursor      # Cursor IDE --user-data-dir (not ~/.config)
 ~/.local/bin/<vendor>-<profile>          # public wrapper (not a stock name)
+~/.local/bin/devkit  devkit-uninstall.sh # kit link and the uninstaller (see install.md)
 ~/.agents-profiles/<profile>/bin/<cli>   # unprefixed vendor CLI + agentctl
 ~/.local/share/applications/...          # launcher (Exec is the fork)
 ~/.local/share/icons/hicolor/<size>/apps/<vendor>-<profile>.png   # badged, 16 to 512
 /usr/lib/devkit/<vendor>-<profile>/      # identity fork (root, apt-rebuilt)
 ```
 
-Layers are projected as **symlinks**, not copies. An update to `core/` therefore
-reaches every profile without a re-copy, and the harness side of a profile
-costs kilobytes rather than a duplicate of a 20M tree. The desktop fork is the
+Layers are projected as **symlinks**, not copies, and they point into the kit
+home (`~/.local/share/devkit/current/core/`), not into the checkout. `create`,
+`sync` and `install.py --apply` first install the payload as a release there;
+editing `core/` in the checkout reaches no profile until one of them, or
+`devkit update apply`, installs a new release. Every profile then shares the one
+copy, so the harness side of a profile costs kilobytes. The desktop fork is the
 exception: a full rsync of the stock app so identity can be patched. Cheap
 gates skip that copy when the fork's version and `desktopName` already match.
 
@@ -141,12 +157,15 @@ gates skip that copy when the fork's version and `desktopName` already match.
 ./devkit profile migrate dummy --to-fork devkit --apply  # re-home onto another fork id
 ```
 
-Every one of these is a dry run without `--apply`.
+Every command that writes is a dry run without `--apply`; `list` and `show` only read.
+`list` prints one row per vendor instance (PROFILE, TYPE, VENDOR, STATE, CONFIG
+DIR), or `no installed profiles.`
 
 ## Composition
 
-`extends` composes parent-first. Lists concatenate; `instances`, `color`,
-`settings` and `client_overlay` are replaced by the child.
+`extends` composes parent-first. Lists concatenate and drop duplicates;
+`instances`, `color`, `settings`, `client_overlay` and `todo` are replaced by the
+child; other maps merge key by key, the child winning.
 
 That distinction matters: a PHP profile declaring `claude` and `codex` means
 exactly those two vendors, not those two plus whatever `core` happened to
@@ -162,6 +181,18 @@ The reference points into `export-allowlist.json`, so the export boundary and
 the profile manifest cannot disagree about what a layer contains. There is one
 list, and the profile names it.
 
+## The `extract` type
+
+`extract` is a slim type for headless images that run extract-kit. It does
+not extend `core`: `bootstrap.sh` installs every dependency a profile declares,
+and `core` declares 34 entries (40 binaries). `extract` carries only git,
+python3, a C toolchain, node, graft, serena, graphify, `playwright-cli` (optional)
+and 7z, plus the `graft` and `playwright-cli` skills, the `implementation/**`
+kb and the Serena MCP. Its layer lists are literal and it sets no `settings`.
+graft, serena, graphify, node and `playwright-cli` are pinned so an image build
+is reproducible. Install it with `./bootstrap.sh --profile extract --apply`
+then `./install.py --profile extract --headless --apply`.
+
 ## MCP
 
 The profile `mcp` list is the default-alive set, matching the reference
@@ -175,7 +206,10 @@ plus `graft.mdc`. Playwright is spawned per task id (`playwright.py spawn
 `playwright-<id>` only onto that profile's Cursor/Claude/Codex MCP files
 (and does not touch stock `~/.cursor` / `~/.claude` / `~/.codex` or sibling
 profiles). From the host harness, it still fans out to stock configs and every
-provenance-marked instance. Sync keeps those spawned entries. Slack is
+provenance-marked instance. Sync keeps every entry already in the instance's MCP
+file that the profile list does not name, except parked names. That covers the
+spawned `playwright-<id>` entries, and also a server you removed from the list:
+delete it from the instance file by hand. Slack is
 on-demand for worklogs.
 
 ## Colour
@@ -203,11 +237,14 @@ same badge is applied to launcher icons, written at 16, 32, 48, 128, 256 and
 512 px under `~/.local/share/icons/hicolor/<size>x<size>/apps/` (GTK ignores a
 1024 px file in `512x512/`), and to in-tree icons inside `/usr/lib/devkit/<vendor>-<profile>/`. Badging needs
 ImageMagick (`magick`, else `convert`). If Magick or the emblem is missing the
-launcher falls back to the stock icon and says so — it does not fail the
-install. After writing launchers the kit rebuilds `icon-theme.cache` there with
+launcher keeps the previous badge, or falls back to the stock icon when there
+is none, and says so — it does not fail the install. After writing launchers the kit rebuilds `icon-theme.cache` there with
 `gtk-update-icon-cache` (or `gtk4-update-icon-cache`); without it GNOME can keep
 showing the stock icon. The apt/dpkg hook installs a copy of the emblem at
 `/usr/lib/devkit/profile-emblem.png` for the root worker.
+
+A headless instance (`--headless`, see [install.md](install.md#headless-and-containers))
+has no colour: no `--color`, no `color` in provenance, no badge.
 
 ## Adopting an existing setup
 
@@ -255,11 +292,16 @@ If the vendor file already exists, `fix-home-rules` aborts and names it;
 Stock Claude, ChatGPT/Codex, and Cursor stay launchable from their own
 `.desktop` files. The kit never writes those trees.
 
-Each profile desktop is a dpkg-unowned rsync copy of the stock app: patch
-`desktopName` in `app.asar` (Cursor also patches `nameShort` in
-`product.json`), badge in-tree icons from **stock** assets with a coloured
-shield emblem, keep `chrome-sandbox` mode `4755`. Apt only updates stock, so a
-pair of hooks rebuild every fork afterwards:
+Each profile desktop is a dpkg-unowned rsync copy of the stock app. Claude and
+Codex get `desktopName` patched in `app.asar`; Cursor has no asar, so
+`desktopName` is patched in `resources/app/package.json` and `nameShort` plus
+`linuxIconName` in `product.json`. In-tree icons are badged from **stock**
+assets with a coloured shield emblem, and `chrome-sandbox` keeps mode `4755`.
+When `/etc/apparmor.d/abi/4.0` exists, each fork also gets an unconfined
+AppArmor profile with `userns` at `/etc/apparmor.d/devkit-<vendor>-<profile>`,
+loaded with `apparmor_parser` when AppArmor is enabled; the worker logs to
+`/var/log/devkit-profile-apps.log`. Apt only updates stock, so a pair of hooks
+rebuild every fork afterwards:
 
 - `/etc/apt/apt.conf.d/99-devkit-profile-apps` (`DPkg::Post-Invoke`)
 - `/etc/dpkg/dpkg.cfg.d/60devkit-profile-apps` (`post-invoke` — apt's hook does
@@ -275,6 +317,9 @@ Config, skills, wrappers, and session data live under `~/.agents-profiles` and
 (for Claude/Codex desktops) `~/.config/Claude-<name>` / `~/.config/Codex-<name>`
 — package upgrades never touch them. Stock `~/.config/Claude` and
 `~/.config/Cursor` stay the stock apps.
+
+A headless instance has no forks: `finish_appforks`, `apps-sync` and the apt
+hook worker skip it, and `DEVKIT_HEADLESS=1` makes `profile apps-sync` a no-op.
 
 ## Desktop user-data
 
@@ -292,7 +337,10 @@ It is not a fake `$HOME`:
 `cursor-agent` sets `XDG_CONFIG_HOME` on its exec line only and never exports it.
 
 From a terminal, call the public wrapper (`claude-dummy`). It execs the stock
-CLI by full path, exports `DEVKIT_PROFILE` and `AGENTS_HOME`, and prepends
+CLI by full path, exports `DEVKIT_PROFILE`, `DEVKIT_PROFILE_HOME`, `AGENTS_HOME`,
+`GRAFT_NO_GITIGNORE` and `GRAFT_NO_IGNORE` (plus `CLAUDE_CONFIG_DIR` or
+`CODEX_HOME`; the Cursor wrapper sets `CURSOR_DATA_DIR` and
+`CURSOR_WORKTREES_ROOT` on its exec line), and prepends
 `~/.agents-profiles/<name>/bin/` to `PATH`. That directory has the unprefixed
 vendor names (`claude`, `codex`, `cursor-agent`) and harness tools (`agentctl`)
 that pin the same env. PATH alone is not enough: `agentctl` reads `AGENTS_HOME`
@@ -306,9 +354,12 @@ Linux allows one default handler per URL scheme (`claude://`, `claude-cli://`,
 `codex://`, `codex-browser-sidebar://`, `cursor://`). Profile launchers do not
 claim those schemes. On create/sync the kit installs a `NoDisplay` dispatcher
 and sets it as the default. Starting a profile's GUI records a pending marker
-so the browser callback returns to that profile. If nothing claimed the
-callback and more than one copy is running, the dispatcher refuses rather than
-guessing.
+so the browser callback returns to that profile; the marker expires after 30
+minutes. Without a live marker the dispatcher routes the callback to the one
+running profile of that vendor. With more than one running it refuses
+(`ambiguous <scheme>:// callback`), and with none it refuses (`no profile claimed
+this <scheme>:// callback`), rather than guessing. A refusal also raises a
+desktop notification.
 
 ```bash
 ./devkit profile auth restore --apply    # stock handlers again

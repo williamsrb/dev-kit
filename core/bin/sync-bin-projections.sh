@@ -131,7 +131,8 @@ if [[ -d "$LOCAL_BIN" ]]; then
   for name in "${PATH_SHIMS[@]}"; do
     src="$BIN/$name"
     if [[ ! -f "$src" ]]; then
-      bad "$src missing — PATH shim skipped"
+      # Some shims are host-only and do not ship with the dev-kit export.
+      say "skip $name (not in $BIN)"
       continue
     fi
     path_want["$name"]="$src"

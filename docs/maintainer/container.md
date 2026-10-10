@@ -28,7 +28,16 @@ docker run --rm -it -v "$PWD:/work" -w /work devkit:core
 
 The vendor CLI defaults to Claude Code (`@anthropic-ai/claude-code`, installed
 with npm into the nvm node that `bootstrap.sh` provides). Pick another with
-`--build-arg VENDOR_CLI=@openai/codex`.
+`--build-arg VENDOR_CLI=@openai/codex`. The other build arguments are `BASE`
+(default `debian:stable-slim`), `USERNAME` (`agent`) and `UID` (`1000`).
+
+There is no `.dockerignore`, so `COPY . /opt/devkit` copies the whole
+build context, `.git` and local tool directories included.
+
+The image installs with `--headless` and sets `DEVKIT_HEADLESS=1`, so it has no
+launchers, URL handlers, app forks or badges. The build asserts that and that
+`devkit doctor` is clean. See
+[install.md](../install.md#headless-and-containers).
 
 The build runs the real `bootstrap.sh`, which is what makes it a useful test
 rather than a parallel install path that drifts.

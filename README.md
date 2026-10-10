@@ -64,10 +64,11 @@ and a visible name in the status line and the dock.
 
 | Profile | Extends | Skills | Rules | Vendors | Required tools |
 |---------|---------|--------|-------|---------|----------------|
-| `client` | `enonic` | 46 | 31 | claude, codex, cursor | 38 |
-| `core` | `—` | 35 | 24 | claude, codex, cursor | 36 |
-| `enonic` | `core` | 46 | 26 | claude, codex, cursor | 38 |
-| `php` | `core` | 35 | 24 | claude, codex | 38 |
+| `client` | `enonic` | 47 | 31 | claude, codex, cursor | 38 |
+| `core` | `—` | 36 | 24 | claude, codex, cursor | 36 |
+| `enonic` | `core` | 47 | 26 | claude, codex, cursor | 38 |
+| `extract` | `—` | 2 | 0 | claude, codex, cursor | 10 |
+| `php` | `core` | 36 | 24 | claude, codex | 38 |
 
 <!-- /devkit:generated:profile-table -->
 
@@ -150,6 +151,7 @@ python3 -m unittest discover -s tests       # the acceptance checklist
 | `install.py` | Step 2. Configuration only. Refuses root. |
 | `devkit` | Profile, export, update and diagnostic CLI. `install.py` links it to `~/.local/bin/devkit`. |
 | `profiles/` | Profile manifests. `core` is the base; the rest extend it. |
+| `flavors/` | Skills-only layers for `devkit project`, with Enonic XP 7 and XP 8 ([docs/project.md](docs/project.md#flavors)). |
 | `devkit_cli/project.py` | `devkit project`: applies skills and instructions to a work repo ([docs/project.md](docs/project.md)). |
 | `core/` | The curated export of the harness. Generated — never edit directly. |
 | `templates/` | Vendor configs, CLI wrappers, desktop launchers, auth dispatchers. |
@@ -167,4 +169,5 @@ that would cost a rebuild per profile switch. A containerized harness driving
 root-equivalent on the host and erases the isolation the container was for.
 
 Docker does earn its place for a headless CLI-agent image: see
-[docs/maintainer/container.md](docs/maintainer/container.md).
+[docs/maintainer/container.md](docs/maintainer/container.md). To install the
+kit itself without any GUI artifacts, pass `--headless` to `install.py`.

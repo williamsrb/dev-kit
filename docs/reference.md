@@ -4,8 +4,14 @@ Generated from the CLI itself by `devkit docs generate`. If this file and the
 CLI disagree, CI fails.
 
 Bare invocation and `--help` produce identical output and exit 0, for every
-group. Only a genuine mistake — an unknown subcommand or a bad flag — writes
-usage to stderr and exits 2.
+group with subcommands (`profile`, `project`, `update`, `origin`, `docs`). The
+flat commands (`export`, `lint-paths`, `doctor`, `deps`, `fix-home-rules`) run
+when invoked bare. A genuine mistake — an unknown subcommand or a bad flag —
+writes the top-level usage to stderr and exits 2.
+
+Exit codes: 0 success, 1 a refusal (`error:` and, when there is one, `fix:` on
+stderr), 2 a usage mistake, 130 an interrupt. `docs generate --check` also fails
+when a file in `docs/` is not reachable from `README.md`.
 
 <!-- devkit:generated:cli-reference -->
 
@@ -166,41 +172,49 @@ options:
 #### `devkit profile create`
 
 ```
-usage: devkit profile create [-h] [--type TYPE] [--vendor VENDOR] [--color HEX] [--apply] [--force] name
+usage: devkit profile create [-h] [--type TYPE] [--vendor VENDOR] [--color HEX] [--headless | --no-headless] [--apply] [--force] name
 
-Write a named profile instance: vendor config dirs, projected skills/rules/kb, AGENTS_HOME tree, CLI wrappers, and desktop launchers. Wrappers pin DEVKIT_PROFILE and AGENTS_HOME so agentctl sees only this profile. --apply writes user-owned config, then prints the desktop-fork plan and asks sudo.
+Write a named profile instance: vendor config dirs, projected skills/rules/kb, AGENTS_HOME tree, CLI wrappers, and desktop launchers. Wrappers pin DEVKIT_PROFILE and AGENTS_HOME so agentctl sees only this profile. --apply writes user-owned config, then prints the desktop-fork plan and asks sudo (--headless skips launchers, forks, badges and that sudo step).
 
 positional arguments:
   name
 
 options:
-  -h, --help       show this help message and exit
-  --type TYPE      Profile type (profiles/<TYPE>.json). Default: NAME when that
-                   type exists.
-  --vendor VENDOR  Limit to these vendors (repeatable).
-  --color HEX      Badge colour (#RRGGBB). Must be unique across profiles.
-                   Default: type colour if free, else a random free palette
-                   colour.
-  --apply          Write user-owned config, then print the desktop-fork plan and
-                   ask sudo. Default: dry run.
-  --force          Proceed past a collision, after a timestamped backup. Does
-                   not bypass a duplicate name.
+  -h, --help            show this help message and exit
+  --type TYPE           Profile type (profiles/<TYPE>.json). Default: NAME when
+                        that type exists.
+  --vendor VENDOR       Limit to these vendors (repeatable).
+  --color HEX           Badge colour (#RRGGBB). Must be unique across profiles.
+                        Default: type colour if free, else a random free palette
+                        colour.
+  --headless, --no-headless
+                        Headless: write no launchers, URL handlers, app forks,
+                        badges or colour, and never ask sudo for forks. Default:
+                        DEVKIT_HEADLESS, else off.
+  --apply               Write user-owned config, then print the desktop-fork
+                        plan and ask sudo. Default: dry run.
+  --force               Proceed past a collision, after a timestamped backup.
+                        Does not bypass a duplicate name.
 ```
 
 #### `devkit profile sync`
 
 ```
-usage: devkit profile sync [-h] [--apply] name
+usage: devkit profile sync [-h] [--headless | --no-headless] [--apply] name
 
-Re-write the instance from the current manifest: prune a leftover core/ symlink, refresh AGENTS_HOME projections, restore a missing devkit-uninstall.sh, keep spawned playwright-<id> MCP entries. --apply writes user-owned config, then prints the desktop-fork plan and asks sudo.
+Re-write the instance from the current manifest: prune a leftover core/ symlink, refresh AGENTS_HOME projections, restore a missing devkit-uninstall.sh, keep spawned playwright-<id> MCP entries. --apply writes user-owned config, then prints the desktop-fork plan and asks sudo (not for a headless instance).
 
 positional arguments:
   name
 
 options:
-  -h, --help  show this help message and exit
-  --apply     Write user-owned config, then print the desktop-fork plan and ask
-              sudo. Default: dry run.
+  -h, --help            show this help message and exit
+  --headless, --no-headless
+                        Headless: write no launchers, URL handlers, app forks,
+                        badges or colour, and never ask sudo for forks. Default:
+                        DEVKIT_HEADLESS, else the stored value.
+  --apply               Write user-owned config, then print the desktop-fork
+                        plan and ask sudo. Default: dry run.
 ```
 
 #### `devkit profile adopt`
@@ -306,6 +320,7 @@ commands:
     build     Link the layers' skills into the repo and exclude them from git.
     status    Check a built project for drift and broken links.
     clean     Remove what the build wrote.
+    flavors   List the flavors and profile types usable as layers.
 ```
 
 #### `devkit project init`
@@ -313,14 +328,14 @@ commands:
 ```
 usage: devkit project init [-h] [--layer TYPE] [--force] [--apply] [PATH]
 
-Write harness/project.json in the repo. Each --layer is a profile type of the installed kit (core, enonic, ...); the build links the union of their skills. Dry run without --apply.
+Write harness/project.json in the repo. Each --layer is a flavor or a profile type (see `devkit project flavors`); the build links the union of their skills. Dry run without --apply.
 
 positional arguments:
   PATH          Root of the git work tree (default: .).
 
 options:
   -h, --help    show this help message and exit
-  --layer TYPE  Profile type to apply (repeatable, at least one).
+  --layer TYPE  Flavor or profile type to apply (repeatable, at least one).
   --force       Overwrite an existing harness/project.json.
   --apply       Write. Default: dry run.
 ```
@@ -372,6 +387,21 @@ positional arguments:
 options:
   -h, --help  show this help message and exit
   --apply     Write. Default: dry run.
+```
+
+#### `devkit project flavors`
+
+```
+usage: devkit project flavors [-h] [--path PATH] [NAME]
+
+Without NAME, list every valid layer name with its tier (kit, repo or profile) and skill count. With NAME, print its includes and the resolved skills in order. Repo flavors are read from <PATH>/harness/flavors when that folder exists. Writes nothing.
+
+positional arguments:
+  NAME         Flavor or profile type to resolve.
+
+options:
+  -h, --help   show this help message and exit
+  --path PATH  Repo whose harness/flavors to read (default: .).
 ```
 
 ### `devkit update`

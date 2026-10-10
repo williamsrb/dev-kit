@@ -1,7 +1,7 @@
 """`devkit project`: apply the harness (skills, instructions) to a work repo.
 
 A profile carries how the agent runs (hooks, MCP, auth, env). A project carries
-what the agent knows: the skills of the named profile types, optional repo-owned
+what the agent knows: the skills of the named flavors or profile types, optional repo-owned
 skills, and an AGENTS.md. Everything is read from the installed kit; nothing is
 installed and nothing outside the repo is written.
 
@@ -30,7 +30,7 @@ import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from . import kithome, manifest, privilege
+from . import flavors, kithome, privilege
 from .common import FILE_MODE, Plan, ensure_dir, load_json, write_json
 from .errors import DevkitError
 
@@ -73,7 +73,7 @@ def load_config(repo: Path, config_path: str | os.PathLike[str] | None = None) -
     layers = data.get("layers")
     if not (isinstance(layers, list) and layers
             and all(isinstance(x, str) and _NAME.match(x) for x in layers)):
-        raise DevkitError(f"{path}: \"layers\" must be a non-empty list of profile type names",
+        raise DevkitError(f"{path}: \"layers\" must be a non-empty list of flavor or profile type names",
                           'e.g. "layers": ["core", "enonic"]')
     return Config(tuple(dict.fromkeys(layers)))
 
@@ -82,24 +82,24 @@ def load_config(repo: Path, config_path: str | os.PathLike[str] | None = None) -
 class Resolved:
     skills: tuple[str, ...]
     lineage: frozenset[str]
+    notes: tuple[str, ...] = ()     # repo flavors that override a kit flavor
 
 
-def resolve_layers(layers: tuple[str, ...] | list[str], kit_root: Path) -> Resolved:
-    """Union of the skills of every named profile type, in layer order.
+def resolve_layers(layers: tuple[str, ...] | list[str], kit_root: Path,
+                   repo: Path | None = None) -> Resolved:
+    """Union of the skills of every named layer, in layer order.
 
-    Each type goes through `manifest.load`, so `extends` still composes inside
-    it and an unknown type raises the error that lists the kit's profiles.
+    A name is a repo flavor, then a kit flavor, then a profile type. Profile
+    types go through `manifest.load`, so `extends` still composes inside them.
     """
+    cat, notes = flavors.catalog(kit_root, repo)
     skills: list[str] = []
     lineage: set[str] = set()
     for layer in layers:
-        profile = manifest.load(layer, kit_root=kit_root)
-        lineage.update(profile.get("lineage", []))
-        for entry in profile.get("skills", []):
-            leaf = manifest.layer_leaf(entry)
-            if leaf and leaf not in skills and (kit_root / "core" / "skills" / leaf).exists():
-                skills.append(leaf)
-    return Resolved(tuple(skills), frozenset(lineage))
+        part = flavors.expand(layer, cat, kit_root)
+        lineage |= part.lineage
+        skills += [s for s in part.skills if s not in skills]
+    return Resolved(tuple(skills), frozenset(lineage), tuple(notes))
 
 
 # -------------------------------------------------------------------- kit
@@ -328,7 +328,7 @@ def _instructions(repo: Path, kit: Kit, resolved: Resolved, with_rules: bool) ->
 def plan_build(repo: Path, config: Config, kit: Kit, with_rules: bool,
                prior: dict | None = None) -> BuildPlan:
     """What a build would do. Reads the repo and the kit; writes nothing."""
-    resolved = resolve_layers(config.layers, kit.root)
+    resolved = resolve_layers(config.layers, kit.root, repo)
     own = _own_skills(repo)
     base = [s for s in resolved.skills if s not in own]
     names = sorted(set(base) | own)
@@ -361,6 +361,8 @@ def plan_build(repo: Path, config: Config, kit: Kit, with_rules: bool,
             entries.add(rel)
         return True
 
+    for note in resolved.notes:
+        plan.actions.append(Action("warn", flavors.REPO_DIR, note=note))
     for name in plan.shadowed:
         plan.actions.append(Action(
             "warn", f"{AGENTS_SKILLS}/{name}",
@@ -612,12 +614,12 @@ def cmd_init(args) -> int:
     repo = require_repo(args.path)
     layers = list(dict.fromkeys(args.layer or []))
     if not layers:
-        raise DevkitError("no layers given", "pass --layer <profile type>, e.g. --layer core")
+        raise DevkitError("no layers given", "pass --layer <flavor or profile type>, e.g. --layer core")
     kit = read_kit(home)
     for layer in layers:
         if not _NAME.match(layer):
-            raise DevkitError(f"{layer!r} is not a profile type name")
-        manifest.load(layer, kit_root=kit.root)
+            raise DevkitError(f"{layer!r} is not a flavor or profile type name")
+    resolve_layers(layers, kit.root, repo)
     target = repo / CONFIG_REL
     if target.exists() and not getattr(args, "force", False):
         raise DevkitError(f"{CONFIG_REL} already exists in {repo}",
@@ -627,3 +629,37 @@ def cmd_init(args) -> int:
     if plan.apply:
         write_json(target, {"schema": SCHEMA, "layers": layers})
     return plan.report(f"project {repo.name} (init)")
+
+
+def cmd_flavors(args) -> int:
+    """List every valid layer name, or show what one resolves to. Read-only."""
+    home = _home(args)
+    kit = read_kit(home)
+    repo = Path(args.path)
+    cat, notes = flavors.catalog(kit.root, repo if (repo / flavors.REPO_DIR).is_dir() else None)
+    name = getattr(args, "name", None)
+    if name:
+        expanded = flavors.expand(name, cat, kit.root)
+        flavor = cat.get(name)
+        print(f"{name} ({flavor.tier if flavor else 'profile'})")
+        if flavor and flavor.description:
+            print(flavor.description)
+        if flavor and flavor.includes:
+            print(f"includes: {', '.join(flavor.includes)}")
+        print(f"skills ({len(expanded.skills)}):")
+        for skill in expanded.skills:
+            print(f"  {skill}")
+        for note in notes:
+            print(f"warn  {note}")
+        return 0
+
+    rows = [(n, f.tier, f.description) for n, f in sorted(cat.items())]
+    rows += [(n, "profile", "") for n in flavors.profile_types(kit.root) if n not in cat]
+    width = max((len(r[0]) for r in rows), default=4)
+    print(f"{'NAME':<{width}s}  {'TIER':<7s}  SKILLS  DESCRIPTION")
+    for row_name, tier, description in sorted(rows):
+        count = len(flavors.expand(row_name, cat, kit.root).skills)
+        print(f"{row_name:<{width}s}  {tier:<7s}  {count:>6d}  {description}")
+    for note in notes:
+        print(f"warn  {note}")
+    return 0

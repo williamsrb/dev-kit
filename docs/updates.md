@@ -12,22 +12,24 @@ remote, is only the source.
 | `devkit update apply` | **no** (unless `--from` names a git URL) | the kit home and the instances | no |
 
 ```bash
-devkit update check  [--from SRC] [--ref REF]
+devkit update check  [--from SRC] [--ref REF] [--profile NAME]
 devkit update fetch  [--from SRC] [--ref REF]
-devkit update apply  [--from SRC] [--ref REF] --apply
+devkit update apply  [--from SRC] [--ref REF] [--profile NAME] --apply
 ```
 
 ## Choosing the source
 
-`--from SRC` is a local directory or a git URL (`https://`, `ssh://`,
-`git@host:path`, `file://`). Without it devkit uses, in order, the source the
-installed kit recorded, then `upstream` in `devkit.yaml`. If none resolves,
+`--from SRC` is a local directory or a git URL (`https://`, `http://`, `ssh://`,
+`git@host:path`, `file://`). Without it devkit uses the source the installed kit
+recorded, and only when none was recorded `upstream` in `devkit.yaml`. A recorded
+directory that no longer exists is an error; it does not fall through to
+`upstream`. If none resolves,
 `fetch` and `apply` refuse and name `--from`; `check` prints a note and reports
 local state only.
 
 | Source | What is installed | Lineage |
 |--------|-------------------|---------|
-| directory with `.git` | the working tree, payload files only: tracked plus untracked, ignored files out. Marked dirty when it differs from HEAD | the root commit |
+| directory with `.git` | the working tree, payload files only: tracked plus untracked, ignored files out. Marked dirty when it differs from HEAD | the root commit; a shallow clone or a repo with no commit falls back to the declared `lineage_id`, unverified by history |
 | directory without `.git` | the payload files found by walking it | only the `lineage_id` its own `devkit.yaml` declares; `check` and `fetch` say it is unverified by history |
 | git URL | `--ref` (default `HEAD`), cloned and stripped of `.git` | the root commit |
 
@@ -41,9 +43,13 @@ bare `apply` to pick up, but for a git URL it still clones.
 
 ## check
 
-Reports the installed kit and the source, then per instance: the installed
-commit, what is available, whether this installer can apply it, and whether the
-origin matches. For a git URL it asks the remote for the ref (`ls-remote`); for a
+Reports the installed kit and the source on one line, with whether an update is
+available, then one row per instance: INSTANCE, INSTALLED commit, SCHEMA and
+STATE. STATE is a blocker (foreign lineage, fork mismatch, installer too old)
+or else compares the instance with the installed kit's commit, not with the
+source, so a row can read `up to date` while the header line says `update
+available`. With no installed instance it prints `no installed instances found.`
+and stops. For a git URL it asks the remote for the ref (`ls-remote`); for a
 directory it compares the payload digest with the installed release. It also
 lists installs that still link into a checkout, with the command that fixes
 them. It never writes, which makes it safe to run against profiles this
@@ -71,11 +77,13 @@ Offline. It copies the staged payload into a temp directory, renames it into
 instance (after a backup) and appends a history entry recording the `from` and
 `to` commits. A payload identical to `current` installs nothing and reports up
 to date. After a success the releases other than `current` and the previous one
-are pruned.
+are pruned. Staged payloads under `~/.cache/devkit/staged` are not pruned.
 
 The provenance file is never updated before the tree it describes. A failure
 mid-apply flips `current` back to the previous release (when there is one) and
-restores each instance's vendor config directory from its backup, so the
+restores each instance's vendor config directory from its backup (with no
+previous release `current` stays on the new one, because the auth scripts
+already name it; the failed release directory stays in `releases/`), so the
 provenance describes the pre-apply state and the instance is never labelled as
 something it is not. What the re-sync writes outside that directory (the
 profile's `agents/`, `bin/` and `hooks/`, wrappers, launchers, auth dispatchers)
@@ -150,7 +158,8 @@ next commit records it. That is why the kit's first two commits exist.
 
 ## When apply refuses
 
-Every refusal names the fix:
+Most refusals name the fix (`<ref> does not exist in <url>` and a failed `git`
+call do not):
 
 | Refusal | Means | Fix |
 |---------|-------|-----|
@@ -159,6 +168,11 @@ Every refusal names the fix:
 | lineage mismatch | the source is a different kit, not a fork | none — and that is intentional |
 | fork mismatch | the instance belongs to a different fork of your lineage | `devkit profile migrate <name> --to-fork <id>` |
 | installer too old | the instance was installed by a newer devkit | update this kit; there is no override |
+| no installed instances to update | `--profile` matched nothing, or none exist | `devkit profile create <name> --type TYPE --apply` |
+| the staged payload changed after it was staged | the staging cache was modified | `devkit update fetch` again |
+| could not resolve the lineage | the source's history is unavailable | use a full clone |
+| absolute or escaping symlink | the payload has a link that leaves the kit | remove it from the source |
+| not a devkit tree / not a directory | `--from` names something else | pass the directory holding `devkit.py` |
 | foreign lineage | this is a different kit, not a fork | none — and that is intentional |
 
 The schema refusal has no override on purpose. An older installer writing an

@@ -16,14 +16,20 @@ from __future__ import annotations
 import datetime as _dt
 import json
 import shutil
+import sys
 import tempfile
 from pathlib import Path
 
-from . import instances, kithome, kitsource, manifest, privilege
+from . import instances, kithome, kitsource, manifest, migrations, privilege
 from .common import REPO_ROOT, Plan, back_up, relative_to_home, timestamp, write_json
 from .errors import DevkitError
 
 STAGING_ROOT = Path.home() / ".cache" / "devkit" / "staged"
+
+# Declared by a tree that can install itself: it has the hidden `update stage-tree`,
+# `update inspect-tree` and `update apply --staged`. A parent reads this constant
+# from the incoming tree's source before handing off (kitsource.incoming_support).
+HANDOFF_PROTOCOL = 1
 
 
 def _kit() -> dict:
@@ -66,10 +72,27 @@ def _source_state(source: str, ref: str, kit: dict) -> dict:
             return {"commit": result.stdout.split()[0]}
         return {"error": f"could not reach {source}"}
     try:
-        found = kitsource.inspect_directory(Path(source).expanduser(), kit)
+        found = _directory_state(Path(source).expanduser(), kit)
     except DevkitError as exc:
         return {"error": str(exc)}
     found["foreign"] = found["lineage_id"] != kit.get("lineage_id")
+    return found
+
+
+def _directory_state(path: Path, kit: dict) -> dict:
+    """A directory source's state, its payload digest computed by its own code
+    when it can: the installed code's file list would hide an entry it lacks."""
+    found = kitsource.inspect_directory(path, kit, payload=False)
+    result = kithome.run_as_incoming(
+        path, ["update", "inspect-tree", "--tree", str(path)],
+        supported=kitsource.incoming_support(path), what="checking")
+    if result is None:
+        found["payload_digest"] = kitsource.tree_payload(path)["payload_digest"]
+        return found
+    lines = result.stdout.splitlines()
+    if result.returncode != 0 or not lines:
+        raise DevkitError(f"the source tree could not describe itself ({path})")
+    found["payload_digest"] = json.loads(lines[-1])["payload_digest"]
     return found
 
 
@@ -105,16 +128,29 @@ def cmd_check(args) -> int:
     if state:
         head = _bare(state.get("commit"))[:8] or "?"
         line += f", {source} at {head}" + (" (dirty)" if state.get("dirty") else "")
+        offered = _bare(state.get("commit"))
+        same_commit = offered != "unknown" and offered == _bare(
+            stamp.get("commit") or local_head)
         if "payload_digest" in state:
             newer = state["payload_digest"] != stamp.get("payload_digest")
         else:
-            newer = _bare(state.get("commit")) != _bare(stamp.get("commit") or local_head)
-        line += ": update available" if newer else ": up to date"
+            newer = not same_commit
+        if not newer:
+            line += ": up to date"
+        elif "payload_digest" in state and same_commit and state.get("dirty"):
+            line += ": same commit, uncommitted changes in the source"
+        elif "payload_digest" in state and same_commit:
+            line += (": same commit, payload differs (release built by an older "
+                     "devkit, or the source changed)")
+        else:
+            line += ": update available"
         if state.get("foreign"):
             line += " (foreign lineage; fetch will refuse it)"
         elif "lineage_verified" in state and not state["lineage_verified"]:
             line += " (lineage unverified by history)"
     print(line)
+    if state and newer and same_commit and "payload_digest" in state:
+        print(f"    fix: devkit update apply --from {source} --apply")
     print(f"{'INSTANCE':28s} {'INSTALLED':10s} {'SCHEMA':8s} STATE")
 
     for name, vendor, _config_dir, prov in found:
@@ -163,6 +199,21 @@ def cmd_fetch(args) -> int:
     return 0
 
 
+def cmd_stage_tree(args) -> int:
+    """Hidden. Stage a tree with this code; the parent that verified the source
+    passes its facts. The last line printed is the staged path."""
+    staged = kitsource.write_staged(Path(args.tree), Path(args.out), args.stamp,
+                                    json.loads(args.facts))
+    print(staged)
+    return 0
+
+
+def cmd_inspect_tree(args) -> int:
+    """Hidden. Print the payload facts of a tree as this code computes them."""
+    print(json.dumps(kitsource.tree_payload(Path(args.tree))))
+    return 0
+
+
 # ------------------------------------------------------------------ apply
 
 def _latest_staged() -> tuple[Path, dict] | None:
@@ -201,6 +252,21 @@ def _refuse_incompatible(found, kit: dict, marker: dict) -> None:
                 "update this kit first; there is no override for a newer schema")
 
 
+def _hand_off_apply(payload: Path, args) -> int | None:
+    """Let the staged tree install itself. None when no hand-off applies."""
+    argv = ["update", "apply", "--staged", str(payload)]
+    if getattr(args, "profile", None):
+        argv += ["--profile", args.profile]
+    if args.apply:
+        argv.append("--apply")
+    result = kithome.run_as_incoming(
+        payload, argv, supported=kitsource.incoming_support(payload), what="installing")
+    if result is None:
+        return None
+    sys.stdout.write(result.stdout)
+    return result.returncode
+
+
 def _restore(backups: list[tuple[Path, Path]]) -> None:
     for config_dir, backup in backups:
         shutil.rmtree(config_dir, ignore_errors=True)
@@ -221,7 +287,10 @@ def _apply(args, staging_root: Path) -> int:
     home = Path.home()
     kit = _kit()
     from_source, ref = getattr(args, "from_source", None), getattr(args, "ref", None)
-    if from_source or ref:
+    if getattr(args, "staged", None):
+        payload = Path(args.staged)
+        marker = kitsource.read_marker(payload)
+    elif from_source or ref:
         source = kitsource.resolve_source(from_source, home)
         payload = kitsource.stage(source, ref or "HEAD", kit, staging_root, _stamp())
         marker = kitsource.read_marker(payload)
@@ -237,6 +306,10 @@ def _apply(args, staging_root: Path) -> int:
         raise DevkitError("no installed instances to update",
                           "run 'devkit profile create <name> --type TYPE --apply' first")
     _refuse_incompatible(found, kit, marker)
+
+    handed = _hand_off_apply(payload, args)
+    if handed is not None:
+        return handed
 
     files = kithome.payload_files(payload)
     digest = kithome.payload_digest(payload, files)
@@ -260,9 +333,7 @@ def _apply(args, staging_root: Path) -> int:
     if not args.apply:
         return plan.report("update")
 
-    release = kithome.releases_dir(home) / release_id
-    if not release.is_dir():
-        kithome.install_release(payload, home, files, digest, marker)
+    release = kithome.install_checked(payload, home, files, digest, marker)
     kithome.flip_current(home, release)
 
     # The provenance file is never updated before the tree it describes, so
@@ -274,6 +345,7 @@ def _apply(args, staging_root: Path) -> int:
     try:
         from .profiles import materialize
         new_commit = instances.kit_commit(current)
+        refreshed = []
         for name, vendor, config_dir, prov in found:
             backups.append((config_dir, back_up(config_dir)))
             type_name = instances.instance_type(prov, name)
@@ -283,10 +355,17 @@ def _apply(args, staging_root: Path) -> int:
             instances.apply_headless(profile, None, home)
             materialize(profile, [vendor], home, Plan(apply=True), force=True,
                         kit_root=current)
+            refreshed.append((config_dir, prov))
+        # Provenance is written last: a failing migration rolls back before any
+        # file names a state that is about to be undone.
+        ran = migrations.run_needed(home, Plan(apply=True))
+        for config_dir, prov in refreshed:
             updated = instances.read_provenance(config_dir) or prov
-            updated["history"] = [*prov.get("history", []),
-                                  {"from": prov.get("source_commit"),
-                                   "to": new_commit, "at": timestamp()}]
+            entry = {"from": prov.get("source_commit"), "to": new_commit,
+                     "at": timestamp()}
+            if ran:
+                entry["migrations"] = ran
+            updated["history"] = [*prov.get("history", []), entry]
             write_json(config_dir / instances.PROVENANCE_NAME, updated)
     except BaseException:
         _restore(backups)

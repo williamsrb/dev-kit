@@ -48,6 +48,11 @@ def _pin_help_formatter(parser: argparse.ArgumentParser) -> None:
                 _pin_help_formatter(sub)
 
 
+def _listed(action) -> set[str]:
+    """Subcommands registered with help=; one without is hidden on purpose."""
+    return {choice.dest for choice in action._choices_actions}
+
+
 def _cli_reference() -> str:
     from .cli import build_parser
     parser = build_parser()
@@ -65,6 +70,8 @@ def _cli_reference() -> str:
                       if isinstance(getattr(a, "choices", None), dict)]
             for inner in nested:
                 for sub_name, sub_parser in inner.choices.items():
+                    if sub_name not in _listed(inner):
+                        continue
                     lines += [f"#### `devkit {name} {sub_name}`", "", "```",
                               sub_parser.format_help().rstrip(), "```", ""]
     return "\n".join(lines)

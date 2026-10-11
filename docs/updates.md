@@ -55,6 +55,11 @@ lists installs that still link into a checkout, with the command that fixes
 them. It never writes, which makes it safe to run against profiles this
 installer is too old to touch — and safe to put in a cron job or a shell prompt.
 
+When the source has the same commit as the installed release but a different
+payload digest, the first line says `same commit, payload differs (release built
+by an older devkit, or the source changed)` and the next line names the repair,
+`devkit update apply --from <source> --apply`. A dirty source says so instead.
+
 It never fails the machine. It reports blockers instead.
 
 ## fetch
@@ -69,6 +74,35 @@ is rejected rather than half-installed.
 
 A shallow clone has no root commit to resolve. `fetch` unshallows rather than
 accepting an unknown lineage, because "could not verify" is not "verified".
+
+## Who installs: the incoming tree
+
+Any command that installs a tree runs with that tree's own code. An installed
+devkit that decided what ships would drop a payload entry added by the version
+it installs, stamp a digest over the smaller set, and later report a phantom
+update. So when a source tree declares `HANDOFF_PROTOCOL` in
+`devkit_cli/update.py`, the installed devkit resolves the source and checks the
+lineage, then runs that tree's `devkit.py` (`update stage-tree`, `update
+inspect-tree` for a directory `check`, and `update apply --staged`) as a
+subprocess with `DEVKIT_HANDOFF=1`, which stops it handing off again. It prints
+`note: <what> with the incoming tree's own code (<tree>)` first. A tree without
+the constant prints `note: <tree> predates the hand-off; ...` and is handled by
+the installed code, as before. The first upgrade onto a version that has the
+hand-off still runs the old code once. Git sources hand off after the lineage
+check, so the cloned code runs at fetch time.
+
+Every release is verified against its own `PAYLOAD` (the tuple in its
+`kithome.py`) and its stamped digest before `current` flips. A failure removes
+the new release and leaves `current` alone.
+
+## Migrations
+
+`devkit_cli/migrations.py` holds a registry of repairs, each with a `needs`
+predicate over real state. `devkit doctor` lists the ones that are needed with
+their fix command. `update apply` runs them after the flip and records their
+names in the provenance `history` entry (`migrations`); `profile sync` runs them
+after it syncs. `release-payload-complete` reports an installed release that
+fails verification and prints the command that reinstalls it.
 
 ## apply
 
@@ -170,6 +204,7 @@ call do not):
 | installer too old | the instance was installed by a newer devkit | update this kit; there is no override |
 | no installed instances to update | `--profile` matched nothing, or none exist | `devkit profile create <name> --type TYPE --apply` |
 | the staged payload changed after it was staged | the staging cache was modified | `devkit update fetch` again |
+| release ... is incomplete | the release does not match its own `PAYLOAD` or digest; nothing was changed | fix the source tree and apply again |
 | could not resolve the lineage | the source's history is unavailable | use a full clone |
 | absolute or escaping symlink | the payload has a link that leaves the kit | remove it from the source |
 | not a devkit tree / not a directory | `--from` names something else | pass the directory holding `devkit.py` |

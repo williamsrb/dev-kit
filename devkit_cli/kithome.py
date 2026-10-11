@@ -15,15 +15,17 @@ directory. Anything written for later use must name `current_link(home)`.
 
 from __future__ import annotations
 
+import ast
 import datetime as _dt
 import hashlib
 import json
 import os
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
-from .common import EXEC_MODE, FILE_MODE, STAMP_NAME, Plan, ensure_dir
+from .common import EXEC_MODE, FILE_MODE, REPO_ROOT, STAMP_NAME, Plan, ensure_dir
 from .errors import DevkitError
 
 # The runtime allowlist. Bootstrap and install stay checkout-only, docs and
@@ -34,6 +36,9 @@ SKIP_PARTS = frozenset({".git", "__pycache__"})
 RETAIN = 2  # current plus the previous release
 
 STAGED_MARKER = ".devkit-staged.json"
+
+# Set in a child that was handed an install: a process that sees it never hands off.
+HANDOFF_ENV = "DEVKIT_HANDOFF"
 
 
 # ------------------------------------------------------------------ paths
@@ -86,18 +91,20 @@ def _skipped(rel: str) -> bool:
     return any(part in SKIP_PARTS for part in rel.split("/"))
 
 
-def payload_files(src: Path) -> list[str]:
+def payload_files(src: Path, entries: tuple[str, ...] | None = None) -> list[str]:
     """Payload files (and symlinks) under `src`, as sorted posix relative paths.
 
     A checkout reads the working tree through git (tracked plus untracked,
     ignored files out); a tree without `.git` is walked. Either way only the
-    allowlist is considered.
+    allowlist is considered: `PAYLOAD`, or `entries` when a release built by
+    another version is being checked against its own list.
     """
+    entries = entries or PAYLOAD
     found: set[str] = set()
     listed = None
     if (src / ".git").exists():
         result = _git("ls-files", "--cached", "--others", "--exclude-standard",
-                      "-z", "--", *PAYLOAD, cwd=src)
+                      "-z", "--", *entries, cwd=src)
         if result.returncode == 0:
             listed = [p for p in result.stdout.split("\0") if p]
     if listed is not None:
@@ -105,7 +112,7 @@ def payload_files(src: Path) -> list[str]:
         found = {rel for rel in listed
                  if os.path.lexists(src / rel) and not _skipped(rel)}
     else:
-        for name in PAYLOAD:
+        for name in entries:
             top = src / name
             if top.is_symlink() or top.is_file():
                 found.add(name)
@@ -221,7 +228,8 @@ def install_release(src: Path, home: Path, files: list[str], digest: str,
         stamp = {"release_id": release_id, "commit": meta.get("commit") or "unknown",
                  "dirty": bool(meta.get("dirty")), "lineage_id": meta.get("lineage_id"),
                  "fork_id": meta.get("fork_id"), "source": meta.get("source"),
-                 "installed_at": _now(), "payload_digest": digest}
+                 "installed_at": _now(), "payload_digest": digest,
+                 "payload_entries": list(PAYLOAD)}
         (temp / STAMP_NAME).write_text(json.dumps(stamp, indent=2) + "\n",
                                        encoding="utf-8")
         (temp / STAMP_NAME).chmod(FILE_MODE)
@@ -233,6 +241,92 @@ def install_release(src: Path, home: Path, files: list[str], digest: str,
         shutil.rmtree(temp, ignore_errors=True)
         raise
     return final
+
+
+def literal_from(source_file: Path, name: str):
+    """A module-level literal from a Python file, read with `ast`: the file is
+    never imported or run. None when the file or the assignment is missing, or
+    the value is not a literal."""
+    try:
+        tree = ast.parse(source_file.read_text(encoding="utf-8"))
+    except (OSError, SyntaxError, ValueError):
+        return None
+    for node in tree.body:
+        if isinstance(node, ast.Assign) and any(
+                isinstance(t, ast.Name) and t.id == name for t in node.targets):
+            try:
+                return ast.literal_eval(node.value)
+            except ValueError:
+                return None
+    return None
+
+
+def verify_release(release: Path) -> list[str]:
+    """Problems with a release, judged by facts the release itself carries.
+
+    "Its own PAYLOAD" is the tuple in the release's `kithome.py`, not the running
+    module's, which is the checkout's when doctor runs from one.
+    """
+    entries = literal_from(release / "devkit_cli" / "kithome.py", "PAYLOAD")
+    if not isinstance(entries, tuple) or not all(isinstance(e, str) for e in entries):
+        return ["the release's own PAYLOAD could not be read from devkit_cli/kithome.py"]
+    problems = []
+    missing = [name for name in entries if not os.path.lexists(release / name)]
+    if missing:
+        problems.append(f"missing from the release: {', '.join(missing)}")
+    stamp = read_stamp(release) or {}
+    expected = stamp.get("payload_digest")
+    if expected and payload_digest(release, payload_files(release, entries)) != expected:
+        problems.append("the stamped payload digest does not match the release's files")
+    if "payload_entries" in stamp and tuple(stamp["payload_entries"]) != entries:
+        problems.append("the stamp's payload_entries differ from the release's own PAYLOAD")
+    return problems
+
+
+def install_checked(src: Path, home: Path, files: list[str], digest: str,
+                    meta: dict) -> Path:
+    """`install_release`, then `verify_release`, before anything can flip to it.
+
+    A release this call built and then rejected is removed; one that already
+    existed is left alone. Raises with the problems and the flip never happens.
+    """
+    release = releases_dir(home) / digest[:12]
+    built = not release.is_dir()
+    if built:
+        install_release(src, home, files, digest, meta)
+    problems = verify_release(release)
+    if problems:
+        if built:
+            shutil.rmtree(release, ignore_errors=True)
+        raise DevkitError(f"release {release.name} is incomplete: " + "; ".join(problems),
+                          "nothing was changed; fix the source tree and run it again")
+    return release
+
+
+def run_as_incoming(tree: Path, argv: list[str], *, supported: bool,
+                    what: str) -> subprocess.CompletedProcess | None:
+    """Run `devkit.py <argv>` of `tree` so the incoming code decides what it installs.
+
+    None when no hand-off applies: the guard is set, `tree` is the running tree,
+    or it predates the hand-off (`supported` False, said in a note). stdout is
+    returned for the caller to forward or parse; stderr goes straight through.
+    """
+    if os.environ.get(HANDOFF_ENV) or tree.resolve() == REPO_ROOT:
+        return None
+    if not supported:
+        print(f"note: {tree} predates the hand-off; {what} with the installed "
+              f"devkit's code")
+        return None
+    print(f"note: {what} with the incoming tree's own code ({tree})")
+    # No bytecode: running the tree must not leave __pycache__ in a source checkout.
+    env = {**os.environ, HANDOFF_ENV: "1", "PYTHONDONTWRITEBYTECODE": "1"}
+    try:
+        result = subprocess.run([sys.executable, str(tree / "devkit.py"), *argv],
+                                env=env, stdout=subprocess.PIPE, text=True, check=False)
+    except OSError as exc:
+        raise DevkitError(f"could not start the incoming tree's devkit.py: {exc}",
+                          "run it directly from that tree")
+    return result
 
 
 def flip_current(home: Path, release: Path) -> None:
@@ -305,8 +399,7 @@ def ensure_installed(src: Path, home: Path, plan: Plan,
         plan.record(f"kit    point current at release {digest[:12]}")
     if not plan.apply:
         return src
-    if not release.is_dir():
-        install_release(src, home, files, digest, meta or describe_tree(src))
+    install_checked(src, home, files, digest, meta or describe_tree(src))
     flip_current(home, release)
     prune(home)
     return current

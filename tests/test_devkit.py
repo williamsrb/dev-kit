@@ -37,6 +37,7 @@ from devkit_cli import (
     kithome,
     kitsource,
     manifest,
+    migrations,
     paths,
     privilege,
     profiles,
@@ -1160,6 +1161,9 @@ class UpdateApplyTests(unittest.TestCase):
     """
 
     MARKER = "# staged-payload marker\n"
+    # What the fabricated payload below holds, and declares as its own PAYLOAD.
+    PARTIAL = ("core", "templates", "profiles", "devkit.yaml", "export-allowlist.json",
+               "devkit_cli")
 
     def _stage(self, root: Path, commit: str) -> Path:
         payload = root / commit
@@ -1178,6 +1182,7 @@ class UpdateApplyTests(unittest.TestCase):
             shutil.copy2(catalog, mcp_dir / "catalog.json")
         wrapper = payload / "templates" / "shell" / "claude.sh"
         wrapper.write_text(wrapper.read_text() + self.MARKER, encoding="utf-8")
+        _put(payload, "devkit_cli/kithome.py", f"PAYLOAD = {self.PARTIAL!r}\n")
         (payload / ".devkit-staged.json").write_text(json.dumps({
             "commit": commit,
             "lineage_id": _kit_lineage(),
@@ -1200,7 +1205,8 @@ class UpdateApplyTests(unittest.TestCase):
             Path.home = staticmethod(lambda: home)
             privilege.refuse_root = lambda *_a, **_kw: None
             try:
-                with redirect_stdout(io.StringIO()):
+                with redirect_stdout(io.StringIO()), \
+                        mock.patch.object(kithome, "PAYLOAD", self.PARTIAL):
                     rc = update.cmd_apply(argparse.Namespace(profile="core", apply=True))
             finally:
                 update.STAGING_ROOT, Path.home = staging, home_fn
@@ -2644,6 +2650,9 @@ def _mini_kit(root: Path, lineage: str = LINEAGE, skill: str = "one\n") -> Path:
                       ("export-allowlist.json", 0o644), ("path-contract.json", 0o644)):
         _put(root, rel, "#!/usr/bin/env python3\n" if mode == 0o755 else "{}\n", mode)
     _put(root, "core/skills/s/SKILL.md", skill)
+    # A release is verified against the PAYLOAD its own kithome.py declares.
+    _put(root, "devkit_cli/kithome.py", f"PAYLOAD = {kithome.PAYLOAD!r}\n")
+    _put(root, "flavors/f.json", "{}\n")
     _put(root, "devkit.yaml", f"lineage_id: {lineage}\nfork_id: t\nupstream: null\n")
     (root / "core/bin/agentctl").symlink_to("agentctl.py")
     for noise in ("docs/a.md", "tests/t.py", "scripts/s.sh", "bootstrap.sh", "install.py",
@@ -2964,7 +2973,10 @@ class _HomePatched(unittest.TestCase):
         for patcher in (
                 mock.patch.dict(os.environ, {"HOME": str(self.home),
                                              "XDG_CONFIG_HOME": str(self.home / ".config"),
-                                             "XDG_DATA_HOME": ""}),
+                                             "XDG_DATA_HOME": "",
+                                             # In-process tests patch this process; a
+                                             # hand-off child would not see the patches.
+                                             kithome.HANDOFF_ENV: "1"}),
                 mock.patch.object(Path, "home", staticmethod(lambda: self.home)),
                 mock.patch.object(update, "STAGING_ROOT", self.tmp / "staged"),
                 mock.patch.object(privilege, "refuse_root", lambda *_a, **_k: None)):
@@ -3218,6 +3230,250 @@ class StandaloneUpgradeTests(_HomePatched):
         self.assertEqual(stamp["source"], f"file://{remote}")
         self.assertEqual(stamp["commit"], _git(remote, "rev-parse", "HEAD"))
         self.assertFalse(stamp["dirty"])
+
+
+class SelfHealingUpgradeTests(_HomePatched):
+    """'An upgrade is installed by the incoming code; a bad release is caught and repaired.'"""
+
+    def setUp(self):
+        super().setUp()
+        self._install()
+        self.first = kithome.current_release(self.home)
+        self.skill = self._core_skill(self.checkout).name
+        self.old_payload = tuple(e for e in kithome.PAYLOAD if e != "flavors")
+
+    def _variant(self, name: str, text: str, *, handoff: bool = True) -> Path:
+        copy = self.tmp / name
+        kithome.copy_payload(self.checkout, copy, kithome.payload_files(self.checkout))
+        _put(copy, f"core/skills/{self.skill}/SKILL.md", text)
+        if not handoff:
+            update_py = copy / "devkit_cli" / "update.py"
+            update_py.write_text(update_py.read_text().replace(
+                "HANDOFF_PROTOCOL = 1", "_NO_HANDOFF = 1"))
+        return copy
+
+    def _hand_off_enabled(self):
+        patcher = mock.patch.dict(os.environ)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        os.environ.pop(kithome.HANDOFF_ENV, None)
+
+    def _old_installer(self):
+        """The running code behaves like a version whose PAYLOAD lacks `flavors`."""
+        patcher = mock.patch.object(kithome, "PAYLOAD", self.old_payload)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def _build_old_release(self) -> Path:
+        """An installed release made by an installer that did not know `flavors`."""
+        with mock.patch.object(kithome, "PAYLOAD", self.old_payload):
+            files = kithome.payload_files(self.checkout)
+            digest = kithome.payload_digest(self.checkout, files)
+            release = kithome.install_release(
+                self.checkout, self.home, files, digest, {"source": str(self.checkout)})
+        kithome.flip_current(self.home, release)
+        return release
+
+    def _doctor(self) -> tuple[int, str]:
+        out = io.StringIO()
+        with redirect_stdout(out):
+            rc = profiles.cmd_doctor(argparse.Namespace(profile=None))
+        return rc, out.getvalue()
+
+    def _check(self, source: Path) -> str:
+        out = io.StringIO()
+        with redirect_stdout(out):
+            update.cmd_check(argparse.Namespace(
+                profile=None, from_source=str(source), ref=None))
+        return out.getvalue()
+
+    def _names(self, needle: Path) -> list[str]:
+        found = [path for path, target in self._projections().items()
+                 if str(needle) in target]
+        for root, _dirs, files in os.walk(self.home):
+            for name in files:
+                path = Path(root) / name
+                if not path.is_symlink() and str(needle).encode() in path.read_bytes():
+                    found.append(str(path))
+        return found
+
+    def test_payload_mismatch_is_detected(self):
+        release = self._build_old_release()
+        self.assertFalse((release / "flavors").exists())
+        self.assertIn("flavors", " ".join(kithome.verify_release(release)))
+        rc, out = self._doctor()
+        self.assertEqual(rc, 1)
+        self.assertIn("migration release-payload-complete", out)
+        self.assertIn("flavors", out)
+        # Same commit, different digest: an honest message with the repair command.
+        stamp = json.loads((release / ".devkit-install.json").read_text())
+        stamp["commit"] = "c" * 40
+        (release / ".devkit-install.json").write_text(json.dumps(stamp))
+        with mock.patch.object(update.instances, "kit_commit", return_value="c" * 40), \
+                mock.patch.object(kitsource, "inspect_directory", return_value={
+                    "commit": "c" * 40, "dirty": False, "lineage_id": LINEAGE,
+                    "lineage_verified": True, "fork_id": "t"}):
+            text = self._check(self.checkout)
+        self.assertIn("same commit, payload differs", text)
+        self.assertIn(f"fix: devkit update apply --from {self.checkout} --apply", text)
+        self.assertNotIn(": update available", text)
+
+    def test_the_stamp_records_the_installers_payload(self):
+        stamp = kithome.read_stamp(self.first)
+        self.assertEqual(stamp["payload_entries"], list(kithome.PAYLOAD))
+
+    def test_handoff_ships_entries_the_installer_lacks(self):
+        self._hand_off_enabled()
+        source = self._variant("second", "second release\n")
+        self._old_installer()
+        rc, out = self._apply(source)
+        self.assertEqual(rc, 0, out)
+        self.assertIn("installing with the incoming tree's own code", out)
+        current = kithome.current_release(self.home)
+        self.assertNotEqual(current, self.first)
+        self.assertTrue(current.is_relative_to(kithome.kit_home(self.home)))
+        self.assertTrue((current / "flavors").is_dir(), "the incoming PAYLOAD decides")
+        self.assertEqual(kithome.verify_release(current), [])
+        self.assertEqual(self._names(self.tmp / "staged"), [])
+        # The child ran from the staging dir, so its REPO_ROOT was there: nothing
+        # it wrote may name that dir.
+        staging = str(self.tmp / "staged")
+        leaked = [p for p in self.home.rglob("*")
+                  if (p.is_symlink() and staging in os.readlink(p))
+                  or (p.is_file() and not p.is_symlink()
+                      and staging.encode() in p.read_bytes())]
+        self.assertEqual(leaked, [])
+
+    def test_handoff_check_sees_an_entry_the_installer_lacks(self):
+        self._hand_off_enabled()
+        source = self._variant("s2", "x\n")
+        with mock.patch.object(kithome, "PAYLOAD", self.old_payload):
+            lines = self._check(source).splitlines()
+        self.assertIn("checking with the incoming tree's own code", lines[0])
+        self.assertIn(": update available", lines[1])
+
+    def test_handoff_git_source(self):
+        self._hand_off_enabled()
+        self._old_installer()
+        remote = self.tmp / "remote-src"
+        shutil.copytree(self.checkout, remote, symlinks=True)
+        _put(remote, f"core/skills/{self.skill}/SKILL.md", "from the remote\n")
+        _git(remote, "init", "-q", "-b", "main")
+        _git(remote, "add", "-A")
+        _git(remote, "commit", "-q", "-m", "root")
+        root = _git(remote, "rev-parse", "HEAD")
+        yaml = remote / "devkit.yaml"
+        yaml.write_text(re.sub(r"lineage_id: \w+", f"lineage_id: {root}", yaml.read_text()))
+        _git(remote, "commit", "-q", "-am", "record lineage")
+        path = self.home / ".agents-profiles/core/claude" / instances.PROVENANCE_NAME
+        prov = json.loads(path.read_text())
+        prov["lineage_id"] = root
+        path.write_text(json.dumps(prov))
+        kit = {**profiles._kit_metadata(), "lineage_id": root}
+        with mock.patch.object(update, "_kit", return_value=kit):
+            rc, out = self._apply(f"file://{remote}")
+        self.assertEqual(rc, 0, out)
+        current = kithome.current_release(self.home)
+        self.assertTrue((current / "flavors").is_dir())
+        stamp = kithome.read_stamp(current)
+        self.assertEqual(stamp["source"], f"file://{remote}", "the URL, not the clone")
+        self.assertEqual(stamp["commit"], _git(remote, "rev-parse", "HEAD"))
+        self.assertEqual(self._names(self.tmp / "staged"), [])
+
+    def test_handoff_loop_guard_and_fallback(self):
+        source = self._variant("guarded", "guarded\n")
+        # The guard is set: no hand-off, so the installed code decides, ships
+        # no flavors, and verification refuses the release before the flip.
+        with mock.patch.object(kithome, "PAYLOAD", self.old_payload), \
+                self.assertRaises(DevkitError) as caught:
+            self._apply(source)
+        self.assertIn("flavors", str(caught.exception))
+        self.assertEqual(kithome.current_release(self.home), self.first)
+
+        self._hand_off_enabled()
+        old_tree = self._variant("predates", "predates\n", handoff=False)
+        real = kithome.run_as_incoming
+        started = []
+
+        def spy(*args, **kwargs):
+            started.append(real(*args, **kwargs))
+            return started[-1]
+        with mock.patch.object(kithome, "run_as_incoming", spy):
+            rc, out = self._apply(old_tree)
+        self.assertEqual(rc, 0, out)
+        self.assertIn("predates the hand-off", out)
+        self.assertTrue(started)
+        self.assertEqual(started, [None] * len(started), "no child process was started")
+
+    def test_verify_release_rejects_before_flip(self):
+        source = self._variant("broken", "broken\n")
+        real = kithome.install_release
+
+        def corrupt(*args, **kwargs):
+            release = real(*args, **kwargs)
+            (release / "templates").is_dir() and shutil.rmtree(release / "templates")
+            return release
+        with mock.patch.object(kithome, "install_release", corrupt), \
+                self.assertRaises(DevkitError) as caught:
+            self._apply(source)
+        self.assertIn("templates", str(caught.exception))
+        self.assertEqual(kithome.current_release(self.home), self.first)
+        self.assertEqual(len(list(kithome.releases_dir(self.home).iterdir())), 1)
+
+    def test_migration_repairs_incomplete_release(self):
+        release = self._build_old_release()
+        rc, out = self._doctor()
+        self.assertEqual(rc, 1)
+        self.assertIn("release-payload-complete", out)
+        self.assertIn(f"fix: devkit update apply --from {self.checkout} --apply", out)
+        rc, out = self._apply(self.checkout)
+        self.assertEqual(rc, 0, out)
+        self.assertNotEqual(kithome.current_release(self.home), release)
+        rc, out = self._doctor()
+        self.assertNotIn("release-payload-complete", out)
+
+        # The recorded source is gone: report the sync command, write nothing.
+        release = self._build_old_release()
+        stamp = json.loads((release / ".devkit-install.json").read_text())
+        stamp["source"] = str(self.tmp / "gone")
+        (release / ".devkit-install.json").write_text(json.dumps(stamp))
+        _rc, out = self._doctor()
+        self.assertIn("devkit profile sync core --apply", out)
+        migration = migrations.REGISTRY[0]
+        before = self._projections()
+        migration.run(self.home, Plan(True))
+        self.assertEqual(self._projections(), before)
+
+    def test_apply_runs_and_records_needed_migrations(self):
+        marker = self.home / "migrated"
+        ran = migrations.Migration(
+            "test-marker", lambda home: [] if marker.exists() else ["no marker"],
+            lambda home, plan: marker.write_text("done"), lambda home: "touch it")
+        with mock.patch.object(migrations, "REGISTRY", [ran]):
+            rc, out = self._apply(self._variant("second", "second\n"))
+        self.assertEqual(rc, 0, out)
+        self.assertTrue(marker.exists())
+        prov = instances.read_provenance(self.home / ".agents-profiles/core/claude")
+        self.assertEqual(prov["history"][-1]["migrations"], ["test-marker"])
+
+        def boom(home, plan):
+            raise RuntimeError("no")
+        before = instances.read_provenance(self.home / ".agents-profiles/core/claude")
+        current = kithome.current_release(self.home)
+        failing = migrations.Migration("boom", lambda home: ["always"], boom, lambda h: "")
+        with mock.patch.object(migrations, "REGISTRY", [failing]), \
+                self.assertRaises(DevkitError):
+            self._apply(self._variant("third", "third\n"))
+        self.assertEqual(kithome.current_release(self.home), current)
+        self.assertEqual(
+            instances.read_provenance(self.home / ".agents-profiles/core/claude"), before)
+
+    def test_hidden_commands_stay_out_of_help(self):
+        for argv in (["--help"], ["update", "--help"], ["update", "apply", "--help"]):
+            result = subprocess.run([sys.executable, str(REPO / "devkit.py"), *argv],
+                                    capture_output=True, text=True, check=False)
+            for hidden in ("stage-tree", "inspect-tree", "--staged"):
+                self.assertNotIn(hidden, result.stdout)
 
 
 class UninstallKitHomeTests(unittest.TestCase):
@@ -3545,7 +3801,8 @@ class HeadlessTests(unittest.TestCase):
             update.STAGING_ROOT = Path(tmp) / "staged"
             Path.home = staticmethod(lambda: home)
             try:
-                with self._user(home), redirect_stdout(io.StringIO()):
+                with self._user(home), redirect_stdout(io.StringIO()), \
+                        mock.patch.object(kithome, "PAYLOAD", UpdateApplyTests.PARTIAL):
                     rc = update.cmd_apply(argparse.Namespace(profile="core", apply=True))
             finally:
                 update.STAGING_ROOT, Path.home = staging, home_fn

@@ -81,11 +81,12 @@ def clone_lineage(work: Path, commit: str) -> str | None:
 
 # ------------------------------------------------------------- directories
 
-def inspect_directory(path: Path, kit: dict) -> dict:
+def inspect_directory(path: Path, kit: dict, *, payload: bool = True) -> dict:
     """What a local directory would install, and whether its lineage holds.
 
-    Returns commit, dirty, payload_digest, lineage_id, lineage_verified (True
-    when it came from git history) and files. Nothing is written.
+    Returns commit, dirty, lineage_id, lineage_verified (True when it came from
+    git history) and, unless `payload` is False, files and payload_digest as the
+    running code computes them. Nothing is written.
     """
     from .profiles import _kit_metadata
 
@@ -95,7 +96,6 @@ def inspect_directory(path: Path, kit: dict) -> dict:
     if not (path / "devkit.py").is_file() or not (path / "devkit_cli").is_dir():
         raise DevkitError(f"{path} is not a devkit tree (no devkit.py or devkit_cli/)",
                           "pass --from <the directory holding devkit.py>")
-    files = kithome.payload_files(path)
     declared = _kit_metadata(path).get("lineage_id")
     lineage, verified = declared, False
     commit, dirty = "unknown", False
@@ -103,29 +103,71 @@ def inspect_directory(path: Path, kit: dict) -> dict:
         commit, dirty = kithome.tree_commit(path)
         if commit != "unknown" and not _is_shallow(path):
             lineage, verified = root_commit(path, commit), True
-    return {"commit": commit, "dirty": dirty, "lineage_id": lineage,
-            "lineage_verified": verified, "files": files,
-            "payload_digest": kithome.payload_digest(path, files),
-            "fork_id": _kit_metadata(path).get("fork_id")}
+    found = {"commit": commit, "dirty": dirty, "lineage_id": lineage,
+             "lineage_verified": verified,
+             "fork_id": _kit_metadata(path).get("fork_id")}
+    if payload:
+        found["files"] = kithome.payload_files(path)
+        found["payload_digest"] = kithome.payload_digest(path, found["files"])
+    return found
+
+
+def tree_payload(tree: Path) -> dict:
+    """The payload facts of `tree`, as the code running now computes them."""
+    files = kithome.payload_files(tree)
+    return {"files": len(files), "payload_digest": kithome.payload_digest(tree, files)}
+
+
+def write_staged(tree: Path, staging_root: Path, stamp: str, facts: dict) -> Path:
+    """Copy the payload of `tree` into the staging cache and write the marker.
+
+    `facts` are what the caller verified (commit, lineage, source ...); the
+    payload list and digest are computed here, by whichever version of the code
+    runs this. `staged_name` names the directory; the default is the digest.
+    """
+    files = kithome.payload_files(tree)
+    digest = kithome.payload_digest(tree, files)
+    kithome.check_links(tree, files)
+    staged = staging_root / (facts.get("staged_name") or f"dir-{digest[:12]}")
+    shutil.rmtree(staged, ignore_errors=True)
+    kithome.copy_payload(tree, staged, files)
+    marker = {key: value for key, value in facts.items() if key != "staged_name"}
+    write_json(staged / kithome.STAGED_MARKER,
+               {**marker, "payload_digest": digest, "fetched_at": stamp})
+    return staged
+
+
+def incoming_support(tree: Path) -> bool:
+    """Whether `tree` declares the hand-off protocol, read from its source."""
+    value = kithome.literal_from(tree / "devkit_cli" / "update.py", "HANDOFF_PROTOCOL")
+    return isinstance(value, int) and value >= 1
+
+
+def stage_as_incoming(tree: Path, staging_root: Path, stamp: str,
+                      facts: dict) -> Path:
+    """Stage `tree` with its own code when it supports that, else with this code."""
+    result = kithome.run_as_incoming(
+        tree, ["update", "stage-tree", "--tree", str(tree), "--out", str(staging_root),
+               "--stamp", stamp, "--facts", json.dumps(facts)],
+        supported=incoming_support(tree), what="staging")
+    if result is None:
+        return write_staged(tree, staging_root, stamp, facts)
+    lines = result.stdout.splitlines()
+    if result.returncode != 0 or not lines:
+        raise DevkitError(f"the incoming tree could not stage itself ({tree})",
+                          "the error above comes from that tree's own devkit")
+    for line in lines[:-1]:
+        print(line)
+    return Path(lines[-1])
 
 
 def stage_directory(path: Path, kit: dict, staging_root: Path, stamp: str) -> Path:
-    found = inspect_directory(path, kit)
+    found = inspect_directory(path, kit, payload=False)
     refuse_foreign(found["lineage_id"], kit, f"{path}")
     if not found["lineage_verified"]:
         print(f"note: {path} has no usable git history; its lineage is the one its own "
               f"devkit.yaml declares (unverified by history)")
-    kithome.check_links(path, found["files"])
-    staged = staging_root / f"dir-{found['payload_digest'][:12]}"
-    shutil.rmtree(staged, ignore_errors=True)
-    kithome.copy_payload(path, staged, found["files"])
-    write_json(staged / kithome.STAGED_MARKER, {
-        "commit": found["commit"], "dirty": found["dirty"],
-        "lineage_id": found["lineage_id"], "fork_id": found["fork_id"],
-        "lineage_verified": found["lineage_verified"],
-        "source": str(path.resolve()), "payload_digest": found["payload_digest"],
-        "fetched_at": stamp})
-    return staged
+    return stage_as_incoming(path, staging_root, stamp, {**found, "source": str(path.resolve())})
 
 
 # --------------------------------------------------------------------- git
@@ -157,20 +199,12 @@ def stage_git(url: str, ref: str, kit: dict, staging_root: Path, stamp: str) -> 
         lineage = clone_lineage(work, commit)
         refuse_foreign(lineage, kit, f"the fetched {url}")
         shutil.rmtree(work / ".git", ignore_errors=True)
-        files = kithome.payload_files(work)
-        digest = kithome.payload_digest(work, files)
-        kithome.check_links(work, files)
-        staged = staging_root / commit
-        shutil.rmtree(staged, ignore_errors=True)
-        kithome.copy_payload(work, staged, files)
+        return stage_as_incoming(work, staging_root, stamp, {
+            "commit": commit, "dirty": False, "lineage_id": lineage,
+            "fork_id": _kit_metadata(work).get("fork_id"), "lineage_verified": True,
+            "source": url, "upstream": url, "staged_name": commit})
     finally:
         shutil.rmtree(work, ignore_errors=True)
-    write_json(staged / kithome.STAGED_MARKER, {
-        "commit": commit, "dirty": False, "lineage_id": lineage,
-        "fork_id": _kit_metadata(staged).get("fork_id"), "lineage_verified": True,
-        "source": url, "upstream": url, "payload_digest": digest,
-        "fetched_at": stamp})
-    return staged
 
 
 def stage(source: str, ref: str, kit: dict, staging_root: Path, stamp: str) -> Path:

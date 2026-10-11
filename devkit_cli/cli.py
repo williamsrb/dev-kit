@@ -418,7 +418,20 @@ def build_parser() -> argparse.ArgumentParser:
     u_apply.add_argument("--profile", metavar="NAME")
     source_options(u_apply)
     u_apply.add_argument("--apply", action="store_true", help="Write. Default: dry run.")
+    u_apply.add_argument("--staged", metavar="DIR", help=argparse.SUPPRESS)
     u_apply.set_defaults(func=update.cmd_apply)
+
+    # Hidden: run by a parent devkit that hands the install to the incoming tree.
+    # No help= keeps the subparser out of the command list.
+    u_stage = upd.add_parser("stage-tree")
+    u_stage.add_argument("--tree", required=True)
+    u_stage.add_argument("--out", required=True)
+    u_stage.add_argument("--stamp", required=True)
+    u_stage.add_argument("--facts", required=True)
+    u_stage.set_defaults(func=update.cmd_stage_tree)
+    u_inspect = upd.add_parser("inspect-tree")
+    u_inspect.add_argument("--tree", required=True)
+    u_inspect.set_defaults(func=update.cmd_inspect_tree)
 
     # -- origin -------------------------------------------------------------
     origin = group("origin", "Inspect and adopt the kit this instance came from.")

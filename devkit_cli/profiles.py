@@ -22,6 +22,7 @@ from . import (
     kithome,
     manifest,
     mcp,
+    migrations,
     privilege,
     uninstaller,
 )
@@ -749,6 +750,8 @@ def cmd_sync(args) -> int:
     uninstaller.ensure(home, plan)
     globalignore.ensure(home, plan)
     cli_link.ensure(home, plan)
+    if plan.apply:
+        migrations.run_needed(home, plan)
     result = plan.report(f"profile {args.name} (sync)")
     if plan.apply:
         finish_appforks(home, profile, user.pw_name)
@@ -902,6 +905,10 @@ def cmd_doctor(args) -> int:
                 f"{relative_to_home(undo)}: missing — {len(installed)} profile(s) "
                 f"are installed and nothing on PATH removes them\n"
                 f"    fix: devkit profile sync {installed[0]} --apply")
+
+    for migration, reasons in migrations.needs_list(home):
+        problems.append(f"migration {migration.name}: {'; '.join(reasons)}\n"
+                        f"    fix: {migration.fix(home)}")
 
     problems += _home_root_problems(home)
     headless_only = instances.env_headless() or (checked > 0 and not desktop_seen)

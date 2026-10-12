@@ -348,6 +348,13 @@ that pin the same env. PATH alone is not enough: `agentctl` reads `AGENTS_HOME`
 profiles' skills, plans, or Playwright instances. The desktop launcher binds
 the same env before exec so the GUI and its integrated terminals inherit it.
 
+Profile launchers and the auth dispatcher also set `XDG_CURRENT_DESKTOP` with
+`GNOME` appended, for example `XFCE:GNOME`. Claude Desktop draws its white
+tray glyph only when that list names GNOME or its own theme is dark, so
+without it a light GTK theme on a dark panel shows a black glyph. A blank
+value falls back to `XDG_SESSION_DESKTOP`, then `DESKTOP_SESSION`. Stock
+vendor launchers are not touched.
+
 ## URL-redirect auth
 
 Linux allows one default handler per URL scheme (`claude://`, `claude-cli://`,

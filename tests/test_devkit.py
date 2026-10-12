@@ -1482,6 +1482,34 @@ class ProfileCliPathTests(unittest.TestCase):
                         os.environ[key] = value
 
 
+class TrayDesktopTests(unittest.TestCase):
+    """'devkit should detect and add the ":GNOME"; empty values too.'"""
+
+    def test_appends_gnome_to_the_current_desktop(self):
+        self.assertEqual(auth.tray_desktop({"XDG_CURRENT_DESKTOP": "XFCE"}), "XFCE:GNOME")
+
+    def test_blank_value_falls_back_to_the_session(self):
+        self.assertEqual(auth.tray_desktop({"XDG_CURRENT_DESKTOP": "",
+                                            "XDG_SESSION_DESKTOP": "xfce"}), "XFCE:GNOME")
+        self.assertEqual(auth.tray_desktop({"DESKTOP_SESSION": "xfce"}), "XFCE:GNOME")
+        self.assertEqual(auth.tray_desktop({}), "GNOME")
+
+    def test_gnome_is_not_added_twice(self):
+        self.assertEqual(auth.tray_desktop({"XDG_CURRENT_DESKTOP": "ubuntu:GNOME"}),
+                         "ubuntu:GNOME")
+
+    def test_launch_sets_tray_desktop(self):
+        with tempfile.TemporaryDirectory() as tmp, \
+                mock.patch.dict(os.environ, {"XDG_CURRENT_DESKTOP": "",
+                                             "XDG_SESSION_DESKTOP": "xfce"}), \
+                mock.patch.object(Path, "home", return_value=Path(tmp)), \
+                mock.patch.object(auth.os, "execvp") as execvp:
+            auth._launch(["--vendor", "claude", "--profile", "dummy", "--",
+                          "claude-desktop", "x"])
+            self.assertEqual(os.environ["XDG_CURRENT_DESKTOP"], "XFCE:GNOME")
+            execvp.assert_called_once_with("claude-desktop", ["claude-desktop", "x"])
+
+
 class AuthDispatcherTests(unittest.TestCase):
     def test_dry_run_creates_nothing_in_the_home(self):
         """'Every one of these is a dry run without --apply.'"""

@@ -12,6 +12,7 @@ import json
 import os
 import subprocess
 import sys
+from collections.abc import Mapping
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from urllib.parse import urlparse
@@ -375,6 +376,21 @@ def bind_profile_env(home: Path, profile: str) -> None:
     os.environ["PATH"] = prefix + (os.pathsep + current if current else "")
 
 
+def tray_desktop(environ: Mapping[str, str]) -> str:
+    """XDG_CURRENT_DESKTOP with GNOME appended.
+
+    Claude Desktop draws its white tray glyph only when this list names GNOME
+    or its own theme is dark, so a light GTK theme on a dark panel gets a black
+    glyph. The real desktop stays first; a blank value falls back to the session.
+    """
+    current = environ.get("XDG_CURRENT_DESKTOP") or (
+        environ.get("XDG_SESSION_DESKTOP") or environ.get("DESKTOP_SESSION") or "").upper()
+    names = [name for name in current.split(":") if name]
+    if "GNOME" not in (name.upper() for name in names):
+        names.append("GNOME")
+    return ":".join(names)
+
+
 def _launch(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(prog="devkit-auth-launch")
     parser.add_argument("--vendor", required=True)
@@ -390,6 +406,7 @@ def _launch(argv: list[str]) -> int:
     home = Path.home()
     write_pending(home, args.profile, args.vendor)
     bind_profile_env(home, args.profile)
+    os.environ["XDG_CURRENT_DESKTOP"] = tray_desktop(os.environ)
     os.execvp(command[0], command)
     return 1
 
@@ -405,6 +422,7 @@ def _dispatch(argv: list[str]) -> int:
         command = launch_argv(name, vendor, home, url)
         clear_pending(home)
         bind_profile_env(home, name)
+        os.environ["XDG_CURRENT_DESKTOP"] = tray_desktop(os.environ)
         os.execvp(command[0], command)
     except DevkitError as exc:
         print(f"error: {exc}", file=sys.stderr)

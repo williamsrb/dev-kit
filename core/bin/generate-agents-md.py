@@ -59,7 +59,7 @@ def mdc_body(path: Path) -> str:
     sample is not mistaken for a heading.
     """
     text = read_body_file(path)
-    front = re.match(r"^---\n.*?\n---\n", text, re.S)
+    front = re.match(r"^---\n.*?\n---\n", text, re.DOTALL)
     if front:
         text = text[front.end():].strip()
     lines = text.split("\n")
@@ -89,7 +89,7 @@ def render(manifest: dict, layers: set[str] | None) -> str:
             text = read_body_file(RULES_DIR / "agents.d" / body["file"])
         else:
             raise GenerateError(f"{section['title']}: unknown body.from {body['from']!r}")
-        parts += [f"## {section['title']}", "", f"Source: {section['source']}", "", text, ""]
+        parts += [f"## {section['title']}", "", text, ""]
 
     parts.append(read_body_file(RULES_DIR / manifest["trailer"]))
     return "\n".join(parts).rstrip("\n") + "\n"

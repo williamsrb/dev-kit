@@ -1,0 +1,15 @@
+---
+description: Git writes beyond BASE §3 (index, reset, amend, commit trailers, worktrees) and no-fast-forward merges
+alwaysApply: true
+---
+
+# Git writes on explicit order
+
+Extends BASE §3 *Git writes*. Local git **read** commands may run without asking. Remote writes cover `git push` in any form (`git -C … push`) and any other remote-write subcommand; "publish the branch" also counts as a push order.
+
+- Index: stage or unstage only when the user asked to stage, unstage, or commit, and only the paths of that request (`git add` / `git restore --staged`). Otherwise leave agent edits **unstaged**: staged is the user's baseline, unstaged is new agent work.
+- Reset: `git reset` in any form (`--soft`, `--mixed`, `--hard`, `HEAD~N`, `<commit>`, `-- <paths>`; to unstage, move `HEAD`, or undo a commit) runs only on an explicit reset order. Never "clean up" a user's commit with reset, and never approximate an amend with it.
+- Amend on explicit order (date-only, message fix, hook-touched files): run `git commit --amend` even if `HEAD` was not created by the agent in this chat; this overrides that default gate. Date-only uses the user's datetime (ISO 8601 with offset when possible) and `--no-edit`: `GIT_COMMITTER_DATE="<datetime>" git commit --amend --no-edit --date "<datetime>"`. BASE remote-amend (warn if already pushed) and hook rules still apply.
+- Commit messages hold only the intended title and body. Forbidden: `Co-authored-by:` in any casing, Cursor/Copilot/Claude/Codex "Generated with …", or any trailer attributing the commit to another author or tool.
+- Task worktrees stay checked out on their task branch. Never create or leave one in detached `HEAD` (including `git worktree add --detach`) unless the user asks for it.
+- Merges never fast-forward, even on linear history: always `git merge --no-ff` (a merge commit with two parents). Never `--ff`, `--ff-only`, a merge that fast-forwards because `merge.ff` is unset/true, or `git pull --ff-only` onto the target branch. Finishing a commit on a feature branch is not permission to fast-forward the integration branch.

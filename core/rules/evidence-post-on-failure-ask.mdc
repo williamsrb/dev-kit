@@ -5,13 +5,13 @@ alwaysApply: true
 
 # Evidence post — Jira comment gate
 
-**Evidence exception (hard):** For `plan-task-evidence` and `run-plan` on an evidence plan, post the Jira evidence comment **only** when `mode` is `jira` **and** every acceptance criterion / evidence step **passed**. If `mode` is `local`: skip the tracker comment; capture and chat-report. If **any** step failed, is blocked, or is inconclusive: **do not post**. **Do not ask** whether to post a partial/fail comment. **Report** the failure list in chat (what failed and why, plus local artifact paths). All-pass may still post without asking when `mode` is `jira`. Local capture, flatten, and attachment upload may still run; the gate is the **comment post**. Do **not** follow the numbered list below for evidence-plan posting.
+Both cases below: all-pass may post without asking, and local capture, flatten, and attachment upload may still run. The gate is the **comment post**.
+
+**Evidence exception (hard):** for `plan-task-evidence` and `run-plan` on an evidence plan, post the Jira evidence comment **only** when `mode` is `jira` **and** every acceptance criterion / evidence step **passed**. `mode` `local`: skip the tracker comment; capture and chat-report. If **any** step failed, is blocked, or is inconclusive: **do not post** and **do not ask** whether to post a partial/fail comment; **report** the failure list in chat (what failed and why, plus local artifact paths). The numbered list below does not apply to evidence-plan posting.
 
 When preparing a **Jira comment** from other validation/review work (not an evidence plan):
 
-1. If **any** step, acceptance criterion, or check **failed**, is **blocked**, or is **inconclusive** — **do not post** the comment yet.
+1. If **any** step, acceptance criterion, or check **failed**, is **blocked**, or is **inconclusive**, **do not post** the comment yet.
 2. **Warn** in chat with the failure list (what failed and why).
 3. **Ask** whether to post a partial/fail comment, post only passes, or hold.
 4. Post only after the user **explicitly approves** that outcome.
-
-All-pass runs may post without asking. Local capture, flatten, and attachment upload may proceed; the gate is the **comment post**.

@@ -64,11 +64,11 @@ and a visible name in the status line and the dock.
 
 | Profile | Extends | Skills | Rules | Vendors | Required tools |
 |---------|---------|--------|-------|---------|----------------|
-| `client` | `enonic` | 47 | 31 | claude, codex, cursor | 38 |
-| `core` | `—` | 36 | 24 | claude, codex, cursor | 36 |
-| `enonic` | `core` | 47 | 26 | claude, codex, cursor | 38 |
+| `client` | `enonic` | 47 | 25 | claude, codex, cursor | 38 |
+| `core` | `—` | 36 | 18 | claude, codex, cursor | 36 |
+| `enonic` | `core` | 47 | 20 | claude, codex, cursor | 38 |
 | `extract` | `—` | 2 | 0 | claude, codex, cursor | 10 |
-| `php` | `core` | 36 | 24 | claude, codex | 38 |
+| `php` | `core` | 36 | 18 | claude, codex | 38 |
 
 <!-- /devkit:generated:profile-table -->
 

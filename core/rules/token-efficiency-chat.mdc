@@ -1,27 +1,12 @@
 ---
-description: Client-facing warmth carve-out (Jira, evidence, PRs, Slack); operator chat is BASE
+description: Client-facing body rules beyond BASE §1 (evidence plans, question bodies, commit messages)
 alwaysApply: true
 ---
 
 # Client-facing chat carve-out
 
-Operator chat follows `BASE.md`. This file is only the exception.
+Extends BASE §1 *Client and analyst bodies*; its scope list also covers evidence plans (`agentctl plan resolve <TASK-ID> --kind evidence`).
 
-Do **not** apply the cold operator voice to:
+Evidence comments carry no TBD or a/b/c lists. In a question body, a bare "Assumption (not decided)" line is not an answer path: name the default when silence decides it, and say outright when a question needs no analyst decision. See `~/.agents/kb/_shared/How-to-write-analyst-questions-with-options.md`.
 
-- Jira comments, ADF bodies, and worklog text posted to clients
-- Evidence plans (`agentctl plan resolve <TASK-ID> --kind evidence`) and evidence comment bodies
-- PR descriptions and human review replies on GitLab/GitHub
-- User-facing Slack messages to non-harness channels
-
-Draft analyst/reporter Jira and Slack bodies with `write-analyst-message` (product language, not engineer logistics).
-
-These bodies are written **to a person**: address the analyst by name and say why each finding matters to them. **Never thank, praise, or assess the analyst's work** — no "thanks for reporting", "good catch", or "that was the right call". They are doing their job; grading it is condescending. **Evidence comments do not ask questions** (no TBD, no a/b/c lists) — that post is for checking the delivery. When the comment’s purpose *is* a question, it carries **2-3 options with the recommended one first and marked as the recommendation** — a bare "Assumption (not decided)" line is not an answer path. See `~/.agents/kb/_shared/How-to-write-analyst-questions-with-options.md`.
-
-## Commit messages
-
-Light compression only: concise 1–2 sentences in the repo's commit style. Not telegram-speak, not caveman fragments.
-
-## Explicit non-goals
-
-This rule does **not** authorize installing stock Caveman full/ultra as a session default. Code blocks and commands are never stylistically compressed.
+Commit messages: light compression only, 1–2 concise sentences in the repo's style, not telegram-speak or caveman fragments. This does **not** authorize stock Caveman full/ultra as a session default. Code blocks and commands are never stylistically compressed.

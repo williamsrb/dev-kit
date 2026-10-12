@@ -71,6 +71,11 @@ Do not delete first. Do not reuse ids across a delete.
   dims are required.
 - Do not paste Jira’s rendered comment HTML (`ak-renderer-wrapper`, media-card
   wrappers). Author one `<figure>` wrapping one media `<div>` with those pixel attrs.
+- Editing an ADF comment in place (`agentctl jira comment --comment-id … --content-format adf`):
+  `renderedBody` shows images as `<span class="image-wrap"><img>`, which the linter reads as
+  "No media figures". Build the lint twin from the new ADF instead: one `<figure data-type="media-single"
+  data-width-type="pixel" data-width=…>` with an inner media `<div data-id data-width data-height>` per
+  `mediaSingle` (RFD-687 comment 537890, 2026-10-09).
 - OCR finding labels does not pass a 1440×900 white overlay — that is the other How-to.
 - An empty HubSpot (or other embed) slot is a **concept fail**. Do not post it as
   a pass and do not treat it as “not an overlay fail, therefore fine”. Diagnose

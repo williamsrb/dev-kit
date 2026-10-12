@@ -17,8 +17,10 @@ hotspots), no LLM, no key.
 - Run `graft ask "<your question>" --source` → ranked nodes with the relevant
   code spans inlined (each hit's ≤8-line crux by default; `--full` for whole
   definitions when the crux isn't enough). Match the tool to the task shape:
-  for understanding or editing, the top node IS the answer — cite its
-  `covers:` file:line spans and edit straight from `--source`. For
+  for understanding, the top node IS the answer — cite its `covers:`
+  file:line spans. To edit, follow `serena.mdc` when Serena is available
+  (read and edit with Serena, not from `--source`); otherwise edit at those
+  spans. For
   exhaustive tasks ("every occurrence / every caller of this pattern"), ranked
   results are top-N, not complete — run `graft grep "<literal>"` instead
   (exhaustive over indexed files, grouped by enclosing symbol), falling back

@@ -7,7 +7,8 @@
     "body.from 'mdc' embeds that rule file verbatim (frontmatter and H1 stripped,",
     "headings demoted one level). 'file' means the AGENTS.md text is a translation or a",
     "merge of several rules and lives in agents.d/ as its single source.",
-    "layer: 'core' ships in every profile; 'client' only in the client overlay (D3)."
+    "layer: 'core' ships in every profile; 'client' only in the client overlay (D3).",
+    "'source' is provenance for maintainers; it is not rendered (keeps AGENTS.md under Claude Code's 40k-char CLAUDE.md limit)."
   ],
   "base": {
     "file": "BASE.md",
@@ -42,40 +43,14 @@
     },
     {
       "title": "Git \u2014 writes on explicit order",
-      "source": "`no-git-shell-commands.mdc`, `no-git-reset.mdc`, `no-git-index-writes.mdc`",
+      "source": "`git.mdc`",
       "rules": [
-        "no-git-shell-commands.mdc",
-        "no-git-reset.mdc",
-        "no-git-index-writes.mdc"
+        "git.mdc"
       ],
       "layer": "core",
       "body": {
-        "from": "file",
-        "file": "03-git-writes-on-explicit-order.md"
-      }
-    },
-    {
-      "title": "Git \u2014 amend on explicit order",
-      "source": "`git-amend-explicit-order.mdc`",
-      "rules": [
-        "git-amend-explicit-order.mdc"
-      ],
-      "layer": "core",
-      "body": {
-        "from": "file",
-        "file": "04-git-amend-on-explicit-order.md"
-      }
-    },
-    {
-      "title": "Commit messages \u2014 no co-authoring text",
-      "source": "`no-commit-co-authors.mdc`",
-      "rules": [
-        "no-commit-co-authors.mdc"
-      ],
-      "layer": "core",
-      "body": {
-        "from": "file",
-        "file": "05-commit-messages-no-co-authoring-text.md"
+        "from": "mdc",
+        "file": "git.mdc"
       }
     },
     {
@@ -86,8 +61,8 @@
       ],
       "layer": "client",
       "body": {
-        "from": "file",
-        "file": "06-client-facing-chat-carve-out.md"
+        "from": "mdc",
+        "file": "token-efficiency-chat.mdc"
       }
     },
     {
@@ -134,8 +109,8 @@
       ],
       "layer": "core",
       "body": {
-        "from": "mdc",
-        "file": "history-automatic-logging.mdc"
+        "from": "file",
+        "file": "10-history-logging-is-automatic.md"
       }
     },
     {

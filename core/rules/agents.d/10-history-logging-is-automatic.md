@@ -1,0 +1,3 @@
+User-level hooks log every chat prompt and result to `~/.agents/history/<iso-date>/<iso-datetime>_prompt.md` and the matching `_result.md` (datetime slug uses `-` for `:`, e.g. `2026-06-16T15-30-00Z_prompt.md`). `~/.cursor/history`, `~/.claude/history`, and `~/.codex/history` symlink there. **Do not** create these files yourself unless the user asks for a manual export or fix.
+
+Hooks: `~/.agents/hooks/history.py` via `claude-history-adapter.py` (Claude Code `settings.json`) and `codex-history-adapter.py` (Codex `hooks.json`) on `UserPromptSubmit` + `Stop`. Failures: `~/.agents/history/.state/hook-errors.log`. All hooks live in `~/.agents/hooks`; `~/.cursor/hooks` and `~/.codex/hooks` symlink to it so Cursor's relative `./hooks/…` commands work.

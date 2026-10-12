@@ -34,3 +34,15 @@ prose: caveman-lite
 - `graphify update .` builds `graphify-out/graph.json` with no model.
 - `graft` compiles native modules: a Docker image needs `build-essential` for the npm install step.
 - A Docker `COPY` of the checkout stays in a layer; use `RUN --mount=type=bind,target=/build/kit ... install` so no copy remains.
+
+## Running it for real against a review XP (2026-10)
+
+- Credentials: put copies of the `agent_api_key` and `cms_url` resources in a mode-700 scratch folder and pass it as `--assets-dir`; shred it after. `extractkit assets --assets-dir <file> --xp-host <url> --storage-state-out <file>` proves the XP login first. `review-auth su` can be denied on one XP while the `cms_url` resource logs in.
+- Start it with `env -i HOME USER LANG PATH ANTHROPIC_MODEL CLAUDE_CODE_EFFORT_LEVEL`. A Claude desktop session exports `ANTHROPIC_BASE_URL` and `CLAUDE_CODE_*`; the agent then answers 401 "Invalid bearer token".
+- The agent's PATH gets `~/.local/bin` first (the launcher dir). `~/.local/bin/claude` and `~/.local/bin/extractkit` win over any shim, so to test another `claude` version repoint that symlink. The install stage refreshes the detached `extractkit` copy from the working tree at the start of every headless run.
+- The sidecar goes to `<source>/extract/<run-id>/`, visible in `git status` as untracked. Tracked files stay clean. A second run on the same source resumes the newest sidecar; delete a task's outputs (`business/`, `domain/*.md`, `reports/do-not-port.md`, `spec-kit/specs/`) to re-run just that task.
+- `claude` versions before 2.1.284 print `[claude-code:unrecognized_model]` for `claude-sonnet-5-5` and still run it (`modelUsage` names the model). 2.1.284 is the first clean one.
+- Volume: one `rules.name` session cannot edit 800+ rules one by one (it writes a blocker). Use `extractkit agent name-rules <file>` in batches of 25 to 40.
+- Cost on a 15-capability Enonic app: about $20 and 90 minutes for the whole agent stage, `domain.behavior` alone about $6 to $12.
+- Docker: a full `docker build` of the image uses 25 to 35 GB of `/` between image and build cache. Build with `--build-arg AGENTS=claude` (about 8 GB), run `docker/smoke.sh`, then `docker rmi` and `docker builder prune -af`. Check `df -h /` first.
+- Accuracy checks: have a read-only subagent re-verify a deterministic sample of 40 claims against the source. Three rounds on one app went 72% (audit), 80%, 85% correct. Errors cluster in claims about what a job does (written from its name) and in operators, floors and caps.

@@ -1,9 +1,9 @@
 ---
 name: validate-plan
-description: "Validate and rewrite implementation or evidence plan files on disk. Not delivery QA, not new-spec drafting, not execution. | recommendedRole: implement | aliases: plan-validation, fix-plan."
-disable-model-invocation: true
+description: "Validate and rewrite implementation or evidence plan files on disk. Not delivery QA, not new-spec drafting, not execution. | recommendedRole: plan-review | aliases: plan-validation, fix-plan."
 metadata:
-  recommendedRole: implement
+  recommendedRole: plan-review
+  reviewOf: plan-implementation, plan-task-evidence
   aliases: plan-validation, fix-plan
   cliDependencies:
     required: [agentctl, rg]

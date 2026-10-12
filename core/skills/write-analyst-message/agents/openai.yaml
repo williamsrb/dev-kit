@@ -2,5 +2,3 @@ interface:
   display_name: "Write Analyst Message"
   short_description: "Draft analyst-facing comments (Jira, Slack, or paste)"
   default_prompt: "Use $write-analyst-message to draft this for the analyst/reporter."
-policy:
-  allow_implicit_invocation: false

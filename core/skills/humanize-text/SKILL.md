@@ -1,9 +1,9 @@
 ---
 name: humanize-text
-description: "Rewrite AI-sounding prose so it reads naturally, without changing meaning. Use for inflated claims, stock AI words, filler, or when asked to humanize text or write as a human. | recommendedRole: implement | aliases: write-as-human, text-to-human."
+description: "Rewrite AI-sounding prose so it reads naturally, without changing meaning. Use for inflated claims, stock AI words, filler, or when asked to humanize text or write as a human. | recommendedRole: build | aliases: write-as-human, text-to-human."
 license: MIT
 metadata:
-  recommendedRole: implement
+  recommendedRole: build
   version: "2.11.2"
   aliases: write-as-human, text-to-human
   source: https://github.com/blader/humanizer

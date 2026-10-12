@@ -1,16 +1,15 @@
 ---
 name: handoff
-description: "Compact this conversation into a Context Summary or persist it as a PRD at ~/.agents/prds/<slug>.md. Use when handing off to another agent, saving a local brief, or turning chat into task context for plan/implement/validate. | recommendedRole: implement | aliases: persist-local-task, persist-prd, context-summary."
+description: "Compact this conversation into a Context Summary or persist it as a PRD at ~/.agents/prds/<slug>.md. Use when handing off to another agent, saving a local brief, or turning chat into task context for plan/implement/validate. | recommendedRole: inherit | aliases: persist-local-task, persist-prd, context-summary."
 argument-hint: "Context Summary or PRD — optional slug or next-session focus"
-disable-model-invocation: true
 metadata:
-  recommendedRole: implement
+  recommendedRole: inherit
   aliases: persist-local-task, persist-prd, context-summary
 ---
 
 # Handoff
 
-Two result formats: **Context Summary** and **PRD**. Pick one, write one file, stop.
+Two result formats: **Context Summary** (default) and **PRD**. Pick one, write one file, stop.
 
 Follow `~/.agents/kb/implementation/How-to-resolve-task-context.md` when a `<TASK-ID>` is needed. Do not invent a Jira key. Redact secrets (API keys, passwords, tokens, personal data).
 

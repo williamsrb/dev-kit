@@ -1,8 +1,8 @@
 ---
 name: write-analyst-message
-description: "Draft analyst-facing comments, TBD questions, and Slack messages. Product language, not engineer logistics. Jira is one sink, not a requirement. | recommendedRole: implement | aliases: professional-communication, analyst-facing-message, draft-analyst-comment."
+description: "Draft analyst-facing comments, TBD questions, and Slack messages. Product language, not engineer logistics. Jira is one sink, not a requirement. | recommendedRole: build | aliases: professional-communication, analyst-facing-message, draft-analyst-comment."
 metadata:
-  recommendedRole: implement
+  recommendedRole: build
   aliases: professional-communication, analyst-facing-message, draft-analyst-comment
 ---
 # Write analyst message

@@ -2,5 +2,3 @@ interface:
   display_name: "Validate Impl"
   short_description: "Review a delivery against its requirements"
   default_prompt: "Use $validate-impl to review this delivery against its requirements and quality gates."
-policy:
-  allow_implicit_invocation: false

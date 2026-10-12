@@ -41,6 +41,14 @@
             "command": "python3 ${PROFILE_HARNESS_DIR}/hooks/claude-history-adapter.py"
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 ${PROFILE_HARNESS_DIR}/hooks/response-format-check.py"
+          }
+        ]
       }
     ],
     "PreToolUse": [

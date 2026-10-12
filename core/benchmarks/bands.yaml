@@ -5,7 +5,10 @@
 tie_sigma: 2
 quality-gate: tie
 task-owner: 0.85
-implement: 0.75
+plan-review: 0.85
+plan: 0.75
+build: 0.75
+impl-review: 0.75
 explore: 0.45
 follow: 0.45
 deterministic: 0.20

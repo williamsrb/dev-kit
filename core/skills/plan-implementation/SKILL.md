@@ -1,9 +1,8 @@
 ---
 name: plan-implementation
-description: "Write or update ~/.agents/plans/<TASK-ID>/ from a PRD (Jira download or local handoff): user stories, requirements, TBDs, technical plan. Legacy ~/.agents/plans/<TASK-ID>.md still resolves. | recommendedRole: implement | aliases: plan-task-spec, plan-spec, task-spec-plan, jira-task-spec."
-disable-model-invocation: true
+description: "Write or update ~/.agents/plans/<TASK-ID>/ from a PRD (Jira download or local handoff): user stories, requirements, TBDs, technical plan. Legacy ~/.agents/plans/<TASK-ID>.md still resolves. | recommendedRole: plan | aliases: plan-task-spec, plan-spec, task-spec-plan, jira-task-spec."
 metadata:
-  recommendedRole: implement
+  recommendedRole: plan
   aliases: plan-task-spec, plan-spec, task-spec-plan, jira-task-spec
   cliDependencies:
     required: [agentctl, rg]

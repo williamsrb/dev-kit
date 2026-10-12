@@ -2,5 +2,3 @@ interface:
   display_name: "Multitask Same Repo"
   short_description: "Coordinate parallel tasks with git worktrees"
   default_prompt: "Use $multitask-same-repo to coordinate these parallel tasks in the same repository."
-policy:
-  allow_implicit_invocation: false

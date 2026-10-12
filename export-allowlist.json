@@ -274,7 +274,8 @@
       "history-log-response.sh",
       "history-log-stop.sh",
       "graft-hooks.cjs",
-      "graft-statusline.cjs"
+      "graft-statusline.cjs",
+      "response-format-check.py"
     ]
   },
   "benchmarks": {

@@ -19,7 +19,9 @@ This copy is for Codex (`spawn_agent`) only.
 
 Keep the root responsible for decomposition, user communication, approvals, synthesis, and the final claim. Delegate outcomes, not vague help.
 
-Defaults are the Codex column of `~/.agents/skills-vendor/ROLES.md`, produced by `agentctl bench place` (2026-10-09): all benchmarks in `~/.agents/benchmarks/latest.yaml` on one Terminal-Bench scale, cheapest config at each role's absolute floor. Retune with `agentctl bench collect` then `agentctl bench place --markdown`. Do not spawn models outside `gpt-6-luna`, `gpt-6.1-sol`, and `gpt-6-astra`; GPT-5.6 Luna/Terra/Sol are never the cheapest config in any band.
+Defaults are the Codex column of `~/.agents/skills-vendor/ROLES.md`: operator picks for `follow`, `plan`, `build`, `plan-review` and `impl-review`, the rest scale `agentctl bench place` (2026-10-09) down so no default is `max`. Retune with `agentctl bench collect` then `agentctl bench place --markdown`. Do not spawn models outside `gpt-6-luna`, `gpt-6.1-sol`, and `gpt-6-astra`; GPT-5.6 Luna/Terra/Sol are never the cheapest config in any band.
+
+A reviewer (`plan-review`, `impl-review`) runs on a different model than the author: Astra reviews Sol work. `inherit` skills (`handoff`) get no spawn model; they run on the session's model. `max` effort is never a default; use it only when the user asks.
 
 Requires `multi_agent = true` under `[features]` in `~/.codex/config.toml`. If `spawn_agent` is missing, stay single-agent and say so.
 
@@ -51,17 +53,21 @@ Stay single-agent when the task is small, the next step depends on the immediate
 
 Choose by ambiguity, coupling, and consequence rather than task size alone. GPT-6 Luna is the Haiku analogue: `deterministic` work only.
 
-| Model | Effort | Use when | Do not use for |
+| Model | Effort | Role | Use when |
 |---|---|---|---|
-| `gpt-6-luna` | `max` | `deterministic` tool runs whose result is cheap to verify. | `explore`, coding, review, or `quality-gate`. |
-| `gpt-6.1-sol` | `medium` | `explore` or `follow`: docs, CI inspection, defined skill procedures. | Implementation that would cause rework if weak; final high-stakes judgment. |
-| `gpt-6.1-sol` | `high` | `implement`: bounded coding or review of one owned surface. Default coding spawn. | Coordinating other agents. |
-| `gpt-6.1-sol` | `max` | `task-owner`: substantial independent task; delegated coordination when the root authorizes it. | Routine `implement` work. |
-| `gpt-6-astra` | `max` | `quality-gate`: architecture, security, payment, release-risk. Best Codex config, but below the absolute `quality-gate` floor (58.0 vs 62.1 Terminal-Bench points). | Anything `gpt-6.1-sol` can finish. |
+| `gpt-6-luna` | `medium` | `deterministic` | Tool runs whose result is cheap to verify. |
+| `gpt-6.1-sol` | `medium` | `explore` | Read-only gather: docs, CI inspection, logs. |
+| `gpt-6.1-sol` | `medium` | `follow` | Defined skill procedures. |
+| `gpt-6.1-sol` | `high` | `plan` | Spec or plan of one surface. |
+| `gpt-6.1-sol` | `high` | `build` | Execute a plan or bounded coding. Default coding spawn. |
+| `gpt-6-astra` | `medium` | `impl-review` | Review a delivery against its plan. |
+| `gpt-6-astra` | `high` | `plan-review` | Review and rewrite a plan before work starts. |
+| `gpt-6.1-sol` | `xhigh` | `task-owner` | Substantial independent task; coordination when authorized. |
+| `gpt-6-astra` | `xhigh` | `quality-gate` | Architecture, security, payment, release-risk. Best Codex config, but below the absolute `quality-gate` floor (58.0 vs 62.1 Terminal-Bench points). |
 
-GPT-6.1 Sol `medium` and `high` are provisional (Artificial Analysis only, estimated cost); the `max` rows are measured on Terminal-Bench. For extreme-consequence gates, prefer a second opinion from the root or the user over a stronger Codex tier: none exists.
+Sol cells are provisional (Artificial Analysis only, estimated cost, or an operator pick). For extreme-consequence gates, prefer a second opinion from the root or the user over a stronger Codex tier: none exists.
 
-Do not use GPT-6 Luna below `max`. Luna never coordinates. GPT-6.1 Sol and GPT-6 Astra may coordinate children only when the root explicitly assigns that, the child work is independently scoped, and slots remain.
+Do not use GPT-6 Luna below `medium`. Luna never coordinates. GPT-6.1 Sol and GPT-6 Astra may coordinate children only when the root explicitly assigns that, the child work is independently scoped, and slots remain.
 
 ## Disclose Every Spawn
 
@@ -69,7 +75,7 @@ Immediately before every `spawn_agent` call, send a concise commentary update:
 
 - The agent task name.
 - Exact model slug, such as `gpt-6.1-sol`.
-- Exact `reasoning_effort`, such as `high` or `max`.
+- Exact `reasoning_effort`, such as `medium` or `high`.
 - Role, and whether the agent is a leaf or an authorized coordinator.
 
 Group simultaneous spawns into one compact update. Describe these as requested configuration, not verified runtime identity. If the runtime reports a different model or effort, disclose the correction.
@@ -79,9 +85,10 @@ Prefer `fork_turns: "none"` with explicit `model` and `reasoning_effort`. When a
 ```text
 Spawning:
 - `log_explore` — `gpt-6.1-sol`, reasoning `medium` — read-only gather
-- `impl_auth` — `gpt-6.1-sol`, reasoning `high` — implement
-- `ci_watch` — `gpt-6-luna`, reasoning `max` — deterministic
-- `quality_gate` — `gpt-6-astra`, reasoning `max` — quality-gate
+- `impl_auth` — `gpt-6.1-sol`, reasoning `high` — build
+- `impl_review` — `gpt-6-astra`, reasoning `medium` — impl-review
+- `ci_watch` — `gpt-6-luna`, reasoning `medium` — deterministic
+- `quality_gate` — `gpt-6-astra`, reasoning `xhigh` — quality-gate
 ```
 
 ## Personas
@@ -92,30 +99,43 @@ Assignment shapes, not permanent project agents. Role slugs match `~/.agents/ski
 
 Read-only gather: logs, diffs, docs, health. Return paths, commands, timestamps, exact failures, and confidence. Do not use Luna. Not Jira evidence capture.
 
-### `follow` — 6.1 Sol medium, or Luna max if `deterministic`
+### `follow` — 6.1 Sol medium, or Luna medium if `deterministic`
 
-Run an already-written skill or procedure with explicit inputs and completion checks. Luna max only when the CLI is the worker and the result is cheap to verify (wait for CI, copy a path, grep). Otherwise 6.1 Sol medium.
+Run an already-written skill or procedure with explicit inputs and completion checks. Luna only when the CLI is the worker and the result is cheap to verify (wait for CI, copy a path, grep).
 
-### `implement` — 6.1 Sol high
+### `plan` — 6.1 Sol high
 
-Own one bounded code surface, spec, or review target. Run targeted checks. Report changed files, checks, and residual risk. Distinct file ownership.
+Write the spec or plan of one surface from a PRD. Return the plan file path, open decisions and risks.
 
-### `task-owner` — 6.1 Sol max
+### `build` — 6.1 Sol high
+
+Own one bounded code surface or execute one plan. Run targeted checks. Report changed files, checks, and residual risk. Distinct file ownership.
+
+### `impl-review` — Astra medium
+
+Review a delivery against its plan on a different model than the author. Report findings by severity with file and line; do not fix unless assigned.
+
+### `plan-review` — Astra high
+
+Review and rewrite a plan before work starts, on a different model than the author. Report gaps in scope, acceptance criteria and risk.
+
+### `task-owner` — 6.1 Sol xhigh
 
 Own a substantial independent task (worktree / key). Coordinate children only when explicitly authorized. Return one integrated result.
 
-### `quality-gate` — Astra max
+### `quality-gate` — Astra xhigh
 
 Challenge architecture, diagnosis, security, financial correctness, or release readiness. Ask for the strongest competing explanation. Return a recommendation; keep the final decision with the root and user.
 
 ## Delegation Patterns
 
-- **Production incident:** 6.1 Sol medium (`explore`) for live health/logs; 6.1 Sol high (`implement`) for the relevant code path; 6.1 Sol max (`task-owner`) only if it becomes a coordinated task. Root separates cause from mitigation.
-- **PR or release:** 6.1 Sol medium (`explore`) for exact-head diff/CI; 6.1 Sol high (`implement`) for substantive review; Astra max (`quality-gate`) for merge-risk. Approval, merge, deploy stay with the root unless the user delegates those actions.
-- **Analytics or payments:** separate 6.1 Sol medium `explore` gathers; 6.1 Sol high to reconcile; Astra max for money-sensitive ambiguity.
-- **UI work:** 6.1 Sol high (`implement`) for bounded implementation; 6.1 Sol max (`task-owner`) for a larger independent task.
-- **Long-running procedure:** 6.1 Sol medium (`follow`), or Luna max when `deterministic`, so the root stays available.
-- **Consulting or research:** 6.1 Sol medium (`explore`) for sources; 6.1 Sol high (`implement`) to normalize; Astra or the root for the recommendation.
+- **Production incident:** 6.1 Sol medium (`explore`) for live health/logs; 6.1 Sol high (`build`) for the relevant code path; 6.1 Sol xhigh (`task-owner`) only if it becomes a coordinated task. Root separates cause from mitigation.
+- **PR or release:** 6.1 Sol medium (`explore`) for exact-head diff/CI; Astra medium (`impl-review`) for substantive review; Astra xhigh (`quality-gate`) for merge-risk. Approval, merge, deploy stay with the root unless the user delegates those actions.
+- **Analytics or payments:** separate 6.1 Sol medium `explore` gathers; 6.1 Sol high to reconcile; Astra xhigh for money-sensitive ambiguity.
+- **UI work:** 6.1 Sol high (`build`) for bounded implementation; 6.1 Sol xhigh (`task-owner`) for a larger independent task.
+- **Plan then build:** Sol high (`plan`), Astra high (`plan-review`), Sol high (`build`) per worktree, Astra medium (`impl-review`).
+- **Long-running procedure:** 6.1 Sol medium (`follow`), or Luna medium when `deterministic`, so the root stays available.
+- **Consulting or research:** 6.1 Sol medium (`explore`) for sources; 6.1 Sol high to normalize; Astra or the root for the recommendation.
 
 ## Assignment Contract
 

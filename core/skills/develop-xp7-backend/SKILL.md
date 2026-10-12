@@ -1,8 +1,8 @@
 ---
 name: develop-xp7-backend
-description: "Enonic XP 7 backend: controllers, services, schemas, CMS, IAM, queries, deploy. Use for XP7, lib-content, lib-node, content types, NoQL/DSL, or Enonic app development. | recommendedRole: implement | aliases: enonic-xp7-backend-development, xp7-backend, enonic-backend, xp-backend-dev."
+description: "Enonic XP 7 backend: controllers, services, schemas, CMS, IAM, queries, deploy. Use for XP7, lib-content, lib-node, content types, NoQL/DSL, or Enonic app development. | recommendedRole: build | aliases: enonic-xp7-backend-development, xp7-backend, enonic-backend, xp-backend-dev."
 metadata:
-  recommendedRole: implement
+  recommendedRole: build
   aliases: enonic-xp7-backend-development, xp7-backend, enonic-backend, xp-backend-dev
   cliDependencies:
     required: [agentctl, rg, python3, enonic]

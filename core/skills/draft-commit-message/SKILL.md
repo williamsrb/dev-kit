@@ -1,9 +1,8 @@
 ---
 name: draft-commit-message
-description: "Draft a commit message from the current diff. No lint, no commit. Prefer lint-and-draft-* when validation is also needed | recommendedRole: implement | aliases: staged-commit-message, suggest-commit-message, commit-msg-from-diff."
-disable-model-invocation: true
+description: "Draft a commit message from the current diff. No lint, no commit. Prefer lint-and-draft-* when validation is also needed | recommendedRole: follow | aliases: staged-commit-message, suggest-commit-message, commit-msg-from-diff."
 metadata:
-  recommendedRole: implement
+  recommendedRole: follow
   aliases: staged-commit-message, suggest-commit-message, commit-msg-from-diff
   cliDependencies:
     required: [agentctl, git]

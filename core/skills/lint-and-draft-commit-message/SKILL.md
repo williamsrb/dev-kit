@@ -1,9 +1,8 @@
 ---
 name: lint-and-draft-commit-message
-description: "Lint and fix the current delivery then draft a commit message. Does not commit. Detects python, PHP, Enonic XP/React4XP, or generic stacks from agentctl repo detect plus delivery files and lazy-loads only matching rules. Use for lint, ruff, php -l, python scripts, PHP, XP JS, React4XP, staged validation, or lint-and-draft-*. | recommendedRole: implement | aliases: lint-and-draft-enonic-commit-message, lint-and-draft-generic-commit-message, enonic-staged-validation-commit-message, generic-staged-validation-commit-message, lint-and-suggest-enonic-commit-msg, lint-and-suggest-generic-commit-msg, lint-enonic-and-commit-msg-from-diff, lint-generic-and-commit-msg-from-diff."
-disable-model-invocation: true
+description: "Lint and fix the current delivery then draft a commit message. Does not commit. Detects python, PHP, Enonic XP/React4XP, or generic stacks from agentctl repo detect plus delivery files and lazy-loads only matching rules. Use for lint, ruff, php -l, python scripts, PHP, XP JS, React4XP, staged validation, or lint-and-draft-*. | recommendedRole: follow | aliases: lint-and-draft-enonic-commit-message, lint-and-draft-generic-commit-message, enonic-staged-validation-commit-message, generic-staged-validation-commit-message, lint-and-suggest-enonic-commit-msg, lint-and-suggest-generic-commit-msg, lint-enonic-and-commit-msg-from-diff, lint-generic-and-commit-msg-from-diff."
 metadata:
-  recommendedRole: implement
+  recommendedRole: follow
   aliases: lint-and-draft-enonic-commit-message, lint-and-draft-generic-commit-message, enonic-staged-validation-commit-message, generic-staged-validation-commit-message, lint-and-suggest-enonic-commit-msg, lint-and-suggest-generic-commit-msg, lint-enonic-and-commit-msg-from-diff, lint-generic-and-commit-msg-from-diff
   cliDependencies:
     required: [agentctl, git, rg, jq, python3, ruff, shellcheck, shfmt]

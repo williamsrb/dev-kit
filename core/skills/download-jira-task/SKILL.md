@@ -1,8 +1,8 @@
 ---
 name: download-jira-task
-description: "Download a Jira issue (description + comments + attachments) to ~/.agents/prds/<KEY>.md via agentctl jira fetch (API token) or Atlassian MCP fallback. Use to fetch, export, or save a Jira task by key or URL. | recommendedRole: follow | aliases: fetch-jira-task, export-jira-task, save-jira-task, jira-task-offline."
+description: "Download a Jira issue (description + comments + attachments) to ~/.agents/prds/<KEY>.md via agentctl jira fetch (API token) or Atlassian MCP fallback. Use to fetch, export, or save a Jira task by key or URL. | recommendedRole: deterministic | aliases: fetch-jira-task, export-jira-task, save-jira-task, jira-task-offline."
 metadata:
-  recommendedRole: follow
+  recommendedRole: deterministic
   aliases: fetch-jira-task, export-jira-task, save-jira-task, jira-task-offline
   cliDependencies:
     required: [agentctl, python3]

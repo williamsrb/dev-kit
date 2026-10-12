@@ -2,5 +2,3 @@ interface:
   display_name: "Validate Plan"
   short_description: "Validate and fix an implementation or evidence plan"
   default_prompt: "Use $validate-plan to validate and fix this implementation or evidence/test plan. Do not implement code or execute evidence."
-policy:
-  allow_implicit_invocation: false

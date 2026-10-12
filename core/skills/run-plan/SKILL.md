@@ -1,9 +1,8 @@
 ---
 name: run-plan
-description: "Execute an existing plan file (implementation, evidence, or validation). For several plans at once, use multitask-same-repo. | recommendedRole: implement | aliases: execute-plan, follow-plan, run-test-plan, run-implementation-plan, run-validation-plan."
-disable-model-invocation: true
+description: "Execute an existing plan file (implementation, evidence, or validation). For several plans at once, use multitask-same-repo. Use only when the operator or an orchestrator names this skill. | recommendedRole: build | aliases: execute-plan, follow-plan, run-test-plan, run-implementation-plan, run-validation-plan."
 metadata:
-  recommendedRole: implement
+  recommendedRole: build
   aliases: execute-plan, follow-plan, run-test-plan, run-implementation-plan, run-validation-plan
   cliDependencies:
     required: [agentctl, git, rg]

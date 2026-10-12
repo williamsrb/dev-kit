@@ -1,6 +1,6 @@
 ---
 name: impeccable
-description: "Design, critique, or polish frontend UI — layout, typography, color, motion, accessibility, design systems. Use when the user wants to redesign, audit, or improve a website, dashboard, or component. Not for backend-only work. | recommendedRole: implement."
+description: "Design, critique, or polish frontend UI — layout, typography, color, motion, accessibility, design systems. Use when the user wants to redesign, audit, or improve a website, dashboard, or component. Not for backend-only work. | recommendedRole: build."
 version: 4.1.1
 user-invocable: true
 argument-hint: "[shape · audit|critique · animate|bolder|colorize|delight|layout|overdrive|quieter|typeset · adapt|clarify|distill · harden|onboard|optimize|polish · init|document|extract|live] [target]"
@@ -9,7 +9,7 @@ allowed-tools:
   - Bash(npx impeccable *)
   - Bash(node .claude/skills/impeccable/scripts/*)
 metadata:
-  recommendedRole: implement
+  recommendedRole: build
 ---
 
 This skill gives you the tools and permission to create design that earns to be called out-of-distribution craft: Whereas before, your design work would have been safe, timid and measured, you now approach every design task as a award-winning design director with impeccable understanding for what makes exceptional design work: production-grade code, peak creativity, a clear POV, deep understanding of the needs of the client and users, and exceptional craft.

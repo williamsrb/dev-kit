@@ -126,39 +126,17 @@
       }
     },
     {
-      "title": "Evidence \u2014 tracker comment post (all-pass only)",
-      "source": "`plan-task-evidence` / evidence-scoped `run-plan` (overrides `evidence-post-on-failure-ask.mdc` for evidence posting)",
+      "title": "Jira evidence and comments",
+      "source": "`evidence-post-on-failure-ask.mdc`, `jira-evidence-persistent-content.mdc`, `jira-screenshot-consistency.mdc`",
       "rules": [
-        "evidence-post-on-failure-ask.mdc"
-      ],
-      "layer": "client",
-      "body": {
-        "from": "file",
-        "file": "12-evidence-tracker-comment-post-all-pass-only.md"
-      }
-    },
-    {
-      "title": "Creating Jira evidence \u2014 persistent content, not disposable pages",
-      "source": "`jira-evidence-persistent-content.mdc`",
-      "rules": [
-        "jira-evidence-persistent-content.mdc"
-      ],
-      "layer": "client",
-      "body": {
-        "from": "mdc",
-        "file": "jira-evidence-persistent-content.mdc"
-      }
-    },
-    {
-      "title": "Jira screenshots \u2014 validate before posting",
-      "source": "`jira-screenshot-consistency.mdc`",
-      "rules": [
+        "evidence-post-on-failure-ask.mdc",
+        "jira-evidence-persistent-content.mdc",
         "jira-screenshot-consistency.mdc"
       ],
       "layer": "client",
       "body": {
         "from": "file",
-        "file": "14-jira-screenshots-validate-before-posting.md"
+        "file": "12-jira-evidence-and-comments.md"
       }
     },
     {

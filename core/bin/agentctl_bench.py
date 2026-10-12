@@ -575,7 +575,9 @@ FAMILIES = {
 FIT_SOURCE = {"guess_score": "deepswe_score"}
 MIN_BRIDGE = 8
 DEFAULT_REF_SE = 1.6
-ROLE_ORDER = ("deterministic", "explore", "follow", "implement", "task-owner", "quality-gate")
+ROLE_ORDER = (
+    "deterministic", "explore", "follow", "plan", "build", "impl-review", "plan-review", "task-owner", "quality-gate",
+)
 VENDOR_COLUMNS = ("codex", "claude", "cursor")
 
 

@@ -2,5 +2,3 @@ interface:
   display_name: "Run Plan"
   short_description: "Execute an approved implementation or evidence plan"
   default_prompt: "Use $run-plan to execute this approved plan and record reusable learnings."
-policy:
-  allow_implicit_invocation: false

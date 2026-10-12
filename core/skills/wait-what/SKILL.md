@@ -1,7 +1,6 @@
 ---
 name: wait-what
 description: "Stop. That last message did not land — re-pitch it | recommendedRole: deterministic."
-disable-model-invocation: true
 metadata:
   recommendedRole: deterministic
 ---

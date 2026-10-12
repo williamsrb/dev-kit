@@ -1,8 +1,8 @@
 ---
 name: apply-react4xp-practices
-description: "React4XP 6 conventions: naming, XML schemas, TypeScript, processors, component registration. Use when creating or editing Enonic parts, layouts, content types, x-data, mixins, or macros. | recommendedRole: implement | aliases: enonic-react4xp-best-practices, enonic-r4xp-conventions."
+description: "React4XP 6 conventions: naming, XML schemas, TypeScript, processors, component registration. Use when creating or editing Enonic parts, layouts, content types, x-data, mixins, or macros. | recommendedRole: build | aliases: enonic-react4xp-best-practices, enonic-r4xp-conventions."
 metadata:
-  recommendedRole: implement
+  recommendedRole: build
   aliases: enonic-react4xp-best-practices, enonic-r4xp-conventions
   cliDependencies:
     required: [agentctl, rg, xmllint]

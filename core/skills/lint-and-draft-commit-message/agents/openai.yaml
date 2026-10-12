@@ -2,5 +2,3 @@ interface:
   display_name: "Lint and Draft Commit"
   short_description: "Lint the delivery and draft its commit message"
   default_prompt: "Use $lint-and-draft-commit-message to validate this delivery and draft its commit message."
-policy:
-  allow_implicit_invocation: false

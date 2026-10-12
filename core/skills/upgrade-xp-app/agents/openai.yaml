@@ -2,5 +2,3 @@ interface:
   display_name: "Upgrade XP App"
   short_description: "Migrate an Enonic XP 7 application to XP 8"
   default_prompt: "Use $upgrade-xp-app to migrate this Enonic XP 7 application to XP 8."
-policy:
-  allow_implicit_invocation: false

@@ -2,5 +2,3 @@ interface:
   display_name: "Plan Implementation"
   short_description: "Create an implementation plan from a PRD (Jira or local)"
   default_prompt: "Use $plan-implementation to create an implementation plan for this task."
-policy:
-  allow_implicit_invocation: false

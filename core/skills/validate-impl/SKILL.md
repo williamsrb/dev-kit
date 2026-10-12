@@ -1,8 +1,9 @@
 ---
 name: validate-impl
-description: "Review and fix the current delivery against requirements (fit, quality, deslop, security). Run before lint-and-draft-*. Not syntax-only. | recommendedRole: implement | aliases: impl-validate, review-task, validate-implementation."
+description: "Review and fix the current delivery against requirements (fit, quality, deslop, security). Run before lint-and-draft-*. Not syntax-only. | recommendedRole: impl-review | aliases: impl-validate, review-task, validate-implementation."
 metadata:
-  recommendedRole: implement
+  recommendedRole: impl-review
+  reviewOf: run-plan
   aliases: impl-validate, review-task, validate-implementation
   cliDependencies:
     required: [agentctl, git, rg, jq]

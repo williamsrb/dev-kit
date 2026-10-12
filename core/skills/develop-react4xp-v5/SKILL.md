@@ -1,8 +1,8 @@
 ---
 name: develop-react4xp-v5
-description: "Maintain legacy Enonic React4XP 5.x on XP 7. Use for existing 5.x apps. Prefer develop-react4xp-v6 for new XP 7 work; develop-react4xp-v7 for XP 8. | recommendedRole: implement | aliases: react4xp-v5, react4xp-5.x."
+description: "Maintain legacy Enonic React4XP 5.x on XP 7. Use for existing 5.x apps. Prefer develop-react4xp-v6 for new XP 7 work; develop-react4xp-v7 for XP 8. | recommendedRole: build | aliases: react4xp-v5, react4xp-5.x."
 metadata:
-  recommendedRole: implement
+  recommendedRole: build
   aliases: react4xp-v5, react4xp-5.x
   cliDependencies:
     required: [agentctl, rg, python3, enonic, npm]

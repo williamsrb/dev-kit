@@ -1,8 +1,8 @@
 ---
 name: develop-react4xp-v7
-description: "Build Enonic React4XP 7.x / stable on XP 8 (componentRegistry, pages/parts/layouts, SSR). Use for React4XP 7. Prefer v6 for new XP 7 work; v5 only for 5.x. | recommendedRole: implement | aliases: react4xp-v7, react4xp-7.x."
+description: "Build Enonic React4XP 7.x / stable on XP 8 (componentRegistry, pages/parts/layouts, SSR). Use for React4XP 7. Prefer v6 for new XP 7 work; v5 only for 5.x. | recommendedRole: build | aliases: react4xp-v7, react4xp-7.x."
 metadata:
-  recommendedRole: implement
+  recommendedRole: build
   aliases: react4xp-v7, react4xp-7.x
   cliDependencies:
     required: [agentctl, rg, python3, enonic, npm]

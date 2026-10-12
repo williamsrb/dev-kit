@@ -1,7 +1,6 @@
 ---
 name: set-up-enonic-react4xp
-description: "Bootstrap a new Enonic React4XP project with the standard architecture, CLAUDE.md, and scripts. | recommendedRole: task-owner | aliases: enonic-react4xp-setup, react4xp-enonic-setup."
-disable-model-invocation: true
+description: "Bootstrap a new Enonic React4XP project with the standard architecture, CLAUDE.md, and scripts. Use only when the operator or an orchestrator names this skill. | recommendedRole: task-owner | aliases: enonic-react4xp-setup, react4xp-enonic-setup."
 metadata:
   recommendedRole: task-owner
   aliases: enonic-react4xp-setup, react4xp-enonic-setup

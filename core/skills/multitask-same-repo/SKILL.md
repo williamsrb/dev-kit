@@ -1,7 +1,6 @@
 ---
 name: multitask-same-repo
-description: "Run multiple tasks on one git repo in parallel: worktrees, phase-split sessions, one implementer per branch. Jira keys or local slugs. | recommendedRole: task-owner."
-disable-model-invocation: true
+description: "Run multiple tasks on one git repo in parallel: worktrees, phase-split sessions, one implementer per branch. Jira keys or local slugs. Use only when the operator or an orchestrator names this skill. | recommendedRole: task-owner."
 metadata:
   recommendedRole: task-owner
   cliDependencies:
@@ -26,16 +25,16 @@ If only one task: stop; use normal single-task skills.
 
 ## Phase map (mandatory)
 
-Roles are the `orchestrate` role slugs (`~/.agents/skills-vendor/ROLES.md`). Resolve each to a model/effort for the harness you are in; do not name vendor models here.
+Roles are the `orchestrate` role slugs (`~/.agents/skills-vendor/ROLES.md`). Resolve each to a model/effort for the harness you are in; do not name vendor models here. A reviewer role (`plan-review`, `impl-review`) must run on a different model than the author of what it reviews; where the harness has one model family (Cursor), rely on effort and a fresh session instead.
 
 | Phase | Session | Role (default) | Does | Exit artifact | Stop? |
 |-------|---------|----------------|------|---------------|-------|
 | 0 Setup | Shell / short agent | `deterministic` | `git worktree add` per key | Worktree dirs + branches | Yes if user only asked setup |
-| 0b Plan | **Fresh, one per key** | `quality-gate` | `plan-implementation` per key from its PRD; skip keys that already have a plan | Impl plan under `~/.agents/plans/<KEY>/` | **Yes** |
-| 1 Validate | **Fresh A** | `quality-gate` | Fix plans vs one sample worktree + sister refs | Corrected plans + `DECISIONS.md` | **Yes — new chat for next phase** |
-| 2 Shared port | **Fresh B** (skip if none) | `implement` | Helpers / path rules **once** | One commit SHA (or identical unstaged patch) cherry-picked to each branch | **Yes** |
-| 3 Implement | **Fresh C** + parallel agents | `task-owner` orchestrator, `implement` per worktree | Thin orchestrator; one agent per worktree | Unstaged diffs per branch | **Yes** |
-| 4 QA / lint | **Fresh D1…Dn** | `implement`, `quality-gate` when release risk is material | One session per branch preferred | Fixes + notes | — |
+| 0b Plan | **Fresh, one per key** | `plan` | `plan-implementation` per key from its PRD; skip keys that already have a plan | Impl plan under `~/.agents/plans/<KEY>/` | **Yes** |
+| 1 Validate | **Fresh A** | `plan-review` | Fix plans vs one sample worktree + sister refs | Corrected plans + `DECISIONS.md` | **Yes — new chat for next phase** |
+| 2 Shared port | **Fresh B** (skip if none) | `build` | Helpers / path rules **once** | One commit SHA (or identical unstaged patch) cherry-picked to each branch | **Yes** |
+| 3 Implement | **Fresh C** + parallel agents | `task-owner` orchestrator, `build` per worktree | Thin orchestrator; one agent per worktree | Unstaged diffs per branch | **Yes** |
+| 4 QA / lint | **Fresh D1…Dn** | `impl-review`, plus `quality-gate` when release risk is material | One session per branch preferred | Fixes + notes | — |
 
 Never chain 0b→1, 1→3, or 3→4 in the same transcript. Never use `/model` as a phase boundary.
 
@@ -82,7 +81,7 @@ For every key **without** a plan, follow `../plan-implementation/SKILL.md` (`cal
 
 Keys that already have a plan skip straight to Phase 1.
 
-## Phase 1 — validate (`quality-gate`, fresh session)
+## Phase 1 — validate (`plan-review`, fresh session)
 
 Prerequisite: every key has a plan (Phase 0b).
 
@@ -99,7 +98,7 @@ Follow `../validate-plan/SKILL.md` (`called_from: multitask-same-repo`) once per
    - Open questions resolved with the user
 6. **Stop and wait** for GO on a **new** session
 
-## Phase 2 — shared port (`implement`, fresh session)
+## Phase 2 — shared port (`build`, fresh session)
 
 If helpers or path rules are shared:
 
@@ -114,7 +113,7 @@ Do **not** tell implementer subagents to “port the same tree identically into 
 
 Orchestrator prompt should list only: multitask root, table of key → worktree → branch (paths implied by convention), and `DECISIONS.md` path. **No** pasted PRD/plan bodies or validation research dumps.
 
-For each task, spawn **one** `implement` subagent with a **thin** brief:
+For each task, spawn **one** `build` subagent with a **thin** brief:
 
 - Work **only** under that worktree path (`<root>/<KEY>/`)
 - `git branch --show-current` must equal `<KEY>` or STOP

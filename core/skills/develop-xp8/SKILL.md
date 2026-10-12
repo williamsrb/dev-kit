@@ -1,8 +1,8 @@
 ---
 name: develop-xp8
-description: "Enonic XP 8 offline docs (platform, CMS, code kit). Use for XP 8 APIs, CMS, frontend integration, or when XP7 docs are the wrong version. | recommendedRole: implement | aliases: xp8-docs, enonic-xp8, develop-xp8-backend."
+description: "Enonic XP 8 offline docs (platform, CMS, code kit). Use for XP 8 APIs, CMS, frontend integration, or when XP7 docs are the wrong version. | recommendedRole: build | aliases: xp8-docs, enonic-xp8, develop-xp8-backend."
 metadata:
-  recommendedRole: implement
+  recommendedRole: build
   aliases: xp8-docs, enonic-xp8, develop-xp8-backend
   cliDependencies:
     required: [agentctl, rg, python3]

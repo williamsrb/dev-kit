@@ -216,13 +216,21 @@ Sorted cheapest/simplest first. **Evidence** in this harness means QA after deli
 
 2. `explore` — Read-only gather: logs, diffs, docs, health. Return paths, commands, timestamps, exact failures, and confidence. Cursor `subagent_type: explore`. Not evidence capture.
 
-3. `follow` — Execute an already-written skill or procedure with explicit inputs and completion checks. Do not invent scope or make approval decisions. Distinct from `deterministic`: the model walks the steps (MCP, CLI watch); the CLI is not the whole worker.
+3. `follow` — Walk an already-written procedure with explicit inputs and completion checks (commit-message drafting, worklogs). Do not invent scope or make approval decisions. Distinct from `deterministic`: the model walks the steps; the CLI is not the whole worker.
 
-4. `implement` — Bounded coding, spec, review, or plan of one surface (`plan-implementation`, `run-plan`, `validate-impl`, `plan-task-evidence`). Distinct file or artifact ownership.
+4. `plan` — Write a spec or plan of one surface from a PRD (`plan-implementation`, `plan-task-evidence`).
 
-5. `task-owner` — Substantial independent task (worktree / key). Coordinate children only when authorized (`orchestrate`, `multitask-same-repo`, bootstrap, upgrade).
+5. `build` — Execute a plan or bounded coding of one surface (`run-plan`, `develop-*`).
 
-6. `quality-gate` — Architecture, security, release readiness, or stress-test (`grilling`). Return a recommendation; the root and user decide.
+6. `impl-review` — Review a delivery against its plan (`validate-impl`). Run it on a different model than the author.
+
+7. `plan-review` — Review and rewrite a plan before work starts (`validate-plan`). Run it on a different model than the author.
+
+8. `task-owner` — Substantial independent task (worktree / key). Coordinate children only when authorized (`orchestrate`, `multitask-same-repo`, bootstrap, upgrade).
+
+9. `quality-gate` — Architecture, security, release readiness, or stress-test (`grilling`). Return a recommendation; the root and user decide.
+
+`inherit` is not a tier: the skill runs on the session's own model (`handoff`). `max` effort only when the user asks.
 
 ## 9. Examples of calibration
 

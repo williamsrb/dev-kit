@@ -1,7 +1,6 @@
 ---
 name: audit-heavy-report
 description: "Audit a codebase for five security categories (tenant isolation, UI-only auth, IDOR, hardcoded secrets, XSS) and write a PDF report plus copy-paste GitHub issues. Use on security-audit, pentest-five, or audit-report requests — not delivery QA. | recommendedRole: quality-gate | aliases: security-audit-report, five-flaw-audit, pentest-five."
-disable-model-invocation: true
 metadata:
   recommendedRole: quality-gate
   aliases: security-audit-report, five-flaw-audit, pentest-five

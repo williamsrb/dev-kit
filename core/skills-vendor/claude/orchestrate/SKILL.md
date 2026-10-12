@@ -1,6 +1,6 @@
 ---
 name: orchestrate
-description: "Claude Code only. Split independent workstreams with the Agent tool (claude-opus-5-5, claude-haiku-5-5). Use on `mult`, this skill name, 2+ independent streams, a blocking long command, or an independent review. Skip sequential or overlapping edits. Cursor: ~/.cursor/skills/orchestrate. Jira same-repo: multitask-same-repo. | recommendedRole: task-owner."
+description: "Claude Code only. Split independent workstreams with the Agent tool (claude-opus-5-5, claude-sonnet-5-5, claude-haiku-5-5). Use on `mult`, this skill name, 2+ independent streams, a blocking long command, or an independent review. Skip sequential or overlapping edits. Cursor: ~/.cursor/skills/orchestrate. Jira same-repo: multitask-same-repo. | recommendedRole: task-owner."
 metadata:
   recommendedRole: task-owner
   cliDependencies:
@@ -11,7 +11,7 @@ metadata:
 
 ## Host gate
 
-If the **Task** tool is available (Cursor): stop. Do not spawn `claude-opus-5-thinking-high`, `claude-4.5-haiku-thinking`, or any Claude slug. Read and follow `${HOME}/.cursor/skills/orchestrate/SKILL.md` (same bytes as `~/.agents/skills-vendor/cursor/orchestrate/SKILL.md`). Cursor ladder: `cursor-grok-4.7-low` (`deterministic`), `cursor-grok-4.7-xhigh` (every other role).
+If the **Task** tool is available (Cursor): stop. Do not spawn `claude-opus-5-thinking-high`, `claude-4.5-haiku-thinking`, or any Claude slug. Read and follow `${HOME}/.cursor/skills/orchestrate/SKILL.md` (same bytes as `~/.agents/skills-vendor/cursor/orchestrate/SKILL.md`). Cursor ladder: `cursor-grok-4.7-low` (`deterministic`), `-medium` (`explore`, `follow`), `-high` (`plan`, `build`, `impl-review`, `task-owner`), `-xhigh` (`plan-review`, `quality-gate`).
 
 If **spawn_agent** is available (Codex): follow `~/.codex/skills/orchestrate/SKILL.md` instead.
 
@@ -19,9 +19,11 @@ This copy is for Claude Code only (Agent tool).
 
 Keep the root responsible for decomposition, user communication, approvals, synthesis, and the final claim. Delegate outcomes, not vague help.
 
-Defaults are the Claude column of `~/.agents/skills-vendor/ROLES.md`, produced by `agentctl bench place` (2026-10-09): all benchmarks in `~/.agents/benchmarks/latest.yaml` on one Terminal-Bench scale, cheapest config at each role's absolute floor. Retune with `agentctl bench collect` then `agentctl bench place --markdown`.
+Defaults are the Claude column of `~/.agents/skills-vendor/ROLES.md`. The `follow`, `plan`, `build`, `plan-review` and `impl-review` cells are operator picks; the rest scale `agentctl bench place` (2026-10-09) down so no default is `max`. Retune with `agentctl bench collect` then `agentctl bench place --markdown`.
 
-Spawn only `claude-opus-5-5` and `claude-haiku-5-5`. Do not spawn `claude-sonnet-5-5`, `claude-fable-5-1`, or `claude-haiku-4-5-20251001` unless the user names them: Sonnet and Fable are never the cheapest config in any band, and Haiku 4.5 is below the `deterministic` floor.
+Spawn only `claude-opus-5-5`, `claude-sonnet-5-5` and `claude-haiku-5-5`. Do not spawn `claude-fable-5-1` or `claude-haiku-4-5-20251001` unless the user names them: Fable is never the cheapest config in any band, and Haiku 4.5 is below the `deterministic` floor.
+
+A reviewer (`plan-review`, `impl-review`) runs on a different model than the author: Opus reviews Sonnet work. `inherit` skills (`handoff`) get no spawn model; they run on the session's model. `max` effort is never a default; use it only when the user asks.
 
 Jira-oriented PRD work on several keys of the same repo is `multitask-same-repo` (worktrees, fresh sessions). Stop here and follow that skill instead.
 
@@ -49,21 +51,25 @@ Stay single-agent when the task is small, the next step depends on the immediate
 
 ## Select the Model
 
-Route on two models: Haiku 5.5 for light work, Opus 5.5 for coding and judgment. Effort is the dial.
+Route on three models: Haiku 5.5 for light work, Sonnet 5.5 for planning, building and procedures, Opus 5.5 for reviews and judgment. Effort is the dial.
 
-| Model | Effort | Use when | Do not use for |
+| Model | Effort | Role | Use when |
 |---|---|---|---|
-| `claude-haiku-5-5` | `high` | `deterministic` tool runs whose result is cheap to verify. | `explore`, coding, review, or `quality-gate`. |
-| `claude-haiku-5-5` | `max` | `explore` or `follow`: docs, CI inspection, defined skill procedures. | Coding that would cause rework if weak; high-stakes judgment. |
-| `claude-opus-5-5` | `medium` | `implement`: bounded coding or review of one owned surface. Default coding spawn. | `deterministic` grep/wait work; the `quality-gate` slot. |
-| `claude-opus-5-5` | `xhigh` | `task-owner`: substantial independent task; coordination when authorized. | Routine `implement` work. |
-| `claude-opus-5-5` | `max` | `quality-gate`: architecture, security, payment, or release-risk. The measured frontier. | Routine `explore` or ordinary isolated coding. |
+| `claude-haiku-5-5` | `low` | `deterministic` | Tool runs whose result is cheap to verify. |
+| `claude-haiku-5-5` | `medium` | `explore` | Read-only gather: docs, CI inspection, logs. |
+| `claude-sonnet-5-5` | `medium` | `follow` | Defined skill procedures (commit message, worklogs). |
+| `claude-sonnet-5-5` | `high` | `plan` | Spec or plan of one surface. |
+| `claude-sonnet-5-5` | `high` | `build` | Execute a plan or bounded coding. Default coding spawn. |
+| `claude-opus-5-5` | `medium` | `impl-review` | Review a delivery against its plan. |
+| `claude-opus-5-5` | `high` | `plan-review` | Review and rewrite a plan before work starts. |
+| `claude-opus-5-5` | `high` | `task-owner` | Substantial independent task; coordination when authorized. |
+| `claude-opus-5-5` | `xhigh` | `quality-gate` | Architecture, security, payment, or release-risk. |
 
-Haiku rows and Opus `medium`/`xhigh` are provisional (Artificial Analysis only, estimated cost); Opus `max` is measured on Terminal-Bench.
+Haiku `low`/`medium` and Opus `medium`/`high`/`xhigh` are provisional (Artificial Analysis only, estimated cost, or an operator pick); Sonnet cells are operator picks.
 
 If the Agent tool exposes a thinking or effort argument, set it to the effort above. If it does not, name that effort in the assignment and do not invent a slug.
 
-Workers do not spawn further unless the root explicitly assigns coordination of an independently scoped task. Haiku never coordinates.
+Workers do not spawn further unless the root explicitly assigns coordination of an independently scoped task. Haiku and Sonnet never coordinate.
 
 ## Disclose Every Spawn
 
@@ -78,43 +84,57 @@ Group simultaneous spawns into one compact update. Describe these as requested c
 
 ```text
 Spawning:
-- `log_explore` — `claude-haiku-5-5`, effort `max`, Explore — read-only gather
-- `impl_auth` — `claude-opus-5-5`, effort `medium`, general-purpose — implement
-- `quality_gate` — `claude-opus-5-5`, effort `max`, general-purpose — quality-gate
+- `log_explore` — `claude-haiku-5-5`, effort `medium`, Explore — read-only gather
+- `impl_auth` — `claude-sonnet-5-5`, effort `high`, general-purpose — build
+- `impl_review` — `claude-opus-5-5`, effort `medium`, general-purpose — impl-review
+- `quality_gate` — `claude-opus-5-5`, effort `xhigh`, general-purpose — quality-gate
 ```
 
 ## Personas
 
 Assignment shapes, not permanent project agents. Role slugs match `~/.agents/skills-vendor/ROLES.md`.
 
-### `explore` — Haiku max, Explore
+### `explore` — Haiku medium, Explore
 
 Read-only gather: logs, diffs, docs, health. Return paths, commands, timestamps, exact failures, and confidence. Use `subagent_type` Explore (or the read-only equivalent). Not Jira evidence capture.
 
-### `follow` — Haiku max, or Haiku high if `deterministic`
+### `follow` — Sonnet medium, or Haiku low if `deterministic`
 
-Run an already-written skill or procedure with explicit inputs and completion checks. Haiku high only when the CLI is the worker and the result is cheap to verify (wait for CI, copy a path, grep). Otherwise Haiku max.
+Run an already-written skill or procedure with explicit inputs and completion checks. Haiku low only when the CLI is the worker and the result is cheap to verify (wait for CI, copy a path, grep).
 
-### `implement` — Opus medium, general-purpose
+### `plan` — Sonnet high, general-purpose
 
-Own one bounded code surface, spec, or review target. Run targeted checks. Report changed files, checks, and residual risk. Distinct file ownership.
+Write the spec or plan of one surface from a PRD. Return the plan file path, open decisions and risks.
 
-### `task-owner` — Opus xhigh, general-purpose
+### `build` — Sonnet high, general-purpose
+
+Own one bounded code surface or execute one plan. Run targeted checks. Report changed files, checks, and residual risk. Distinct file ownership.
+
+### `impl-review` — Opus medium, general-purpose
+
+Review a delivery against its plan on a different model than the author. Report findings by severity with file and line; do not fix unless assigned.
+
+### `plan-review` — Opus high, general-purpose
+
+Review and rewrite a plan before work starts, on a different model than the author. Report gaps in scope, acceptance criteria and risk.
+
+### `task-owner` — Opus high, general-purpose
 
 Own a substantial independent task (worktree / key). Coordinate children only when explicitly authorized. Return one integrated result.
 
-### `quality-gate` — Opus max, general-purpose
+### `quality-gate` — Opus xhigh, general-purpose
 
 Challenge architecture, diagnosis, security, financial correctness, or release readiness. Ask for the strongest competing explanation. Return a recommendation; keep the final decision with the root and user.
 
 ## Delegation Patterns
 
-- **Production incident:** Haiku max (`explore`) for live health/logs; Opus medium (`implement`) for the relevant code path. Root separates cause from mitigation.
-- **PR or release:** Haiku max (`explore`) for exact-head diff/CI; Opus medium (`implement`) for substantive review; Opus max (`quality-gate`) for merge-risk. Approval, merge, deploy stay with the root unless the user delegates those actions.
-- **Analytics or payments:** separate Haiku max `explore` gathers; Opus medium to reconcile; Opus max for money-sensitive ambiguity.
-- **UI work:** Opus medium (`implement`) for bounded work; Opus xhigh (`task-owner`) for a larger independent task.
-- **Long-running procedure:** Haiku max (`follow`), or Haiku high when `deterministic`, so the root stays available.
-- **Consulting or research:** Haiku max (`explore`) for sources; Opus medium (`implement`) to normalize; Opus max or the root for the recommendation.
+- **Production incident:** Haiku medium (`explore`) for live health/logs; Sonnet high (`build`) for the relevant code path. Root separates cause from mitigation.
+- **PR or release:** Haiku medium (`explore`) for exact-head diff/CI; Opus medium (`impl-review`) for substantive review; Opus xhigh (`quality-gate`) for merge-risk. Approval, merge, deploy stay with the root unless the user delegates those actions.
+- **Analytics or payments:** separate Haiku medium `explore` gathers; Sonnet high to reconcile; Opus xhigh for money-sensitive ambiguity.
+- **UI work:** Sonnet high (`build`) for bounded work; Opus high (`task-owner`) for a larger independent task.
+- **Plan then build:** Sonnet high (`plan`), Opus high (`plan-review`), Sonnet high (`build`) per worktree, Opus medium (`impl-review`).
+- **Long-running procedure:** Sonnet medium (`follow`), or Haiku low when `deterministic`, so the root stays available.
+- **Consulting or research:** Haiku medium (`explore`) for sources; Sonnet high to normalize; Opus xhigh or the root for the recommendation.
 
 ## Assignment Contract
 

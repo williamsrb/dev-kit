@@ -1,87 +1,86 @@
 ---
 name: describe-image
-description: "Describe a local screenshot with local Ollama vision (gemma4:e4b), not remote LLM vision. Use when layout, UI, or text in an image needs semantics that pixel-diff or OCR cannot answer. | recommendedRole: explore | aliases: ollama-vision, image-description, vision-describe, local-image-describe."
+description: "Describe a local screenshot: local Ollama vision (gemma4:e4b) first, the ROLES.md deterministic Claude model when Ollama cannot serve it. Use when layout, UI, or text in an image needs semantics that pixel-diff or OCR cannot answer."
 metadata:
   recommendedRole: explore
   aliases: ollama-vision, image-description, vision-describe, local-image-describe
   cliDependencies:
-    required: [python3]
-    optional: [agentctl]
-    services:
-      required: [ollama serving on localhost:11434 with a vision-capable model pulled]
+    required: [python3, agentctl]
+    optional: [ollama, claude, identify, convert]
 ---
 
 # Describe Image
 
-Send a local image to a locally-running Ollama vision model and get back a text description, without spending remote LLM subscription tokens. Runs entirely on-machine over the Ollama HTTP API (`/api/generate`).
+Turn one local image into a short text description, so the main model spends tokens on the answer, not on the pixels.
 
 ## Local deterministic first
 
-This is **not** deterministic — it's a real (small, local) vision model, so wording and detail vary run to run. Prefer these when they can answer the question instead:
+This is a model, not a deterministic tool: wording and detail vary run to run. Prefer these when they answer the question:
 
-- Only need the words on screen? Use [ocr](../tesseract-cli/SKILL.md) (`tesseract`) — exact text, no hallucination risk.
-- Only need "how much is blank"? Use [blank-space](../blank-space/SKILL.md) — exact pixel ratio.
-- Only need "did anything change"? Use [diff-image](../diff-image/SKILL.md) — exact pixel diff.
+- Only need the words on screen? Use [ocr](../tesseract-cli/SKILL.md) (`tesseract`): exact text, no hallucination risk.
+- Only need "how much is blank"? Use [blank-space](../blank-space/SKILL.md): exact pixel ratio.
+- Only need "did anything change"? Use [diff-image](../diff-image/SKILL.md): exact pixel diff.
 
-Reach for `describe-image` when the question is genuinely semantic ("what does this look like", "does this layout look broken", "what UI elements are present") and those tools can't answer it — but don't spend a remote LLM vision call ($$$, subscription tokens) to get there.
+Reach for `describe-image` when the question is semantic ("does this layout look broken", "which UI elements are present").
 
-## Performance
+## Backends
 
-This host has no GPU — `gemma4:e4b` runs on CPU and one screenshot description measured **~140s warm** (model already loaded), more on a cold load. It's still free of remote-token cost, but it is not fast. Don't reach for it inside a tight loop over many screenshots without warning the user about wall-clock time; batch or prioritize instead.
+`agentctl image describe` picks the backend per call and reports it in `backend`:
 
-## When to use
+| Backend | When | Speed and cost |
+|---------|------|----------------|
+| `ollama` | `ollama` is installed, the service answers on `$OLLAMA_HOST` (default `http://localhost:11434`), and `--model` is pulled | Free; no GPU on this host, so `gemma4:e4b` measured ~140 s warm per screenshot, more on a cold load |
+| `claude` | Any of those fails (`fallback_reason`: `ollama-missing`, `service-unreachable`, `model-not-pulled`) | The ROLES.md `deterministic` Claude cell (`agentctl local models` shows it), about 6 s and under $0.001 per screenshot |
 
-- Evidence screenshot review where a semantic read is needed but doesn't warrant a full remote-model turn.
-- Quick "what's on this screen" sanity check before deciding whether deeper (remote-model) review is warranted.
-- Batch-describing many screenshots cheaply, reserving remote-model attention for ambiguous ones.
+The fallback reads a 1280 px preview (`03-vendor-vision-image-preview.md`) and runs with no user settings, hooks or MCP. The original stays on disk.
+
+## Privacy
+
+The `claude` backend sends the image to Anthropic. Pass `--local-only` when the screenshot shows personal data, customer records or credentials. The command then fails the way the Ollama path fails instead of falling back. Crop to the region in question when only part of the screen matters.
+
+## Inside a Claude Code session
+
+Run `agentctl image describe` first: Ollama may serve it for free. When the result already says `backend: "claude"`, use it; do not also spawn the subagent.
+
+To skip Ollama on purpose (for example several images where ~140 s each is too slow), spawn the `image-describer` subagent with the absolute path and the question, one subagent per image in the same message:
+
+```text
+Agent(subagent_type: "image-describer", prompt: "Image: /abs/path/in.preview.png\nQuestion: Is the hero title clipped on the right?")
+```
+
+Make the preview first when the long edge is over 1280 px: `convert in.png -resize '1280x1280>' in.preview.png`.
 
 ## When not to use
 
-- Anything load-bearing for a security decision, destructive action, or a Jira evidence pass/fail gate — those need deterministic checks and vendor-model or human judgment (per this repo's local-first-deterministic-tools rule).
-- Text-only extraction — OCR is faster, exact, and free of hallucination.
-- Pixel-exact comparison — use `diff-image`.
+- Anything decisive for a security decision, destructive action, or a Jira evidence pass/fail gate. Those need deterministic checks and vendor-model or human judgment (`02-local-first-deterministic-tools.md`).
+- Text-only extraction: OCR is faster, exact, and free of hallucination.
+- Pixel-exact comparison: use `diff-image`.
 
 ## Command
 
-Prefer `agentctl` — the shared entry point for local image primitives:
-
 ```bash
-agentctl image describe /absolute/path/screenshot.png
+agentctl image describe /absolute/path/screenshot.png --prompt "List every visible button label"
 ```
-
-Equivalent direct call (adds `--host` for a non-default Ollama endpoint, not exposed via `agentctl`):
-
-```bash
-python3 ~/.agents/skills/describe-image/scripts/describe.py /absolute/path/screenshot.png
-```
-
-Options (identical on both forms except `--host`, direct-script only):
 
 | Flag | Default | Purpose |
 |------|---------|---------|
-| `--prompt` | general layout/text/UI/issues description | Override to ask something specific, e.g. `"List every visible button label"` or `"Does the hero image overlap the title?"`. Keep it factual and scoped — this is a small local model, not a reasoning model. |
-| `--model` | `gemma4:e4b` | Must be a vision-capable local Ollama model (`ollama show <model>` lists `vision` under Capabilities). |
-| `--host` | `http://localhost:11434` | Override only for a non-default Ollama endpoint. |
-| `--timeout` | `300` seconds | CPU-only inference (no GPU on this box) on the 8B `gemma4:e4b` model measured ~140s *warm* for one screenshot; a cold model load (nothing in `ollama ps`) adds more on top. Raise further for large images or when `ollama ps` shows no model loaded. |
-| `--max-chars` | `4000` | Bounds the returned description so it doesn't blow up context. |
+| `--prompt` | general layout/text/UI/issues description | Ask something specific and factual. |
+| `--model` | `gemma4:e4b` | Ollama vision model (`ollama show <model>` lists `vision` under Capabilities). Not used by the fallback. |
+| `--timeout` | `300` seconds | Ollama inference wait. The fallback uses at most 180 s. |
+| `--max-chars` | `4000` | Bounds the returned description. |
+| `--local-only` | off | Never leave the machine: fail instead of falling back. |
+
+`python3 ~/.agents/skills/describe-image/scripts/describe.py <image> [--host URL]` is the Ollama backend alone, with no fallback.
 
 ## Output
 
-Bounded JSON on stdout: `description` (the model's text), `truncated` (bool), `eval_count`, `total_duration_ms`, and `model`. On failure (`status: "error"`), the JSON includes a `hint` — e.g. pull the model or check `ollama serve` is running.
+Bounded JSON: `status`, `description`, `truncated`, `model`, `backend`, and `fallback_reason` when Ollama was not used. The Ollama path adds `eval_count` and `total_duration_ms`; the fallback adds `preview`, `duration_ms` and `cost_usd`. On an Ollama failure (`--local-only`) the JSON carries a `hint`.
 
 ## Failures
 
 | Situation | Action |
 |-----------|--------|
-| `cannot reach ollama` | Check `systemctl status ollama` / `ollama serve` is running. Do not fall back to a remote vision API without telling the user. |
-| HTTP error mentioning the model | Model isn't pulled — `ollama pull <model>`, or use one of the other local vision-capable models (`ollama list`). |
-| Timeout | First inference after model load is slow; retry once with a larger `--timeout`, or re-run (model stays warm in memory for a while after). |
-| Description looks wrong/hallucinated | This is a small local model — treat it as a hint, not ground truth. Verify visually or escalate to vendor-model judgment before treating the description as evidence. |
-
-## Example
-
-```bash
-agentctl image describe \
-  ${HOME}/.agents/prds/PROJ-388/evidence/01-article-content-form.png \
-  --prompt "Is this an article content form? List the visible form fields and any empty-looking sections."
-```
+| `backend: "claude"` but you wanted local | Pull the model (`ollama pull gemma4:e4b`) or start the service (`systemctl status ollama`), then rerun. |
+| `claude CLI not on PATH` | Install Claude Code, or pull the Ollama model. |
+| Timeout | First Ollama inference after a model load is slow; retry once with a larger `--timeout`. |
+| Description looks wrong | Treat it as a hint. Crop to the region and ask a narrower question, or look at the preview yourself. |

@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "name": "sync",
+  "mode": "tracker",
+  "route_step": "route",
+  "head": [
+    {
+      "id": "related-impl",
+      "skill": "find-related-issues",
+      "role": "follow",
+      "args": "Phase implement. Rescan with the task's files, brief every parallel candidate with --hunks, and assess each related issue against the plan or the delivery diff. Write one summary line per related issue as `KEY (class): clause` with class one of contradiction, dependency, overlap, context, duplicate (a sibling that shares files with this task's diff is overlap or dependency, not context). Report status blocked with one blocker per unacknowledged contradiction, else ok. Do not edit the plan or the code.",
+      "pre": [
+        "branch_is_task"
+      ]
+    },
+    {
+      "id": "sync-inbox",
+      "kind": "builtin",
+      "builtin": "sync-inbox"
+    },
+    {
+      "id": "sync-outbox",
+      "kind": "builtin",
+      "builtin": "sync-outbox"
+    },
+    {
+      "id": "sync-notice",
+      "kind": "builtin",
+      "builtin": "sync-notice"
+    }
+  ]
+}

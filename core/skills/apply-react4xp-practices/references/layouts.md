@@ -2,19 +2,21 @@
 
 Create and update layouts.
 
-Reference: https://developer.enonic.com/docs/xp/stable/cms/layouts
+Reference: <https://developer.enonic.com/docs/xp/stable/cms/layouts>
 
 ## Location and Files
 
 **Descriptor + interfaces** (site layer):
-```
+
+```text
 site/layouts/{layout-name}/
 ├── {layout-name}.xml       # Descriptor
 └── {layout-name}.d.ts      # TypeScript interface
 ```
 
 **React4XP 6 implementation** (react4xp layer):
-```
+
+```text
 react4xp/components/layouts/{layout-name}/
 ├── {layout-name}.tsx       # React layout component
 └── processor.ts             # Data processor
@@ -25,12 +27,14 @@ The layout name follows kebab-case (e.g., `article`, `two-columns`).
 ## Registration
 
 **`react4xp/dataFetcher.ts`:**
+
 ```typescript
 import { myLayoutProcessor } from './components/layouts/my-layout/processor';
 dataFetcher.addLayout(`${app.name}:my-layout`, { processor: myLayoutProcessor });
 ```
 
 **`react4xp/componentRegistry.tsx`:**
+
 ```typescript
 import { MyLayout } from './components/layouts/my-layout/my-layout';
 componentRegistry.addLayout('com.example.{PROJECT_SHORT_NAME}:my-layout', { View: MyLayout });
@@ -146,6 +150,7 @@ export const LayoutName = ({ component, meta, data, common }: ComponentProps<Lay
 ## Example
 
 **`article.xml`**
+
 ```xml
 <layout>
     <display-name i18n="layout.article.display_name">Article</display-name>
@@ -158,6 +163,7 @@ export const LayoutName = ({ component, meta, data, common }: ComponentProps<Lay
 ```
 
 **`article.d.ts`**
+
 ```typescript
 import type { ExtendedRichTextData } from '@enonic/react-components';
 
@@ -170,6 +176,7 @@ export interface ArticleLayoutProps {
 ```
 
 **`processor.ts`**
+
 ```typescript
 import { LayoutComponent, Content, Component } from '@enonic-types/core';
 import { getContent } from '/lib/xp/portal';
@@ -206,6 +213,7 @@ function getComponentProps(content: Content, component: Component, dataFetcher: 
 ```
 
 **`article.tsx`**
+
 ```typescript
 import { Region, RichText } from '@enonic/react-components';
 import type { ComponentProps, LayoutData } from '@enonic/react-components';
@@ -230,7 +238,7 @@ export const ArticleLayout = ({ component, meta, data, common }: ComponentProps<
 
 See [i18n.md](./i18n.md) for the full key pattern. Layout keys follow:
 
-```
+```text
 layout.{name}.display_name
 layout.{name}.{field_name}
 ```

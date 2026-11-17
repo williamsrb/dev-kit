@@ -18,7 +18,7 @@ TBD defaults (operator silence, 2026-08-25): parent JSONL only; full corpus (no 
 
 1. Script: `~/.agents/bin/export-cursor-sessions-to-claude.py`. Dry-run with `--dry-run`. Single chat: `--composer-id <uuid>`. Force one associated/handoff chat: `--force --composer-id <uuid>` (`--force` alone exits).
 2. Inputs: `~/.cursor/projects/*/agent-transcripts/<id>/<id>.jsonl`. Skip `subagents/` and `composerHeaders.isSubagent=1`. Drafts (`isDraft=true`) skip when a header exists; most drafts have no parent JSONL.
-3. IDs: UUID5 of `cursor:<composerId>` in namespace `https://agents.local/cursor-to-claude`. Title prefix `[cursor] ` once (same as Codex `[codex] `). If the title already starts with `[cursor]`, do not prepend again. `entrypoint=cursor-export`. Do not reuse the raw composer UUID.
+3. IDs: UUID5 of `cursor:<composerId>` in namespace `https://agents.local/cursor-to-claude`. Title prefix `[cursor]` once (same as Codex `[codex]`). If the title already starts with `[cursor]`, do not prepend again. `entrypoint=cursor-export`. Do not reuse the raw composer UUID.
 4. JSONL `cwd` is the real workspace folder. Dest path uses that slug. Desktop index uses the same `cwd`. Cursor may list the export next to the native composer (Codex echo). Distinct UUID5 + skip-echo keep that from growing.
 5. Dest: `~/.claude/projects/<project_slug>/<cli>.jsonl` and `local_<cli>.json` under `pick_org_dir(~/.config/Claude/claude-code-sessions)`. Ledger/lock/log: `~/.local/share/cursor-to-claude-sync/` (`export.lock` is not Codex or Claude `sync.lock`).
 6. Batch order in `~/.agents/cron/sync-claude-desktop-sessions.job` and live crontab (`*/5`): Codex export, Cursor export, then `backfill-claude-jsonl-ai-titles.py`.

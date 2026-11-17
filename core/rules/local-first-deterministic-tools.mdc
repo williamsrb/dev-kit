@@ -9,7 +9,7 @@ For mechanical extraction, normalization, discovery, validation, or formatting:
 
 1. Use a deterministic local CLI or project-native command.
 2. Use `agentctl` when it has the required primitive; it keeps raw artifacts on disk and returns bounded JSON.
-3. Use local Ollama only for low-risk clustering, classification, or summarization that cannot be deterministic. Verify its output against the local source artifact.
+3. Use local Ollama only for low-risk clustering, classification, or summarization that cannot be deterministic. Verify its output against the local source artifact. `agentctl local run` and `agentctl image describe` fall back to the ROLES.md `deterministic` model when Ollama or the model is unavailable; pass `--local-only` when the input must not leave the machine.
 4. Use the vendor model for ambiguity, tradeoffs, implementation judgment, or user-facing synthesis.
 
 Do not send images to a model for OCR, full logs for error extraction, full diffs for file scoping, or whole Markdown files when a local slicer can select the needed sections.

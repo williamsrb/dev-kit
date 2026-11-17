@@ -1,0 +1,22 @@
+{
+  "_comment": [
+    "Kit-only text that `devkit export` injects into core/ after copying from the harness.",
+    "The harness (~/.agents) does not carry these lines: they describe devkit profiles, where",
+    "AGENTS_HOME replaces ~/.agents. Without an overlay the next export would drop them.",
+    "path is relative to core/. The line equal to `after` is kept and `insert` is added below",
+    "it after a blank line. A missing anchor fails the export, so a harness rewrite cannot",
+    "silently lose the overlay."
+  ],
+  "overlays": [
+    {
+      "path": "rules/BASE.md",
+      "after": "When a command is not on PATH, look for it on ~/.local/bin and ~/.agents/bin.",
+      "insert": "`~/.agents/` in any skill, rule, or KB text means the harness root: `$AGENTS_HOME` when set (a devkit profile), else `~/.agents`. Resolve it silently and use the real path. Do not tell the operator the file is \"not at ~/.agents/…\"."
+    },
+    {
+      "path": "rules/BASE.mdc",
+      "after": "When a command is not on PATH, look for it on ~/.local/bin and ~/.agents/bin.",
+      "insert": "`~/.agents/` in any skill, rule, or KB text means the harness root: `$AGENTS_HOME` when set (a devkit profile), else `~/.agents`. Resolve it silently and use the real path. Do not tell the operator the file is \"not at ~/.agents/…\"."
+    }
+  ]
+}

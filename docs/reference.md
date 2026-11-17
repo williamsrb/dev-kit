@@ -15,7 +15,7 @@ when a file in `docs/` is not reachable from `README.md`.
 
 <!-- devkit:generated:cli-reference -->
 
-```
+```text
 usage: devkit [-h] GROUP ...
 
 Install and manage isolated agent-harness profiles.
@@ -36,7 +36,9 @@ Common examples:
   devkit profile apps-sync --apply   # prints the fork plan, then asks sudo
   devkit profile auth restore
   devkit profile session-sync --source stock --target dummy   # dry run
+  devkit profile session-find --title "quota fix"             # find one session
   devkit project init . --layer core --apply   # then: devkit project build . --apply
+  devkit project scaffold . --layer core --apply   # copy the harness into the repo
   devkit update check
   devkit doctor
   devkit deps --profile enonic       # are the declared binaries on PATH?
@@ -64,9 +66,9 @@ command groups:
                     dir.
 ```
 
-### `devkit export`
+## `devkit export`
 
-```
+```text
 usage: devkit export [-h] [--check] [--apply] [--source DIR] [--no-scan]
 
 Copy the allowlisted subset of the harness into core/.
@@ -79,9 +81,9 @@ options:
   --no-scan     Skip the gitleaks gate. For offline use only.
 ```
 
-### `devkit lint-paths`
+## `devkit lint-paths`
 
-```
+```text
 usage: devkit lint-paths [-h] [--contract FILE] [PATH ...]
 
 Fail on home paths in machine-consumed positions.
@@ -94,9 +96,9 @@ options:
   --contract FILE  Path contract. Default: path-contract.json.
 ```
 
-### `devkit doctor`
+## `devkit doctor`
 
-```
+```text
 usage: devkit doctor [-h] [--profile NAME]
 
 Check instances for staleness, ownership, auth handlers, and desktop forks.
@@ -106,9 +108,9 @@ options:
   --profile NAME  Check only this profile.
 ```
 
-### `devkit deps`
+## `devkit deps`
 
-```
+```text
 usage: devkit deps [-h] [--profile TYPE] [--manager {apt,dnf,pacman}] [--family NAME] [--third-party-declined]
 
 Check that every binary a profile declares is on PATH.
@@ -125,9 +127,9 @@ options:
                         skipped, not missing.
 ```
 
-### `devkit profile`
+## `devkit profile`
 
-```
+```text
 usage: devkit profile [-h] COMMAND ...
 
 Create, inspect, sync, and rebuild isolated harness profiles.
@@ -146,20 +148,22 @@ commands:
     auth          Install or restore URL-redirect auth handlers.
     apps-sync     Rebuild per-profile desktop app forks (rsync + asar identity).
     session-sync  Copy agent sessions (Claude, Codex, Cursor) between instances.
+    session-find  Find a Claude session by title across every profile and stock.
+    session-pull  Copy one Claude session into the side you work in.
 ```
 
-#### `devkit profile list`
+### `devkit profile list`
 
-```
+```text
 usage: devkit profile list [-h]
 
 options:
   -h, --help  show this help message and exit
 ```
 
-#### `devkit profile show`
+### `devkit profile show`
 
-```
+```text
 usage: devkit profile show [-h] name
 
 positional arguments:
@@ -169,10 +173,10 @@ options:
   -h, --help  show this help message and exit
 ```
 
-#### `devkit profile create`
+### `devkit profile create`
 
-```
-usage: devkit profile create [-h] [--type TYPE] [--vendor VENDOR] [--color HEX] [--headless | --no-headless] [--apply] [--force] name
+```text
+usage: devkit profile create [-h] [--type TYPE] [--vendor VENDOR] [--color HEX] [--headless | --no-headless] [--from SRC] [--track BRANCH | --pin TAG_OR_SHA] [--apply] [--force] name
 
 Write a named profile instance: vendor config dirs, projected skills/rules/kb, AGENTS_HOME tree, CLI wrappers, and desktop launchers. Wrappers pin DEVKIT_PROFILE and AGENTS_HOME so agentctl sees only this profile. --apply writes user-owned config, then prints the desktop-fork plan and asks sudo (--headless skips launchers, forks, badges and that sudo step).
 
@@ -191,16 +195,24 @@ options:
                         Headless: write no launchers, URL handlers, app forks,
                         badges or colour, and never ask sudo for forks. Default:
                         DEVKIT_HEADLESS, else off.
+  --from SRC            Kit to read the ref from: a git URL or a local git
+                        checkout. Default: the source the installed kit
+                        recorded.
+  --track BRANCH        Follow this kit branch: skills, rules and kb come from
+                        its tip and move on 'devkit update fetch' + 'update
+                        apply'.
+  --pin TAG_OR_SHA      Fix this kit tag or commit: skills, rules and kb come
+                        from it and never move by themselves.
   --apply               Write user-owned config, then print the desktop-fork
                         plan and ask sudo. Default: dry run.
   --force               Proceed past a collision, after a timestamped backup.
                         Does not bypass a duplicate name.
 ```
 
-#### `devkit profile sync`
+### `devkit profile sync`
 
-```
-usage: devkit profile sync [-h] [--headless | --no-headless] [--apply] name
+```text
+usage: devkit profile sync [-h] [--headless | --no-headless] [--from SRC] [--track BRANCH | --pin TAG_OR_SHA | --unpin] [--apply] name
 
 Re-write the instance from the current manifest: prune a leftover core/ symlink, refresh AGENTS_HOME projections, restore a missing devkit-uninstall.sh, keep spawned playwright-<id> MCP entries. --apply writes user-owned config, then prints the desktop-fork plan and asks sudo (not for a headless instance).
 
@@ -213,13 +225,22 @@ options:
                         Headless: write no launchers, URL handlers, app forks,
                         badges or colour, and never ask sudo for forks. Default:
                         DEVKIT_HEADLESS, else the stored value.
+  --from SRC            Kit to read the ref from: a git URL or a local git
+                        checkout. Default: the source the installed kit
+                        recorded.
+  --track BRANCH        Follow this kit branch: skills, rules and kb come from
+                        its tip and move on 'devkit update fetch' + 'update
+                        apply'.
+  --pin TAG_OR_SHA      Fix this kit tag or commit: skills, rules and kb come
+                        from it and never move by themselves.
+  --unpin               Return the profile to the installed kit (current).
   --apply               Write user-owned config, then print the desktop-fork
                         plan and ask sudo. Default: dry run.
 ```
 
-#### `devkit profile adopt`
+### `devkit profile adopt`
 
-```
+```text
 usage: devkit profile adopt [-h] [--type TYPE] --vendor VENDOR --config-dir CONFIG_DIR [--apply] name
 
 positional arguments:
@@ -233,9 +254,9 @@ options:
   --apply               Write. Default: dry run.
 ```
 
-#### `devkit profile migrate`
+### `devkit profile migrate`
 
-```
+```text
 usage: devkit profile migrate [-h] --to-fork TO_FORK [--apply] name
 
 positional arguments:
@@ -247,9 +268,9 @@ options:
   --apply            Write. Default: dry run.
 ```
 
-#### `devkit profile auth`
+### `devkit profile auth`
 
-```
+```text
 usage: devkit profile auth [-h] COMMAND ...
 
 Linux allows one default handler per URL scheme. Profile launchers do not claim vendor schemes; a NoDisplay dispatcher routes the callback to the profile that started login.
@@ -262,9 +283,9 @@ commands:
     restore   Put stock scheme handlers back.
 ```
 
-#### `devkit profile apps-sync`
+### `devkit profile apps-sync`
 
-```
+```text
 usage: devkit profile apps-sync [-h] [--user NAME] [--profile NAME] [--vendor VENDOR] [--install-hook] [--icons-only] [--apply]
 
 Rebuild per-profile desktop app forks from the stock packages. Rsync into /usr/lib/devkit/, patch desktopName / WM_CLASS, and badge in-tree icons with a coloured shield emblem. Never writes stock trees. --apply prints the plan, then asks sudo.
@@ -281,9 +302,9 @@ options:
   --apply          Write. Prints the plan, then asks sudo. Default: dry run.
 ```
 
-#### `devkit profile session-sync`
+### `devkit profile session-sync`
 
-```
+```text
 usage: devkit profile session-sync [-h] --source NAME --target NAME [--agent LIST] [--only {code,desktop}] [--indexeddb] [--apply]
 
 Copy sessions from --source to --target. Names are installed profiles, or 'stock' for the unprefixed installs. --agent picks which agents to copy (claude: Code transcripts and Desktop chats; codex: rollouts and the thread index; cursor: IDE chats from state.vscdb), each from the source's instance into the target's instance of the same agent. One direction per run: swap the two for the other. A file or row is copied when the target lacks it or the source is newer; nothing is deleted. Databases are backed up first. Quit the agents' apps on the target first.
@@ -304,9 +325,40 @@ options:
   --apply               Write. Default: dry run.
 ```
 
-### `devkit project`
+### `devkit profile session-find`
 
+```text
+usage: devkit profile session-find [-h] --title TEXT [--since YYYY-MM-DD] [--profile NAME] [--json]
+
+Read-only. Lists Claude Code and Claude Desktop sessions whose title contains --title (case-insensitive), with id, last activity, working folder and file paths. Desktop index files are always read; transcripts are scanned from --since, default the last 30 days.
+
+options:
+  -h, --help          show this help message and exit
+  --title TEXT        Title text to match.
+  --since YYYY-MM-DD  Only sessions active on or after this date.
+  --profile NAME      Only this side: a profile name or 'stock'.
+  --json              Bounded JSON for scripts.
 ```
+
+### `devkit profile session-pull`
+
+```text
+usage: devkit profile session-pull [-h] --session ID --source NAME [--target NAME] [--org DIR] [--apply]
+
+Copy one Claude session (transcripts, sidecar folders and the Desktop index file) from --source into --target. --target defaults to the profile named by DEVKIT_PROFILE, else 'stock'. The session keeps its id. The source is never written; nothing is deleted; a newer target file is kept. While the target's app runs, only files the target lacks are added. Dry run until --apply.
+
+options:
+  -h, --help     show this help message and exit
+  --session ID   Session id.
+  --source NAME  Side that holds it: a profile name or 'stock'.
+  --target NAME  Side to write to. Default: DEVKIT_PROFILE, else stock.
+  --org DIR      Target Desktop organisation folder for the index file.
+  --apply        Write. Default: dry run.
+```
+
+## `devkit project`
+
+```text
 usage: devkit project [-h] COMMAND ...
 
 Apply the harness (skills, instructions) to a work repo, alongside profiles.
@@ -318,14 +370,15 @@ commands:
   COMMAND
     init      Write harness/project.json naming the layers.
     build     Link the layers' skills into the repo and exclude them from git.
+    scaffold  Copy the harness into the repo as files the repo owns.
     status    Check a built project for drift and broken links.
     clean     Remove what the build wrote.
     flavors   List the flavors and profile types usable as layers.
 ```
 
-#### `devkit project init`
+### `devkit project init`
 
-```
+```text
 usage: devkit project init [-h] [--layer TYPE] [--force] [--apply] [PATH]
 
 Write harness/project.json in the repo. Each --layer is a flavor or a profile type (see `devkit project flavors`); the build links the union of their skills. Dry run without --apply.
@@ -340,9 +393,9 @@ options:
   --apply       Write. Default: dry run.
 ```
 
-#### `devkit project build`
+### `devkit project build`
 
-```
+```text
 usage: devkit project build [-h] [--config FILE] [--rules | --no-rules] [--apply] [PATH]
 
 Link the skills of the layers in harness/project.json into .agents/skills (Codex, Cursor) and .claude/skills (Claude Code), link repo-owned skills from harness/skills, write AGENTS.md and a CLAUDE.md link when the repo has neither, and list every generated path in .git/info/exclude. Tracked files are never modified. Reads the installed kit; never installs one. Dry run without --apply.
@@ -359,9 +412,34 @@ options:
   --apply              Write. Default: dry run.
 ```
 
-#### `devkit project status`
+### `devkit project scaffold`
 
+```text
+usage: devkit project scaffold [-h] [--layer TYPE] [--from SRC] [--track BRANCH | --pin TAG_OR_SHA] [--rules | --no-rules] [--overwrite] [--apply] [PATH]
+
+Copy the skills of the --layer flavors or profile types into harness/skills, write AGENTS.md and a CLAUDE.md link, and record where they came from in harness/project.json and harness/.origin.json. A first scaffold is a one-time copy: the repo owns the result and commits it, and build, status and clean never rewrite it. --overwrite rebuilds the copy from its source (the recorded one, or the flags given) and first backs every replaced path up into harness/.devkit-backup-<time>/; skills you added are kept. --track follows a branch of the kit and --pin fixes a tag or commit, each read from a throwaway clone, never from `current`. Dry run without --apply.
+
+positional arguments:
+  PATH                 Root of the git work tree (default: .).
+
+options:
+  -h, --help           show this help message and exit
+  --layer TYPE         Flavor or profile type to copy (repeatable; at least one
+                       on a first scaffold).
+  --from SRC           Kit to read the ref from: a git URL or a local git
+                       checkout. Default: the source the installed kit recorded.
+  --track BRANCH       Copy from the tip of this kit branch.
+  --pin TAG_OR_SHA     Copy from this kit tag or commit.
+  --rules, --no-rules  Embed the kit's rules in AGENTS.md. Default: on; with
+                       --overwrite, the recorded choice.
+  --overwrite          Rebuild the copy from source after backing up what it
+                       replaces. Without it, an existing copy is refused.
+  --apply              Write. Default: dry run.
 ```
+
+### `devkit project status`
+
+```text
 usage: devkit project status [-h] [--config FILE] [PATH]
 
 Compare the repo with what a build would write now. Exit 1 on a missing or dangling link or a changed entry set; a newer kit release alone is informational. Warns when the active profile provides a skill of the same name. Writes nothing.
@@ -374,9 +452,9 @@ options:
   --config FILE  Project config. Default: <PATH>/harness/project.json.
 ```
 
-#### `devkit project clean`
+### `devkit project clean`
 
-```
+```text
 usage: devkit project clean [-h] [--apply] [PATH]
 
 Remove the links and files the stamp lists (only while they still point where the build put them), this worktree's exclude block, the stamp, and the directories left empty. Repo-owned links and tracked files stay. Dry run without --apply.
@@ -389,9 +467,9 @@ options:
   --apply     Write. Default: dry run.
 ```
 
-#### `devkit project flavors`
+### `devkit project flavors`
 
-```
+```text
 usage: devkit project flavors [-h] [--path PATH] [NAME]
 
 Without NAME, list every valid layer name with its tier (kit, repo or profile) and skill count. With NAME, print its includes and the resolved skills in order. Repo flavors are read from <PATH>/harness/flavors when that folder exists. Writes nothing.
@@ -404,9 +482,9 @@ options:
   --path PATH  Repo whose harness/flavors to read (default: .).
 ```
 
-### `devkit update`
+## `devkit update`
 
-```
+```text
 usage: devkit update [-h] COMMAND ...
 
 Check, stage, and apply kit updates (one direction).
@@ -422,9 +500,9 @@ commands:
               --from names a git URL, which is staged first.
 ```
 
-#### `devkit update check`
+### `devkit update check`
 
-```
+```text
 usage: devkit update check [-h] [--profile NAME] [--from SRC] [--ref REF]
 
 options:
@@ -437,9 +515,9 @@ options:
                   is always read as its working tree.
 ```
 
-#### `devkit update fetch`
+### `devkit update fetch`
 
-```
+```text
 usage: devkit update fetch [-h] [--from SRC] [--ref REF]
 
 options:
@@ -451,9 +529,9 @@ options:
               always read as its working tree.
 ```
 
-#### `devkit update apply`
+### `devkit update apply`
 
-```
+```text
 usage: devkit update apply [-h] [--profile NAME] [--from SRC] [--ref REF] [--apply]
 
 options:
@@ -467,9 +545,9 @@ options:
   --apply         Write. Default: dry run.
 ```
 
-### `devkit origin`
+## `devkit origin`
 
-```
+```text
 usage: devkit origin [-h] COMMAND ...
 
 Inspect and adopt the kit this instance came from.
@@ -483,18 +561,18 @@ commands:
     adopt     Point an instance at a different fork.
 ```
 
-#### `devkit origin show`
+### `devkit origin show`
 
-```
+```text
 usage: devkit origin show [-h]
 
 options:
   -h, --help  show this help message and exit
 ```
 
-#### `devkit origin adopt`
+### `devkit origin adopt`
 
-```
+```text
 usage: devkit origin adopt [-h] --fork-id FORK_ID --upstream UPSTREAM [--apply]
 
 options:
@@ -504,9 +582,9 @@ options:
   --apply              Write. Default: dry run.
 ```
 
-### `devkit docs`
+## `devkit docs`
 
-```
+```text
 usage: devkit docs [-h] COMMAND ...
 
 Generate and verify the documentation tree.
@@ -519,9 +597,9 @@ commands:
     generate  Regenerate the generated docs sections.
 ```
 
-#### `devkit docs generate`
+### `devkit docs generate`
 
-```
+```text
 usage: devkit docs generate [-h] [--check]
 
 options:
@@ -529,9 +607,9 @@ options:
   --check     Exit 1 on any diff.
 ```
 
-### `devkit fix-home-rules`
+## `devkit fix-home-rules`
 
-```
+```text
 usage: devkit fix-home-rules [-h] [--vendor VENDOR] [--apply] [--force]
 
 Move a home-root CLAUDE.md/AGENTS.md into its vendor config dir.

@@ -29,7 +29,7 @@ What step 2 leaves on your machine, all under `~/.local/bin` (which must be on
 |------|---------|
 | `devkit` | Link to the installed kit's `devkit.py`, so `devkit` runs from any directory. |
 | `<vendor>-<name>` (`claude-dummy`) | The profile's CLI wrappers. |
-| `devkit-uninstall.sh` | Removes everything the kit wrote, except projects built with `devkit project build` (run `devkit project clean` in each repo first) and the home-root rules `fix-home-rules` moved ([docs/install.md#uninstalling](docs/install.md#uninstalling)). |
+| `devkit-uninstall.sh` | Removes everything the kit wrote, except projects built with `devkit project build` or `scaffold` (run `devkit project clean` in each repo first; a scaffold keeps its `harness/` copy) and the home-root rules `fix-home-rules` moved ([docs/install.md#uninstalling](docs/install.md#uninstalling)). |
 
 The kit is also copied to `~/.local/share/devkit/`, and every profile links into that copy, not into this checkout. Once step 2 has run you can move or delete the checkout; it is only the source of an upgrade (see [docs/updates.md](docs/updates.md)).
 
@@ -64,11 +64,11 @@ and a visible name in the status line and the dock.
 
 | Profile | Extends | Skills | Rules | Vendors | Required tools |
 |---------|---------|--------|-------|---------|----------------|
-| `client` | `enonic` | 47 | 25 | claude, codex, cursor | 38 |
-| `core` | `—` | 36 | 18 | claude, codex, cursor | 36 |
-| `enonic` | `core` | 47 | 20 | claude, codex, cursor | 38 |
+| `client` | `enonic` | 57 | 26 | claude, codex, cursor | 38 |
+| `core` | `—` | 46 | 19 | claude, codex, cursor | 36 |
+| `enonic` | `core` | 57 | 21 | claude, codex, cursor | 38 |
 | `extract` | `—` | 2 | 0 | claude, codex, cursor | 10 |
-| `php` | `core` | 36 | 18 | claude, codex | 38 |
+| `php` | `core` | 46 | 19 | claude, codex | 38 |
 
 <!-- /devkit:generated:profile-table -->
 

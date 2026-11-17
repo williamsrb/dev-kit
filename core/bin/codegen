@@ -1,0 +1,20 @@
+#!/bin/bash
+set -euo pipefail
+
+project="${1:-}"
+[ "$project" = "-" ] && project=""
+environment="${2:-review}"
+auth_dir="${AGENTS_HOME:-$HOME/.agents}/.auth"
+
+storage="$auth_dir/user.json"
+[ -n "$project" ] && storage="$auth_dir/${project}-${environment}.json"
+
+if [ "$environment" = "local" ]; then
+  exec npx -y playwright codegen --save-storage="$storage" "http://localhost:8080/admin"
+fi
+
+if [ -n "$project" ]; then
+  exec npx -y playwright codegen --save-storage="$storage" "https://review.${project}.k8s.example.com/admin"
+fi
+
+exec npx -y playwright codegen --save-storage="$storage"

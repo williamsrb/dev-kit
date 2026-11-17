@@ -62,7 +62,7 @@ sleep 15   # watch for "Started application <key> bundle N"
 
 ### 3. Hit the dispatcher URL
 
-```
+```text
 /admin/<appKey>/<toolName>/_/admin:extension/<appKey>:<extensionName>
 ```
 

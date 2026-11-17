@@ -1,11 +1,11 @@
 ---
 name: plan-implementation
-description: "Write or update ~/.agents/plans/<TASK-ID>/ from a PRD (Jira download or local handoff): user stories, requirements, TBDs, technical plan. Legacy ~/.agents/plans/<TASK-ID>.md still resolves. | recommendedRole: plan | aliases: plan-task-spec, plan-spec, task-spec-plan, jira-task-spec."
+description: "Write or update ~/.agents/plans/<TASK-ID>/ from a PRD (Jira download or local write-prd): user stories, requirements, TBDs, technical plan. Legacy ~/.agents/plans/<TASK-ID>.md still resolves."
 metadata:
   recommendedRole: plan
   aliases: plan-task-spec, plan-spec, task-spec-plan, jira-task-spec
   cliDependencies:
-    required: [agentctl, rg]
+    required: [agentctl, rg, python3]
     optional: [ollama]
   localModels:
     preferred: granite3-moe:3b
@@ -17,7 +17,7 @@ Use `agentctl task resolve`, `agentctl markdown slice`, and `agentctl plan init 
 
 ## Cursor IDE
 
-**Offline task cache:** `~/.agents/prds/<TASK-ID>.md` (Jira: `download-jira-task`. Local: `handoff` PRD format).  
+**Offline task cache:** `~/.agents/prds/<TASK-ID>.md` (Jira: `download-jira-task`. Local: `write-prd`).  
 **Plan / spec output:** `<plans-dir>/<TASK-ID>/` (folder; see Plans directory). Legacy `<plans-dir>/<TASK-ID>.md` still resolves.  
 **Enonic offline docs (XP7 / XP8 / React4XP v5 / v6 / v7):** see Step 3c — route via `~/.agents/kb/offline-reference/{xp7,xp8,react4xp-5.x,react4xp-6.x,react4xp-stable}/llm-index.md`.
 
@@ -25,7 +25,7 @@ Write the spec with **Write** / **StrReplace**. Use **Shell** for `mkdir -p <pla
 
 ## Context budget (token)
 
-Follow `~/.agents/kb/implementation/How-to-resolve-task-context.md`. Allowlist: sectioned `~/.agents/prds/<TASK-ID>.md` via `agentctl markdown slice` → write `~/.agents/plans/<TASK-ID>/`. Do not read evidence plans or sibling PRDs.
+Follow `~/.agents/kb/implementation/How-to-resolve-task-context.md`. Allowlist: sectioned `~/.agents/prds/<TASK-ID>.md` via `agentctl markdown slice` → write `~/.agents/plans/<TASK-ID>/`. Do not read evidence plans or sibling PRDs (the `find-related-issues` output in Step 2b is the only view of other issues).
 
 ## Auxiliary skills (optional, on demand)
 
@@ -92,19 +92,30 @@ Follow `../set-up-worktree/SKILL.md`. Run it from the **primary** checkout on th
 ```
 
 1. Check whether that file exists (e.g. `ls ~/.agents/prds/<TASK-ID>.md`).
-2. **If it exists** — use it. Do **not** re-download or re-handoff unless the user explicitly asks for a newer version.
+2. **If it exists** — use it. Do **not** re-download or rewrite it unless the user explicitly asks for a newer version.
 3. **If it is missing and `mode` is `jira`** — run the `download-jira-task` skill **as a nested prerequisite**:
    - Read and follow `../download-jira-task/SKILL.md` for this issue key.
    - State clearly: `called_from: plan-implementation` (so `download-jira-task` **skips** its cascade prompt into this skill).
    - Wait until `~/.agents/prds/<TASK-ID>.md` exists, then continue.
-4. **If it is missing and `mode` is `local`** — run `handoff` in **PRD** format as a nested prerequisite (`called_from: plan-implementation`). Do **not** call `download-jira-task`. Wait until the PRD exists, then continue.
+4. **If it is missing and `mode` is `local`** — run `write-prd` as a nested prerequisite (`called_from: plan-implementation`), with this conversation as the source. Do **not** call `download-jira-task`. Wait until the PRD exists, then continue.
 5. **Read the offline file in sections** (token budget). Call `agentctl markdown slice ~/.agents/prds/<TASK-ID>.md --sections … --json`. Do **not** `Read` the whole PRD.
-   - Always: title/summary metadata, `## Description`, and any acceptance-criteria headings (`--sections description` plus `acceptance-criteria` when that H2 exists)
+   - Always: title/summary metadata, `## Description`, `## Requirement Changes`, and any acceptance-criteria headings (`--sections description,requirement-changes` plus `acceptance-criteria` when that H2 exists). Requirement Changes override Description and AC; cite their `RC<n>` codes.
+   - Before drafting: `python3 ~/.agents/skills/write-prd/scripts/requirement_changes.py ~/.agents/prds/<TASK-ID>.md --json`. Exit 1 (stale) → **stop**. Tell the operator which comments are unchecked and how to refresh: `write-prd` "refresh `<slug>`" (`local`) or a new `download-jira-task` run (`jira`). Do not apply the comments yourself. Nested callers get the same stop
    - Read `## Comments` **only if** AC is missing/thin, TBD gaps remain, or nested `validate-plan` needs comments the draft cites (`--sections comments`)
    - Prefer Grep for criteria keywords, conflicts, missing URLs/locales/envs, and Figma/node mentions over dumping the whole comments thread
    - When comments are read: keep comment **ids**; ignore bot/CI noise (see 3a). Harvest conflicts into TBD (see 3f; **local:** auto-select after harvest)
 
-Do **not** call Atlassian MCP for issue/comment fetch in this skill when the offline file is available (or was just created by a nested download). Live Jira fetch belongs in `download-jira-task` only. Do **not** read `*-evidence-plan.md` or sibling-task PRDs while drafting.
+Do **not** call Atlassian MCP for issue/comment fetch in this skill when the offline file is available (or was just created by a nested download). Live Jira fetch belongs in `download-jira-task` only. Do **not** read `*-evidence-plan.md` or sibling-task PRDs while drafting. The one exception is the output of `find-related-issues` (Step 2b).
+
+### Step 2b — Related issues
+
+Other developers may change the same code, and released issues explain why it looks as it does. `~/.agents/prds/<TASK-ID>.related.json` and `~/.agents/prds/<TASK-ID>/related/<KEY>.md` hold that result.
+
+1. If `<TASK-ID>.related.json` is missing, or its `head.sha` is not the current `HEAD`, or it is over a day old, run `find-related-issues` (phase `plan`) as a nested prerequisite (`called_from: plan-implementation`). The factory runs it as its own step before this one, so it is usually there already. When the factory is the caller, do not run it again.
+2. Read the `## Assessment` of each brief, not the other issue's PRD or diff. Use `context` findings as rationale in the plan. A `contradiction` or `dependency` on unreleased work goes into Constraints (naming the issue key) and, when it needs a decision, into TBD (`jira`, drafted with `write-analyst-message`) or Local PO decisions (`local`). A `duplicate` is a TBD.
+3. A requirement change from another issue is history, not an AC of this task. Never copy another issue's scope into this plan's ACs.
+4. When the technical plan names files the scan did not cover (`files.source` was `prd` or `none`), rerun `scan` once after the files are known.
+5. A tracker `unavailable` or `warnings` about stale refs go into the plan's Constraints as unverified, not as "no related work".
 
 ---
 
@@ -113,7 +124,16 @@ Do **not** call Atlassian MCP for issue/comment fetch in this skill when the off
 Load only the phase being executed:
 
 1. Read [classify-and-scope.md](references/classify-and-scope.md) after the PRD exists. It covers comment filtering, task classification, docs/prototype checks, TBD harvesting, implicit-requirement harvesting, and existing-plan handling.
-2. Read [write-and-validate.md](references/write-and-validate.md) only when generating or revising the plan. It contains the complete template, quality gates, handoff rules, the techlead implicit-requirements post (`jira`), and local PO auto-select.
-3. **Validate/fix an existing plan** — follow `../validate-plan/SKILL.md` (`called_from: plan-implementation`). Do not duplicate that workflow here.
+2. Read [decision-points.md](references/decision-points.md) when the harvest finds a technical choice the ticket leaves open (auth, data store, caching, state, new dependency).
+3. Read [write-and-validate.md](references/write-and-validate.md) only when generating or revising the plan. It contains the complete template, quality gates, handoff rules, the techlead implicit-requirements post (`jira`), and local PO auto-select.
+4. **Validate/fix an existing plan** — follow `../validate-plan/SKILL.md` (`called_from: plan-implementation`). Do not duplicate that workflow here.
 
 Do not load both write references in advance. Use the local commands above for issue resolution, section selection, plan scaffolding, and final structure validation.
+
+## Final reply: next step (always last)
+
+After drafting a plan, put this block right after the 👉 line, as the last thing in the reply, with `<TASK-ID>` expanded (Jira key or slug). The operator pastes it into a fresh session. Skip it when `called_from` is set or `AGENTCTL_FACTORY` is set. In validate/fix mode, emit the `validate-plan` block instead.
+
+```text
+/validate-plan <TASK-ID>
+```

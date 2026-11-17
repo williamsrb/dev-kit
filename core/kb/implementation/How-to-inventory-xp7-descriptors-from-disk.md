@@ -2,7 +2,7 @@
 id: how-to-inventory-xp7-descriptors-from-disk
 when_skills: [run-plan, plan-implementation, develop-xp7-backend]
 inputs: [an XP7 checkout with src/main/resources]
-outputs: [static inventory covering FR-10 kinds]
+outputs: [static inventory covering the v1 descriptor kinds]
 stop_if: [starting the XP runtime for static inventory]
 read: whole
 prose: caveman-lite

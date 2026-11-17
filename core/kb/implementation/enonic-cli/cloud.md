@@ -11,7 +11,7 @@ prose: caveman-lite
 
 Login to Enonic Cloud via browser-based OAuth.
 
-```
+```bash
 enonic cloud login [--qr]
 ```
 
@@ -25,7 +25,7 @@ enonic cloud login [--qr]
 
 Log out from Enonic Cloud.
 
-```
+```bash
 enonic cloud logout
 ```
 
@@ -35,7 +35,7 @@ No additional flags.
 
 Install project JAR to Enonic Cloud.
 
-```
+```bash
 enonic cloud app install [flags]
 ```
 

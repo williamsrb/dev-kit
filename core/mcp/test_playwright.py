@@ -150,6 +150,30 @@ class PlaywrightHelpers(unittest.TestCase):
             self.assertEqual(picked, out / "storage-state.json")
             self.assertTrue(picked.is_file())
 
+    def test_extra_storage_states_copy_into_auth_and_refuse_duplicate_names(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            first = Path(tmp) / "realm-a" / "auth.json"
+            second = Path(tmp) / "realm-b" / "auth.json"
+            for path in (first, second):
+                path.parent.mkdir()
+                path.write_text('{"cookies": []}')
+            out = Path(tmp) / "out"
+            copied = self.mod.copy_extra_storage_states([str(first)], out, dry_run=False)
+            self.assertEqual(copied, [str(out / "auth" / "auth.json")])
+            self.assertEqual(os.stat(copied[0]).st_mode & 0o777, 0o600)
+            with self.assertRaises(SystemExit) as caught:
+                self.mod.copy_extra_storage_states([str(first), str(second)], out, dry_run=False)
+            self.assertIn("share the name auth.json", str(caught.exception))
+
+    def test_extra_storage_state_dry_run_plans_without_copying(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            src = Path(tmp) / "realm.json"
+            src.write_text('{"cookies": []}')
+            out = Path(tmp) / "out"
+            planned = self.mod.copy_extra_storage_states([str(src)], out, dry_run=True)
+            self.assertEqual(planned, [str(out / "auth" / "realm.json")])
+            self.assertFalse((out / "auth").exists())
+
     def test_claude_allow_rules_are_literal_per_instance(self):
         self.assertEqual(
             self.mod.claude_allow_rules("playwright-TASK-101"),

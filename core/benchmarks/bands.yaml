@@ -1,14 +1,24 @@
-# Absolute quality floor per role, the same for every vendor. A number is a fraction of
-# the frontier (best measured consolidated score, Terminal-Bench 4.0 points). `tie` means
-# within tie_sigma of the frontier's standard error. A config passes when its score
-# minus one standard error clears the floor.
-tie_sigma: 2
-quality-gate: tie
-task-owner: 0.85
-plan-review: 0.85
-plan: 0.75
-build: 0.75
-impl-review: 0.75
-explore: 0.45
-follow: 0.45
-deterministic: 0.20
+# Absolute quality floor per role, in Terminal-Bench 4.0 points, the same for every vendor.
+# A config passes when its consolidated score minus one standard error clears the floor.
+# Floors do not move when a stronger model ships: they are what the work needs, not a
+# fraction of the frontier (the old fraction-of-frontier bands rose with every new top
+# model, which pushed every role to a higher effort though the work did not change).
+#
+# Anchors (2026-11-10):
+#   Opus 4.8 max is measured at 23.6, so Opus 4.8 medium sits below that. The operator reports
+#   Haiku 5.5 high (35.9 +- 3.8, Artificial Analysis only) does the work Opus 4.8 medium did.
+#   Applying that to plan and build is an assumption. So plan and build need 30: Haiku 5.5 high clears it, medium
+#   (26.6 after one SE) does not.
+#   explore, follow and deterministic sit below that line by how little judgment they carry.
+#   Reviews need a margin over the author (Haiku 5.5 high authors at 35.9), so 40 forces a
+#   different, stronger model. task-owner adds room for coordination. quality-gate stays at
+#   the measured top cluster (gpt-6-astra low 50.2, Fable 5.1 medium 53.0, Opus 5 high 50.4).
+deterministic: 12
+explore: 22
+follow: 25
+plan: 30
+build: 30
+impl-review: 40
+plan-review: 40
+task-owner: 45
+quality-gate: 52

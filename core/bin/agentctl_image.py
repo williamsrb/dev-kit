@@ -7,9 +7,12 @@ import datetime as dt
 import hashlib
 import json
 import shutil
+import sys
+import tempfile
 from pathlib import Path
 from typing import Any
 
+import agentctl_local
 from agentctl_common import agents_home, argsafe_limit, emit, run, run_skill_script
 
 
@@ -141,12 +144,51 @@ def cmd_image_whitespace(args: argparse.Namespace) -> int:
 
 
 def cmd_image_describe(args: argparse.Namespace) -> int:
+    image = args.image.expanduser().resolve()
+    available, reason = agentctl_local.ollama_status(args.model)
+    if available or args.local_only:
+        payload, code = describe_with_ollama(image, args)
+        payload["backend"] = "ollama" if available else None
+        if reason:
+            payload["fallback_reason"] = reason
+        emit(payload)
+        return code
+    if not image.is_file():
+        emit({"status": "error", "image": str(image), "error": f"image not found: {image}"})
+        return 2
+    try:
+        system = agentctl_local.describer_prompt()
+    except OSError as exc:
+        emit({"status": "error", "image": str(image), "error": f"image-describer prompt missing: {exc}"})
+        return 2
+    with tempfile.TemporaryDirectory(prefix="agentctl-describe-") as tmp:
+        target = agentctl_local.preview(image, Path(tmp))
+        answer = agentctl_local.claude_fallback(
+            f"Image: {target}\nQuestion: {args.prompt or 'Describe this image.'}", system,
+            image_dir=target.parent, timeout=min(args.timeout, 180))
+    text = answer.get("text") or ""
+    out = {"status": "ok" if answer["ok"] else "error", "image": str(image), "preview": target != image,
+           "model": answer["model"], "backend": "claude", "fallback_reason": reason,
+           "duration_ms": answer.get("duration_ms"), "cost_usd": answer.get("cost_usd")}
+    if answer["ok"]:
+        out.update(description=text[:args.max_chars], truncated=len(text) > args.max_chars)
+    else:
+        out["error"] = answer.get("error")
+    emit(out)
+    return 0 if answer["ok"] else 2
+
+
+def describe_with_ollama(image: Path, args: argparse.Namespace) -> tuple[dict[str, Any], int]:
     script = agents_home() / "skills" / "describe-image" / "scripts" / "describe.py"
-    script_args = [str(args.image.expanduser().resolve()), "--model", args.model,
-                   "--timeout", str(args.timeout), "--max-chars", str(args.max_chars)]
+    script_args = [str(image), "--model", args.model, "--timeout", str(args.timeout), "--max-chars", str(args.max_chars)]
     if args.prompt:
         script_args += ["--prompt", args.prompt]
-    return run_skill_script(script, script_args, timeout=args.timeout + 30)
+    result = run([sys.executable, str(script), *script_args], timeout=args.timeout + 30)
+    try:
+        return json.loads(result.stdout), result.returncode
+    except json.JSONDecodeError:
+        return {"status": "error", "error": "non-JSON output from describe.py", "exit_code": result.returncode,
+                "stderr": result.stderr[:2000]}, 2
 
 
 def cmd_image_diff(args: argparse.Namespace) -> int:
@@ -284,11 +326,12 @@ def add_image_parsers(group) -> None:
     whitespace.set_defaults(func=cmd_image_whitespace)
     describe = group.add_parser(
         "describe",
-        help="Describe a screenshot with a local vision-capable Ollama model.",
+        help="Describe a screenshot: local Ollama vision first, ROLES.md deterministic model as fallback.",
         description=(
-            "Delegate to the describe-image skill: sends the image to a local Ollama "
-            "vision model (default gemma4:e4b) over its HTTP API. Not deterministic; "
-            "CPU-only inference measured ~140s per screenshot on this host."
+            "Sends the image to a local Ollama vision model (default gemma4:e4b) over its HTTP API; CPU-only "
+            "inference measured ~140s per screenshot on this host. When Ollama is missing, not answering, or "
+            "lacks the model, the ROLES.md `deterministic` Claude model describes a 1280px preview instead "
+            "(the image then leaves the machine; --local-only refuses that). Not deterministic either way."
         ),
     )
     describe.add_argument("image", type=Path, help="Screenshot image.")
@@ -296,6 +339,8 @@ def add_image_parsers(group) -> None:
     describe.add_argument("--model", default="gemma4:e4b", help="Vision-capable local Ollama model.")
     describe.add_argument("--timeout", type=float, default=300.0, help="Seconds to wait for inference.")
     describe.add_argument("--max-chars", type=int, default=4000, help="Bound the returned description.")
+    describe.add_argument("--local-only", action="store_true",
+                          help="Fail instead of falling back when Ollama cannot serve the model.")
     describe.add_argument("--json", action="store_true", help=argparse.SUPPRESS)
     describe.set_defaults(func=cmd_image_describe)
     diff = group.add_parser(

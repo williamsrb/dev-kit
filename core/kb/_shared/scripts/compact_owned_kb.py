@@ -18,7 +18,7 @@ SKIP_NAMES = {"llm-index.md", "How-to-author-ai-howtos.md"}
 _SCRIPTS = Path(__file__).resolve().parent
 if str(_SCRIPTS) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS))
-from llm_index import write_bucket_indexes  # noqa: E402
+from llm_index import write_bucket_indexes
 
 
 def tokens(text: str) -> int:
@@ -36,19 +36,17 @@ def split_worklog() -> None:
     # extract major sections
     def section(name: str, until: str | None) -> str:
         pat = rf"^## {re.escape(name)}\n"
-        m = re.search(pat, text, re.M)
+        m = re.search(pat, text, re.MULTILINE)
         if not m:
             return ""
         start = m.start()
         if until:
-            m2 = re.search(rf"^## {re.escape(until)}\n", text[m.end() :], re.M)
+            m2 = re.search(rf"^## {re.escape(until)}\n", text[m.end() :], re.MULTILINE)
             end = m.end() + m2.start() if m2 else len(text)
         else:
             end = len(text)
         return text[start:end].rstrip() + "\n"
 
-    slack = section("MCP discovery", "Jira collection") + "\n" + section("Slack collection", "Jira collection")
-    # MCP discovery until Slack is included in first call if until is Slack... fix:
     mcp = section("MCP discovery", "Slack collection")
     slack_only = section("Slack collection", "Jira collection")
     jira = section("Jira collection", "Collection status model")
@@ -67,7 +65,7 @@ def split_worklog() -> None:
             "prose: caveman-lite\n"
             "---\n\n"
             f"# {title}\n\n"
-            + re.sub(r"^## ", "### ", body, flags=re.M)
+            + re.sub(r"^## ", "### ", body, flags=re.MULTILINE)
         )
 
     (KB / "worklog/slack.md").write_text(
@@ -112,7 +110,7 @@ def add_commands_index() -> None:
     text = path.read_text(encoding="utf-8")
     if text.startswith("---\n"):
         return
-    cmds = re.findall(r"^### (enonic .+)$", text, re.M)
+    cmds = re.findall(r"^### (enonic .+)$", text, re.MULTILINE)
     rows = "\n".join(f"| `{c}` | `### {c}` |" for c in cmds)
     fm = (
         "---\n"
@@ -134,7 +132,7 @@ def add_commands_index() -> None:
 
 SCOPE_RE = re.compile(
     r"^(# .+)\n+(?:\*\*Scope:\*\*[^\n]*\n)+(?:\*\*Applies to:\*\*[^\n]*\n)?(?:\*\*Related:\*\*[^\n]*\n)?(?:\*\*CLI version baseline:\*\*[^\n]*\n)?\n?",
-    re.M,
+    re.MULTILINE,
 )
 
 
@@ -144,17 +142,14 @@ def add_frontmatter(path: Path, bucket: str) -> bool:
         return False
     if path.name in SKIP_NAMES:
         return False
-    m = re.match(r"^# (.+)\n", text)
-    title = m.group(1) if m else path.stem
     slug = path.stem.lower()
-    scope = re.search(r"\*\*Scope:\*\*\s*(.+)", text)
     applies = re.search(r"\*\*Applies to:\*\*\s*(.+)", text)
     when = []
     if applies:
         when = re.findall(r"`([^`]+)`", applies.group(1))
     fm_when = ", ".join(when[:8]) if when else ""
     body = SCOPE_RE.sub(r"\1\n\n", text, count=1)
-    body = re.sub(r"^## Purpose\n\n(?:.*?\n)+?(?=^## )", "", body, count=1, flags=re.M | re.S)
+    body = re.sub(r"^## Purpose\n\n(?:.*?\n)+?(?=^## )", "", body, count=1, flags=re.MULTILINE | re.DOTALL)
     fm = (
         "---\n"
         f"id: {slug}\n"
@@ -189,4 +184,7 @@ def main() -> None:
 
 
 if __name__ == "__main__":
+    from apply_gate import gate
+
+    gate(__doc__)
     main()

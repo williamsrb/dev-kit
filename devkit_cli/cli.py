@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import argparse
 import sys
-from typing import Callable
+from collections.abc import Callable
 
 from . import (
     bootstrap_plan,
@@ -22,6 +22,7 @@ from . import (
     paths,
     profiles,
     project,
+    session_find,
     session_sync,
     update,
 )
@@ -46,7 +47,9 @@ Common examples:
   devkit profile apps-sync --apply   # prints the fork plan, then asks sudo
   devkit profile auth restore
   devkit profile session-sync --source stock --target dummy   # dry run
+  devkit profile session-find --title "quota fix"             # find one session
   devkit project init . --layer core --apply   # then: devkit project build . --apply
+  devkit project scaffold . --layer core --apply   # copy the harness into the repo
   devkit update check
   devkit doctor
   devkit deps --profile enonic       # are the declared binaries on PATH?
@@ -141,6 +144,22 @@ def build_parser() -> argparse.ArgumentParser:
     p_show.add_argument("name")
     p_show.set_defaults(func=profiles.cmd_show)
 
+    def ref_options(parser, *, unpin: bool = False) -> None:
+        """--track / --pin / --from (and --unpin on sync): the kit version of a profile."""
+        parser.add_argument("--from", dest="from_source", metavar="SRC",
+                            help="Kit to read the ref from: a git URL or a local git "
+                                 "checkout. Default: the source the installed kit recorded.")
+        group = parser.add_mutually_exclusive_group()
+        group.add_argument("--track", metavar="BRANCH",
+                           help="Follow this kit branch: skills, rules and kb come from its "
+                                "tip and move on 'devkit update fetch' + 'update apply'.")
+        group.add_argument("--pin", metavar="TAG_OR_SHA",
+                           help="Fix this kit tag or commit: skills, rules and kb come from "
+                                "it and never move by themselves.")
+        if unpin:
+            group.add_argument("--unpin", action="store_true",
+                               help="Return the profile to the installed kit (current).")
+
     p_create = profile.add_parser(
         "create",
         help="Materialize a named instance from a profile type.",
@@ -168,6 +187,7 @@ def build_parser() -> argparse.ArgumentParser:
                           help="Headless: write no launchers, URL handlers, app forks, "
                                "badges or colour, and never ask sudo for forks. "
                                "Default: DEVKIT_HEADLESS, else off.")
+    ref_options(p_create)
     p_create.add_argument("--apply", action="store_true",
                           help="Write user-owned config, then print the desktop-fork "
                                "plan and ask sudo. Default: dry run.")
@@ -194,6 +214,7 @@ def build_parser() -> argparse.ArgumentParser:
                         help="Headless: write no launchers, URL handlers, app forks, "
                              "badges or colour, and never ask sudo for forks. "
                              "Default: DEVKIT_HEADLESS, else the stored value.")
+    ref_options(p_sync, unpin=True)
     p_sync.add_argument("--apply", action="store_true",
                         help="Write user-owned config, then print the desktop-fork "
                              "plan and ask sudo. Default: dry run.")
@@ -289,6 +310,44 @@ def build_parser() -> argparse.ArgumentParser:
                             help="Write. Default: dry run.")
     p_sessions.set_defaults(func=session_sync.cmd_session_sync)
 
+    p_find = profile.add_parser(
+        "session-find",
+        help="Find a Claude session by title across every profile and stock.",
+        description=(
+            "Read-only. Lists Claude Code and Claude Desktop sessions whose title "
+            "contains --title (case-insensitive), with id, last activity, working "
+            "folder and file paths. Desktop index files are always read; "
+            "transcripts are scanned from --since, default the last 30 days."),
+    )
+    p_find.add_argument("--title", required=True, metavar="TEXT", help="Title text to match.")
+    p_find.add_argument("--since", metavar="YYYY-MM-DD",
+                        help="Only sessions active on or after this date.")
+    p_find.add_argument("--profile", metavar="NAME",
+                        help="Only this side: a profile name or 'stock'.")
+    p_find.add_argument("--json", action="store_true", help="Bounded JSON for scripts.")
+    p_find.set_defaults(func=session_find.cmd_session_find)
+
+    p_pull = profile.add_parser(
+        "session-pull",
+        help="Copy one Claude session into the side you work in.",
+        description=(
+            "Copy one Claude session (transcripts, sidecar folders and the Desktop "
+            "index file) from --source into --target. --target defaults to the "
+            "profile named by DEVKIT_PROFILE, else 'stock'. The session keeps its "
+            "id. The source is never written; nothing is deleted; a newer target "
+            "file is kept. While the target's app runs, only files the target "
+            "lacks are added. Dry run until --apply."),
+    )
+    p_pull.add_argument("--session", required=True, metavar="ID", help="Session id.")
+    p_pull.add_argument("--source", required=True, metavar="NAME",
+                        help="Side that holds it: a profile name or 'stock'.")
+    p_pull.add_argument("--target", metavar="NAME",
+                        help="Side to write to. Default: DEVKIT_PROFILE, else stock.")
+    p_pull.add_argument("--org", metavar="DIR",
+                        help="Target Desktop organisation folder for the index file.")
+    p_pull.add_argument("--apply", action="store_true", help="Write. Default: dry run.")
+    p_pull.set_defaults(func=session_sync.cmd_session_pull)
+
     # -- project ------------------------------------------------------------
     proj = group("project",
                  "Apply the harness (skills, instructions) to a work repo, "
@@ -341,6 +400,46 @@ def build_parser() -> argparse.ArgumentParser:
     p_build.add_argument("--apply", action="store_true",
                          help="Write. Default: dry run.")
     p_build.set_defaults(func=project.cmd_build)
+
+    p_scaffold = proj.add_parser(
+        "scaffold",
+        help="Copy the harness into the repo as files the repo owns.",
+        description=(
+            "Copy the skills of the --layer flavors or profile types into "
+            "harness/skills, write AGENTS.md and a CLAUDE.md link, and record "
+            "where they came from in harness/project.json and harness/.origin.json. "
+            "A first scaffold is a one-time copy: the repo owns the result and "
+            "commits it, and build, status and clean never rewrite it. "
+            "--overwrite rebuilds the copy from its source (the recorded one, or "
+            "the flags given) and first backs every replaced path up into "
+            "harness/.devkit-backup-<time>/; skills you added are kept. "
+            "--track follows a branch of the kit and --pin fixes a tag or commit, "
+            "each read from a throwaway clone, never from `current`. Dry run "
+            "without --apply."
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    project_path(p_scaffold)
+    p_scaffold.add_argument("--layer", action="append", metavar="TYPE",
+                            help="Flavor or profile type to copy (repeatable; at least "
+                                 "one on a first scaffold).")
+    p_scaffold.add_argument("--from", dest="from_source", metavar="SRC",
+                            help="Kit to read the ref from: a git URL or a local git "
+                                 "checkout. Default: the source the installed kit recorded.")
+    scaffold_ref = p_scaffold.add_mutually_exclusive_group()
+    scaffold_ref.add_argument("--track", metavar="BRANCH",
+                              help="Copy from the tip of this kit branch.")
+    scaffold_ref.add_argument("--pin", metavar="TAG_OR_SHA",
+                              help="Copy from this kit tag or commit.")
+    p_scaffold.add_argument("--rules", action=argparse.BooleanOptionalAction,
+                            help="Embed the kit's rules in AGENTS.md. Default: on; "
+                                 "with --overwrite, the recorded choice.")
+    p_scaffold.add_argument("--overwrite", action="store_true",
+                            help="Rebuild the copy from source after backing up what "
+                                 "it replaces. Without it, an existing copy is refused.")
+    p_scaffold.add_argument("--apply", action="store_true",
+                            help="Write. Default: dry run.")
+    p_scaffold.set_defaults(func=project.cmd_scaffold)
 
     p_status = proj.add_parser(
         "status",

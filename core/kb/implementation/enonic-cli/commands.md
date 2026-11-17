@@ -38,6 +38,7 @@ These flags apply to all **remote** commands (commands that talk to a running XP
 | `--client-cert` | —     | Client certificate for mTLS (must pair with `--client-key`) | —       |
 
 ---
+
 ## Compatibility Mode (`--compat`)
 
 CLI 4.x talks to the **XP 8** management API by default. Four data commands accept a `--compat` flag to target a legacy **XP 7** instance:

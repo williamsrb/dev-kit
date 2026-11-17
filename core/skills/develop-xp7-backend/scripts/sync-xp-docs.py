@@ -2,8 +2,6 @@
 """Sync Enonic XP 7.x docs to LLM-dense offline markdown."""
 from __future__ import annotations
 
-from pathlib import Path
-
 import argparse
 import datetime as dt
 import html as html_lib
@@ -12,6 +10,7 @@ import re
 import sys
 import urllib.error
 import urllib.request
+from pathlib import Path
 
 DOC_BASE = "https://developer.enonic.com/docs/platform/7.x"
 
@@ -73,7 +72,7 @@ URL_GROUPS = {
     ],
 }
 
-ANY_DIV_RE = re.compile(r"</?div\b[^>]*>", re.I)
+ANY_DIV_RE = re.compile(r"</?div\b[^>]*>", re.IGNORECASE)
 TAG_RE = re.compile(r"(?is)<[^>]+>")
 WS_RE = re.compile(r"[ \t]+\n")
 MULTI_NL_RE = re.compile(r"\n{3,}")
@@ -101,11 +100,11 @@ def fetch_html(url: str, timeout: int = 30) -> str:
 
 def extract_balanced_div(html_text: str, *, div_id: str | None = None, class_name: str | None = None) -> str | None:
     if div_id:
-        open_re = re.compile(rf'<div\b[^>]*\bid=["\']{re.escape(div_id)}["\'][^>]*>', re.I)
+        open_re = re.compile(rf'<div\b[^>]*\bid=["\']{re.escape(div_id)}["\'][^>]*>', re.IGNORECASE)
     elif class_name:
         open_re = re.compile(
             rf'<div\b[^>]*\bclass=["\'][^"\']*\b{re.escape(class_name)}\b[^"\']*["\'][^>]*>',
-            re.I,
+            re.IGNORECASE,
         )
     else:
         return None
@@ -136,11 +135,11 @@ def extract_title(html_text: str) -> str:
     m = re.search(
         r'<div class="docpage-content__title">\s*<h1[^>]*>(.*?)</h1>',
         html_text,
-        flags=re.I | re.S,
+        flags=re.IGNORECASE | re.DOTALL,
     )
     if m:
         return normalize_inline(m.group(1))
-    m = re.search(r"<title>(.*?)</title>", html_text, flags=re.I | re.S)
+    m = re.search(r"<title>(.*?)</title>", html_text, flags=re.IGNORECASE | re.DOTALL)
     if not m:
         return "Untitled"
     title = html_lib.unescape(re.sub(r"\s+", " ", m.group(1)).strip())
@@ -389,8 +388,7 @@ def write_llm_index(output_dir: str, entries: list[tuple[str, str]]) -> None:
     path = os.path.join(output_dir, "llm-index.md")
     with open(path, "w", encoding="utf-8") as f:
         f.write("# LLM_INDEX|machine|v1|path<TAB>tokens\n\n")
-        for rel, tokens in entries:
-            f.write(f"{rel}\t{tokens}\n")
+        f.writelines(f"{rel}\t{tokens}\n" for rel, tokens in entries)
 
 
 def main() -> int:
@@ -405,7 +403,7 @@ def main() -> int:
     args = parser.parse_args()
 
     output_dir = os.path.abspath(args.output)
-    generated_at = dt.datetime.now(dt.timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+    generated_at = dt.datetime.now(dt.UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
     rows: list[tuple[str, str, str]] = []
     llm_entries: list[tuple[str, str]] = []

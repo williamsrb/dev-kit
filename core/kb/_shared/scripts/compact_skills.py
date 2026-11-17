@@ -20,7 +20,7 @@ SKILLS = Path("${HOME}/.agents/skills")
 VENDOR_NAMES = {"playwright-cli"}
 
 TEMPLATE_DIR_PARTS = {"template", "templates"}
-TEMPLATE_NAME_RE = re.compile(r"template", re.I)
+TEMPLATE_NAME_RE = re.compile(r"template", re.IGNORECASE)
 
 SKIP_SUFFIX = {
     ".py",
@@ -46,15 +46,15 @@ SKIP_SUFFIX = {
 }
 SKIP_DIR_PARTS = {"scripts", "agents", "__pycache__", ".git"}
 
-FENCE_SPLIT = re.compile(r"(^```[^\n]*\n.*?^```[ \t]*\n?)", re.M | re.S)
+FENCE_SPLIT = re.compile(r"(^```[^\n]*\n.*?^```[ \t]*\n?)", re.MULTILINE | re.DOTALL)
 BLANK3 = re.compile(r"\n{3,}")
 PROVENANCE_DESC = re.compile(
     r"\s*Installed for Cursor IDE from \S+\.?",
-    re.I,
+    re.IGNORECASE,
 )
 ADAPTED_LINE = re.compile(
     r"^Adapted from \[[^\]]+\]\([^)]+\)(?: v[\d.]+)?\.\s*$",
-    re.M,
+    re.MULTILINE,
 )
 
 
@@ -66,9 +66,7 @@ def is_template(path: Path, root: Path) -> bool:
     rel_parts = path.relative_to(root).parts
     if any(p.lower() in TEMPLATE_DIR_PARTS for p in rel_parts):
         return True
-    if TEMPLATE_NAME_RE.search(path.name):
-        return True
-    return False
+    return bool(TEMPLATE_NAME_RE.search(path.name))
 
 
 def map_prose(text: str, fn) -> str:
@@ -103,11 +101,11 @@ def compact_description_block(fm: str) -> str:
     m = re.search(
         r"^(description:\s*>-?\n)((?:^[ \t].+\n)+)",
         fm,
-        re.M,
+        re.MULTILINE,
     )
     if m:
         prefix, body = m.group(1), m.group(2)
-        raw = re.sub(r"^[ \t]+", "", body, flags=re.M).replace("\n", " ").strip()
+        raw = re.sub(r"^[ \t]+", "", body, flags=re.MULTILINE).replace("\n", " ").strip()
         stripped = PROVENANCE_DESC.sub("", raw).strip()
         if len(stripped) < 80 or stripped == raw:
             return fm
@@ -127,7 +125,7 @@ def compact_description_block(fm: str) -> str:
         new_body = "\n".join(lines) + "\n"
         return fm[: m.start()] + prefix + new_body + fm[m.end() :]
 
-    m = re.search(r'^description:\s*"([^"]*)"', fm, re.M)
+    m = re.search(r'^description:\s*"([^"]*)"', fm, re.MULTILINE)
     if m:
         raw = m.group(1)
         stripped = PROVENANCE_DESC.sub("", raw).strip()
@@ -135,7 +133,7 @@ def compact_description_block(fm: str) -> str:
             return fm
         return fm[: m.start()] + f'description: "{stripped}"' + fm[m.end() :]
 
-    m = re.search(r"^description:\s*(.+)$", fm, re.M)
+    m = re.search(r"^description:\s*(.+)$", fm, re.MULTILINE)
     if m and not m.group(1).startswith(">") and not m.group(1).startswith("|"):
         raw = m.group(1).strip().strip('"').strip("'")
         stripped = PROVENANCE_DESC.sub("", raw).strip()
@@ -216,4 +214,7 @@ def main() -> None:
 
 
 if __name__ == "__main__":
+    from apply_gate import gate
+
+    gate(__doc__)
     main()

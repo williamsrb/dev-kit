@@ -27,7 +27,7 @@ Python 3 stdlib. No `debsums`, no `dpkg -S` per file.
    - `.md5sums` lines are `<md5>  <relative path>` (two spaces), path has **no** leading `/`.
    - Filter both indexes to the roots you actually scan. On a full system this drops ~90% of entries and the RSS with them (48 MB instead of ~400 MB).
 
-2. **Parse `Conffiles` out of `/var/lib/dpkg/status`, not the `.conffiles` files.** The status stanza carries dpkg's own pristine md5; `/var/lib/dpkg/info/*.conffiles` carries only paths. Format is one indented ` /path md5 [obsolete|newconffile]` per line. The first element of the parsed field is the empty text on the `Conffiles:` line itself — discard it.
+2. **Parse `Conffiles` out of `/var/lib/dpkg/status`, not the `.conffiles` files.** The status stanza carries dpkg's own pristine md5; `/var/lib/dpkg/info/*.conffiles` carries only paths. Format is one indented `/path md5 [obsolete|newconffile]` per line. The first element of the parsed field is the empty text on the `Conffiles:` line itself — discard it.
 
 3. **Classify with conffile baselines taking priority** over `.md5sums`, then ownership, then hash comparison. Compute md5 and sha256 in a single read pass; hashing 100k files twice doubles the only expensive part.
 

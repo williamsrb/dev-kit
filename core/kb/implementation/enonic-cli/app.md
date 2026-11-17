@@ -11,7 +11,7 @@ prose: caveman-lite
 
 Install an application on all cluster nodes. Alias: `i`.
 
-```
+```bash
 enonic app install [flags]
 ```
 
@@ -26,7 +26,7 @@ enonic app install [flags]
 
 Start an installed application.
 
-```
+```bash
 enonic app start <app-key> [flags]
 ```
 
@@ -39,7 +39,7 @@ enonic app start <app-key> [flags]
 
 Stop a running application.
 
-```
+```bash
 enonic app stop <app-key> [flags]
 ```
 

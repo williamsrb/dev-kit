@@ -12,8 +12,6 @@ In-scope links rewrite to learn/react4xp-tutorial/<channel>/....md (shared learn
 """
 from __future__ import annotations
 
-from pathlib import Path
-
 import argparse
 import datetime as dt
 import html as html_lib
@@ -24,6 +22,7 @@ import time
 import urllib.error
 import urllib.request
 from collections import deque
+from pathlib import Path
 from urllib.parse import urldefrag, urljoin, urlparse
 
 HOST = "https://developer.enonic.com"
@@ -50,12 +49,12 @@ ASSET_EXTS = (
     ".ahtml",
 )
 
-ANY_DIV_RE = re.compile(r"</?div\b[^>]*>", re.I)
+ANY_DIV_RE = re.compile(r"</?div\b[^>]*>", re.IGNORECASE)
 TAG_RE = re.compile(r"(?is)<[^>]+>")
 WS_RE = re.compile(r"[ \t]+\n")
 MULTI_NL_RE = re.compile(r"\n{3,}")
 HEADING_LINK_RE = re.compile(r'(?is)<a\b[^>]*class="[^"]*link[^"]*"[^>]*>(.*?)</a>')
-HREF_RE = re.compile(r"""href=["']([^"']+)["']""", re.I)
+HREF_RE = re.compile(r"""href=["']([^"']+)["']""", re.IGNORECASE)
 VERSION_BADGE_RE = re.compile(
     r"(?i)\bXP\s*XP\s*[78]\.\d+(?:\.\d+)?\s*[78]\.\d+(?:\.\d+)?\b|"
     r"\bXP\s+[78]\.\d+(?:\.\d+)?\s+[78]\.\d+(?:\.\d+)?\b"
@@ -72,7 +71,7 @@ DOC_TAG = "react4xp"
 
 
 def utc_now() -> str:
-    return dt.datetime.now(dt.timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+    return dt.datetime.now(dt.UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
 
 def path_allowed(path: str) -> bool:
@@ -138,11 +137,11 @@ def fetch_html(url: str, timeout: int = 30) -> tuple[str, str]:
 
 def extract_balanced_div(html_text: str, *, div_id: str | None = None, class_name: str | None = None) -> str | None:
     if div_id:
-        open_re = re.compile(rf'<div\b[^>]*\bid=["\']{re.escape(div_id)}["\'][^>]*>', re.I)
+        open_re = re.compile(rf'<div\b[^>]*\bid=["\']{re.escape(div_id)}["\'][^>]*>', re.IGNORECASE)
     elif class_name:
         open_re = re.compile(
             rf'<div\b[^>]*\bclass=["\'][^"\']*\b{re.escape(class_name)}\b[^"\']*["\'][^>]*>',
-            re.I,
+            re.IGNORECASE,
         )
     else:
         return None
@@ -196,11 +195,11 @@ def extract_title(html_text: str, page_url: str) -> str:
     m = re.search(
         r'<div class="docpage-content__title">\s*<h1[^>]*>(.*?)</h1>',
         html_text,
-        flags=re.I | re.S,
+        flags=re.IGNORECASE | re.DOTALL,
     )
     if m:
         return normalize_inline(m.group(1), page_url)
-    m = re.search(r"<title>(.*?)</title>", html_text, flags=re.I | re.S)
+    m = re.search(r"<title>(.*?)</title>", html_text, flags=re.IGNORECASE | re.DOTALL)
     if not m:
         return "Untitled"
     title = html_lib.unescape(re.sub(r"\s+", " ", m.group(1)).strip())
@@ -377,19 +376,16 @@ def write_index(output_dir: str, generated_at: str, rows: list[tuple[str, str, s
         f.write("Format: llm-dense (cascade)\n")
         f.write("Shared base: `learn/react4xp/*`\n\n")
         f.write("Start URLs:\n")
-        for seed in START_URLS:
-            f.write(f"- {seed}\n")
+        f.writelines(f"- {seed}\n" for seed in START_URLS)
         f.write("\n| File | Title | URL |\n")
         f.write("| --- | --- | --- |\n")
-        for rel, title, url in rows:
-            f.write(f"| `{rel}` | {title.replace('|', '\\|')} | {url} |\n")
+        f.writelines(f"| `{rel}` | {title.replace('|', '\\|')} | {url} |\n" for rel, title, url in rows)
 
 
 def write_llm_index(output_dir: str, entries: list[tuple[str, str]]) -> None:
     with open(os.path.join(output_dir, "llm-index.md"), "w", encoding="utf-8") as f:
         f.write("# LLM_INDEX|machine|v1|path<TAB>tokens\n\n")
-        for rel, tokens in sorted(entries):
-            f.write(f"{rel}\t{tokens}\n")
+        f.writelines(f"{rel}\t{tokens}\n" for rel, tokens in sorted(entries))
 
 
 def main() -> int:

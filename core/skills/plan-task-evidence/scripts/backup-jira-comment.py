@@ -19,7 +19,7 @@ import json
 import os
 import re
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 SAFE_RE = re.compile(r"[^A-Za-z0-9._-]+")
@@ -72,7 +72,7 @@ def main(argv: list[str]) -> int:
         print(f"error: {exc}", file=sys.stderr)
         return 2
 
-    stamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H-%M-%SZ")
+    stamp = datetime.now(UTC).strftime("%Y-%m-%dT%H-%M-%SZ")
     dest_dir = BACKUP_ROOT / issue / "comment-backups" / comment_id
     html_path = dest_dir / f"{stamp}.html"
     meta_path = dest_dir / f"{stamp}.meta.json"
@@ -83,7 +83,7 @@ def main(argv: list[str]) -> int:
         meta = {
             "issue": args.issue.strip(),
             "commentId": args.comment_id.strip(),
-            "backedUpAt": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "backedUpAt": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
             "created": args.created,
             "updated": args.updated,
             "author": args.author,

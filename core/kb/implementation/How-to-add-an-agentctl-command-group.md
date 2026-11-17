@@ -12,7 +12,7 @@ prose: caveman-lite
 
 Heavy groups live in `bin/agentctl_<name>.py`. `bin/agentctl` only registers them. Shared `emit` / `run` / markdown helpers live in `bin/agentctl_common.py` so groups never import `bin/agentctl` (cycle).
 
-Existing siblings: `plan`, `image` (also evidence), `security`, `skills`, `docs` (also local), `kb`, `jira`, `code`.
+Existing siblings: `plan`, `image` (also evidence), `security`, `skills`, `docs` (also local), `kb`, `jira`, `code`, `factory`.
 
 ## Procedure
 
@@ -28,3 +28,6 @@ Existing siblings: `plan`, `image` (also evidence), `security`, `skills`, `docs`
 - `group()` already prints that group's help on bare invocation. Do not set `required=True` on the group's subparsers.
 - A missing CLI (`zstd`) is a `KbError`, not a silent skip.
 - Do not document a new group as a How-to under `kb/_shared` unless that extra is ticked.
+- A group whose JSON must keep a key order (summary first) cannot use `emit`: it sorts keys. Print with `json.dumps(..., separators=(",", ":"))` in the group module and keep errors on the shared `main()` handler (`agentctl_disk.py`).
+- Tests that build a fixture tree under `/tmp` or fake `$HOME` inside it hit path-based rules for tmp and cache kinds. Create the fixture next to the test file and pin `HOME`, `AGENTS_HOME` and the group's own state-dir env var.
+- A live gate catches what fake runners cannot: `flatpak uninstall --unused` answered `n` exits 1, and `docker system df` build-cache "reclaimable" excludes `Shared` records. Run each external collector once for real before calling it done.

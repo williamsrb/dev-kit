@@ -1,1 +1,0 @@
-User-level hooks (`~/.agents/hooks/history.py`) log every chat prompt and result to `~/.agents/history/<iso-date>/<iso-datetime>_prompt.md` and `_result.md`; the `~/.cursor`, `~/.claude`, `~/.codex` `history` dirs symlink there. **Do not** create these files unless the user asks for a manual export or fix. Hook failures: `~/.agents/history/.state/hook-errors.log`.

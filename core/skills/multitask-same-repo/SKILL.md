@@ -1,6 +1,6 @@
 ---
 name: multitask-same-repo
-description: "Run multiple tasks on one git repo in parallel: worktrees, phase-split sessions, one implementer per branch. Jira keys or local slugs. Use only when the operator or an orchestrator names this skill. | recommendedRole: task-owner."
+description: "Run multiple tasks on one git repo in parallel: worktrees, phase-split sessions, one implementer per branch. Jira keys or local slugs. Use only when the operator or an orchestrator names this skill."
 metadata:
   recommendedRole: task-owner
   cliDependencies:

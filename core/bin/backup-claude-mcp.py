@@ -2,8 +2,9 @@
 """Copy mcpServers from each Claude .claude.json into mcp-backup.json.
 
 Default root: ~/.claude. Writes only the MCP server
-map (including env/headers), not the rest of the volatile config. Destination
-mode is 0600. Unchanged payloads are left in place.
+map (env and headers included, with secret values replaced by "<redacted>"), not
+the rest of the volatile config. Destination mode is 0600. Unchanged payloads are
+left in place.
 
   python3 ~/.agents/bin/backup-claude-mcp.py --dry-run
   python3 ~/.agents/bin/backup-claude-mcp.py
@@ -20,8 +21,10 @@ import os
 import sys
 import tempfile
 import time
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Iterable
+
+logger = logging.getLogger(__name__)
 
 HOME = Path.home()
 DEFAULT_ROOTS = (
@@ -32,11 +35,13 @@ DEST_NAME = "mcp-backup.json"
 DEFAULT_LOCK = HOME / ".local" / "share" / "claude-mcp-backup" / "backup.lock"
 DEFAULT_LOG = HOME / ".local" / "share" / "claude-mcp-backup" / "backup.log"
 DEST_MODE = 0o600
+SECRET_HINTS = ("TOKEN", "SECRET", "AUTHORIZATION", "PASSWORD", "BEARER", "KEY")
+REDACTED = "<redacted>"
 
 
 def acquire_lock(lock_path: Path):
     lock_path.parent.mkdir(parents=True, exist_ok=True)
-    fh = open(lock_path, "w")
+    fh = open(lock_path, "w", encoding="utf-8")  # noqa: SIM115 - held open to keep the lock
     try:
         fcntl.flock(fh.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
     except OSError as e:
@@ -65,17 +70,35 @@ def setup_logging(log_path: Path, verbose: bool) -> None:
 def load_mcp_servers(source: Path) -> dict:
     data = json.loads(source.read_text(encoding="utf-8"))
     if not isinstance(data, dict):
-        raise ValueError(f"{source} root is not an object")
+        raise ValueError(f"{source} root is not an object")  # noqa: TRY004 - malformed input, not a programming error
     mcp = data.get("mcpServers")
     if mcp is None:
         return {}
     if not isinstance(mcp, dict):
-        raise ValueError(f"{source} mcpServers is not an object")
+        raise ValueError(f"{source} mcpServers is not an object")  # noqa: TRY004 - malformed input, not a programming error
     return mcp
 
 
+def redact_secrets(mcp_servers: dict) -> dict:
+    """Copy of the server map with secret-named env and header values replaced.
+
+    Same hint list as mcp/install.py; the real values live in the env files and .auth.
+    """
+    out = {}
+    for name, spec in mcp_servers.items():
+        spec = dict(spec)
+        for field in ("env", "headers"):
+            if isinstance(spec.get(field), dict):
+                spec[field] = {
+                    key: REDACTED if any(hint in key.upper() for hint in SECRET_HINTS) else value
+                    for key, value in spec[field].items()
+                }
+        out[name] = spec
+    return out
+
+
 def encode_backup(mcp_servers: dict) -> bytes:
-    payload = {"mcpServers": mcp_servers}
+    payload = {"mcpServers": redact_secrets(mcp_servers)}
     text = json.dumps(payload, indent=2, sort_keys=True, ensure_ascii=False)
     return (text + "\n").encode("utf-8")
 
@@ -102,10 +125,10 @@ def backup_one(root: Path, *, dry_run: bool) -> str:
     data = encode_backup(mcp)
     names = sorted(mcp)
     if dest.is_file() and dest.read_bytes() == data:
-        logging.info("unchanged %s servers=%d", dest, len(names))
+        logger.info("unchanged %s servers=%d", dest, len(names))
         return "unchanged"
     action = "write" if dest.exists() else "create"
-    logging.info(
+    logger.info(
         "%s %s -> %s servers=%d names=%s",
         "would " + action if dry_run else action,
         source,
@@ -139,19 +162,19 @@ def main(argv: Iterable[str] | None = None) -> int:
     roots = tuple(r.expanduser() for r in (args.root or DEFAULT_ROOTS))
     wrote = unchanged = failed = 0
     try:
-        logging.info("backup start roots=%s dry_run=%s", [str(r) for r in roots], args.dry_run)
+        logger.info("backup start roots=%s dry_run=%s", [str(r) for r in roots], args.dry_run)
         for root in roots:
             try:
                 result = backup_one(root, dry_run=args.dry_run)
             except Exception:
-                logging.exception("backup failed for %s", root)
+                logger.exception("backup failed for %s", root)
                 failed += 1
                 continue
             if result == "unchanged":
                 unchanged += 1
             else:
                 wrote += 1
-        logging.info(
+        logger.info(
             "backup done wrote=%d unchanged=%d failed=%d elapsed=%.2fs",
             wrote,
             unchanged,

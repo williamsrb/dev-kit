@@ -23,7 +23,7 @@ Plain-JS (non-TypeScript) XP 7 app migrated to XP 8.0.4. Verified on
 `upgrade.md`'s widget-migration example is **TypeScript**, where `import {a, b} from '...'`
 compiles away. Copying its shape into plain JS gives a 500 on first request:
 
-```
+```text
 com.example.automatictranslation:/admin/extensions/ata/ata.js:5:6
 ES6 destructuring is not yet implemented
 const { requestHandler, mappedRelativePath } = require('/lib/enonic/static')
@@ -55,14 +55,14 @@ function initializeConnection() {
 On XP 8 (Jetty 12.1.x) the handle captures the local scope of the request that created it. The
 **next** request's first node read then dereferences a recycled servlet request:
 
-```
+```text
 java.lang.NullPointerException: Cannot invoke "org.eclipse.jetty.server.Request.getSession(boolean)"
   because the return value of "org.eclipse.jetty.ee11.servlet.ServletApiRequest.getRequest()" is null
-	at org.eclipse.jetty.ee11.servlet.ServletApiRequest.getSession(ServletApiRequest.java:578)
-	at com.enonic.xp.web.impl.context.SessionWrapper.getAttribute(SessionWrapper.java:33)
-	at com.enonic.xp.context.LocalScopeImpl.getAttribute(LocalScopeImpl.java:81)
-	at com.enonic.xp.repo.impl.InternalContext.getSearchPreference(InternalContext.java:186)
-	at com.enonic.xp.repo.impl.node.GetNodeByPathCommand.execute(GetNodeByPathCommand.java:23)
+ at org.eclipse.jetty.ee11.servlet.ServletApiRequest.getSession(ServletApiRequest.java:578)
+ at com.enonic.xp.web.impl.context.SessionWrapper.getAttribute(SessionWrapper.java:33)
+ at com.enonic.xp.context.LocalScopeImpl.getAttribute(LocalScopeImpl.java:81)
+ at com.enonic.xp.repo.impl.InternalContext.getSearchPreference(InternalContext.java:186)
+ at com.enonic.xp.repo.impl.node.GetNodeByPathCommand.execute(GetNodeByPathCommand.java:23)
 ```
 
 Misleading in two ways: the message names Jetty, not your cache, and the **first** request after
@@ -134,7 +134,7 @@ Note the *runtime* `Input` object in `fundamentals/types.md` does use `occurrenc
 The dev image's `launcher.sh` runs `./gradlew clean deploy` as root inside the bind-mounted source
 tree. Every later **host** build then dies at `processResources`:
 
-```
+```text
 Could not set file mode 775 on '.../xp/build/resources/main/tasks'
 ```
 

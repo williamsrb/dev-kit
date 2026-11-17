@@ -10,11 +10,21 @@ open the chooser, then only the matching folder index, then matching How-tos.
 when_skills from frontmatter is documentation. The skills column keeps only
 canonical skill directory names (aliases resolved). Globs, URLs, and paths
 are dropped.
+
+Optional frontmatter `topic:` and `keywords: [a, b]` override the generated
+topic and lead the keyword list, so hand-curated routing terms survive a rerun.
+
+Catalogs in SYNC_OWNED are written by their own sync script and skipped here.
+A rerun that would drop a skill or keyword already in a committed row writes
+nothing for that file and exits 1; set LLM_INDEX_ALLOW_DROP=1 to accept it.
 """
 
 from __future__ import annotations
 
+import os
 import re
+import sys
+from itertools import pairwise
 from pathlib import Path
 
 KB = Path("${HOME}/.agents/kb")
@@ -53,6 +63,10 @@ CATALOG_HINTS = {
     "godot-3d": "godot-3d",
 }
 
+SYNC_OWNED = {"godot": "skills/develop-godot/scripts/sync-godot-docs.py --reindex"}
+
+DROPPED: list[str] = []
+
 FOLDER_NOT_TOPIC = {
     "_shared", "scripts", "docs", "from-html", "learn", "stable", "5.x", "6.x",
 }
@@ -81,9 +95,9 @@ def catalog_skill_names(skills_root: Path = SKILLS) -> dict[str, str]:
         canonical = skill.parent.name
         mapping[canonical] = canonical
         head = skill.read_text(encoding="utf-8", errors="replace")[:2500]
-        match = re.search(r"^  aliases:\s*(.+)$", head, re.M)
+        match = re.search(r"^  aliases:\s*(.+)$", head, re.MULTILINE)
         if not match:
-            match = re.search(r"^aliases:\s*(.+)$", head, re.M)
+            match = re.search(r"^aliases:\s*(.+)$", head, re.MULTILINE)
         if match:
             for alias in match.group(1).split(","):
                 alias = alias.strip().strip("\"'").rstrip(".")
@@ -99,16 +113,28 @@ def skill_map() -> dict[str, str]:
     return _SKILL_MAP
 
 
-def parse_when_skills(text: str) -> list[str]:
+def frontmatter_list(text: str, key: str) -> list[str]:
     if not text.startswith("---\n"):
         return []
     end = text.find("\n---\n", 4)
     if end < 0:
         return []
-    match = re.search(r"^when_skills:\s*\[([^\]]*)\]", text[4:end], re.M)
+    match = re.search(rf"^{key}:\s*\[([^\]]*)\]", text[4:end], re.MULTILINE)
     if not match:
         return []
     return [item.strip().strip("'\"") for item in match.group(1).split(",") if item.strip()]
+
+
+def frontmatter_value(text: str, key: str) -> str:
+    if not text.startswith("---\n"):
+        return ""
+    end = text.find("\n---\n", 4)
+    match = re.search(rf"^{key}:\s*([^\[\n][^\n]*)$", text[4:end], re.MULTILINE) if end > 0 else None
+    return match.group(1).strip().strip("'\"") if match else ""
+
+
+def parse_when_skills(text: str) -> list[str]:
+    return frontmatter_list(text, "when_skills")
 
 
 def sanitize_skills(raw: list[str], mapping: dict[str, str] | None = None) -> str:
@@ -124,12 +150,12 @@ def sanitize_skills(raw: list[str], mapping: dict[str, str] | None = None) -> st
 def filename_tokens(path: Path) -> list[str]:
     stem = re.sub(r"^how-to-", "", path.stem.lower())
     parts = [part for part in re.split(r"[-_]+", stem) if part and part not in WORD_STOP]
-    compounds = [f"{left}-{right}" for left, right in zip(parts, parts[1:])]
+    compounds = [f"{left}-{right}" for left, right in pairwise(parts)]
     return parts + compounds
 
 
 def h1_keywords(text: str) -> list[str]:
-    match = re.search(r"^# +(.+)$", text, re.M)
+    match = re.search(r"^# +(.+)$", text, re.MULTILINE)
     if not match:
         return []
     heading = match.group(1).lower()
@@ -139,14 +165,14 @@ def h1_keywords(text: str) -> list[str]:
         if word in WORD_STOP:
             continue
         words.append(word)
-    compounds = [f"{left}-{right}" for left, right in zip(words, words[1:])]
+    compounds = [f"{left}-{right}" for left, right in pairwise(words)]
     return words + compounds
 
 
 def keywords(path: Path, text: str, limit: int = 24, extra: str = "") -> str:
     seen: list[str] = []
     extras = extra.split() if extra else []
-    for word in extras + filename_tokens(path) + h1_keywords(text):
+    for word in extras + frontmatter_list(text, "keywords") + filename_tokens(path) + h1_keywords(text):
         if word in seen:
             continue
         seen.append(word)
@@ -155,7 +181,9 @@ def keywords(path: Path, text: str, limit: int = 24, extra: str = "") -> str:
     return " ".join(seen) if seen else path.stem.lower()
 
 
-def topic_for(path: Path, root: Path) -> str:
+def topic_for(path: Path, root: Path, text: str = "") -> str:
+    if declared := frontmatter_value(text, "topic"):
+        return declared
     rel_dirs = path.relative_to(root).parts[:-1]
     for part in reversed(rel_dirs):
         if part in FOLDER_NOT_TOPIC:
@@ -179,9 +207,7 @@ def topic_for(path: Path, root: Path) -> str:
 def skip_markdown(path: Path) -> bool:
     if path.name in SKIP_NAMES:
         return True
-    if path.name == "README.md" and "offline-reference" in path.parts:
-        return True
-    return False
+    return path.name == "README.md" and "offline-reference" in path.parts
 
 
 def has_markdown(folder: Path) -> bool:
@@ -232,7 +258,7 @@ def find_split(root: Path) -> tuple[list[Path], list[Path]]:
     ]
     if len(dirs) >= 2:
         return dirs, leftover
-    return [], leftover if leftover and not dirs else leftover
+    return [], leftover
 
 
 def leaf_row(path: Path, rel_root: Path, mapping: dict[str, str]) -> str:
@@ -241,7 +267,7 @@ def leaf_row(path: Path, rel_root: Path, mapping: dict[str, str]) -> str:
     skills = sanitize_skills(parse_when_skills(text), mapping)
     hints = catalog_hints(rel_root)
     return (
-        f"{rel}\t{tokens(text)}\t{topic_for(path, rel_root)}\t{skills}\t"
+        f"{rel}\t{tokens(text)}\t{topic_for(path, rel_root, text)}\t{skills}\t"
         f"{keywords(path, text, extra=hints)}"
     )
 
@@ -269,7 +295,32 @@ def aggregate_chooser_row(folder: Path, parent: Path, file_rows: list[str]) -> s
     return f"{rel}\t{max(tok, 1)}\t{topic}\t{' '.join(skills)}\t{' '.join(kws[:24])}"
 
 
+def row_losses(path: Path, rows: list[str]) -> list[str]:
+    """Skills or keywords a committed row has that the new row lacks."""
+    if not path.is_file():
+        return []
+    old = {}
+    for line in path.read_text(encoding="utf-8").splitlines():
+        parts = line.split("\t")
+        if len(parts) == 5 and not line.startswith("#"):
+            old[parts[0]] = parts
+    losses = []
+    for row in rows:
+        new = row.split("\t")
+        prev = old.get(new[0])
+        if not prev:
+            continue
+        lost = (set(prev[3].split()) - set(new[3].split())) | (set(prev[4].split()) - set(new[4].split()))
+        if lost:
+            losses.append(f"{path}: {new[0]} loses {' '.join(sorted(lost))}")
+    return losses
+
+
 def write_index(path: Path, rows: list[str]) -> None:
+    losses = row_losses(path, rows)
+    if losses and not os.environ.get("LLM_INDEX_ALLOW_DROP"):
+        DROPPED.extend(losses)
+        return
     path.write_text(HEADER + "\n".join(rows) + ("\n" if rows else ""), encoding="utf-8")
 
 
@@ -301,9 +352,18 @@ def write_offline_indexes() -> None:
     mapping = skill_map()
     root = KB / "offline-reference"
     for catalog in sorted(path for path in root.iterdir() if path.is_dir() and path.name != "scripts"):
+        if catalog.name in SYNC_OWNED:
+            print(f"skipped {catalog.name}: owned by {SYNC_OWNED[catalog.name]}")
+            continue
         write_bucket_indexes(catalog, mapping)
 
 
 if __name__ == "__main__":
+    from apply_gate import gate
+
+    gate(__doc__)
     write_owned_indexes()
     write_offline_indexes()
+    if DROPPED:
+        print("not written (would drop curated data; LLM_INDEX_ALLOW_DROP=1 to accept):", *DROPPED, sep="\n  ")
+        sys.exit(1)

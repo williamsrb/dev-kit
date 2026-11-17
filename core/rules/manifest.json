@@ -8,14 +8,13 @@
     "headings demoted one level). 'file' means the AGENTS.md text is a translation or a",
     "merge of several rules and lives in agents.d/ as its single source.",
     "layer: 'core' ships in every profile; 'client' only in the client overlay (D3).",
-    "'source' is provenance for maintainers; it is not rendered (keeps AGENTS.md under Claude Code's 40k-char CLAUDE.md limit)."
+    "'source' is provenance for maintainers; it is not rendered (keeps AGENTS.md under the 40k-char limit Claude Code warns at for memory files)."
   ],
   "base": {
     "file": "BASE.md",
     "layer": "core"
   },
   "intro": "agents.d/_intro.md",
-  "trailer": "agents.d/_trailer.md",
   "sections": [
     {
       "title": "Local-first deterministic tools",
@@ -42,7 +41,7 @@
       }
     },
     {
-      "title": "Git \u2014 writes on explicit order",
+      "title": "Git — writes on explicit order",
       "source": "`git.mdc`",
       "rules": [
         "git.mdc"
@@ -66,7 +65,7 @@
       }
     },
     {
-      "title": "Helper scripts \u2014 prefer Python over shell",
+      "title": "Helper scripts — prefer Python over shell",
       "source": "`prefer-python-over-shell.mdc`",
       "rules": [
         "prefer-python-over-shell.mdc"
@@ -78,7 +77,7 @@
       }
     },
     {
-      "title": "Browser automation \u2014 preference order",
+      "title": "Browser automation — preference order",
       "source": "browser-mcp-preference.mdc (translated to Claude Code / Codex MCPs)",
       "rules": [
         "browser-mcp-preference.mdc"
@@ -109,8 +108,8 @@
       ],
       "layer": "core",
       "body": {
-        "from": "file",
-        "file": "10-history-logging-is-automatic.md"
+        "from": "mdc",
+        "file": "history-automatic-logging.mdc"
       }
     },
     {
@@ -121,8 +120,8 @@
       ],
       "layer": "core",
       "body": {
-        "from": "file",
-        "file": "11-session-store-isolation.md"
+        "from": "mdc",
+        "file": "session-store-isolation.mdc"
       }
     },
     {
@@ -159,8 +158,8 @@
       ],
       "layer": "core",
       "body": {
-        "from": "file",
-        "file": "16-user-scope-exclusions-beat-inference.md"
+        "from": "mdc",
+        "file": "user-scope-exclusions.mdc"
       }
     },
     {
@@ -171,12 +170,12 @@
       ],
       "layer": "core",
       "body": {
-        "from": "file",
-        "file": "17-multitask-on-the-same-repo.md"
+        "from": "mdc",
+        "file": "multitask-same-repo.mdc"
       }
     },
     {
-      "title": "Code intelligence \u2014 graft and Serena",
+      "title": "Code intelligence — graft and Serena",
       "source": "`serena.mdc`",
       "rules": [
         "serena.mdc"
@@ -198,6 +197,19 @@
         "from": "mdc",
         "file": "response-formatting.mdc"
       }
+    },
+    {
+      "title": "Unattended mode never hits a gate",
+      "source": "`unattended-mode-no-gated-commands.mdc`",
+      "rules": [
+        "unattended-mode-no-gated-commands.mdc"
+      ],
+      "layer": "core",
+      "body": {
+        "from": "mdc",
+        "file": "unattended-mode-no-gated-commands.mdc"
+      }
     }
-  ]
+  ],
+  "notes": "agents.d/_notes.md"
 }

@@ -46,3 +46,20 @@ prose: caveman-lite
 - Cost on a 15-capability Enonic app: about $20 and 90 minutes for the whole agent stage, `domain.behavior` alone about $6 to $12.
 - Docker: a full `docker build` of the image uses 25 to 35 GB of `/` between image and build cache. Build with `--build-arg AGENTS=claude` (about 8 GB), run `docker/smoke.sh`, then `docker rmi` and `docker builder prune -af`. Check `df -h /` first.
 - Accuracy checks: have a read-only subagent re-verify a deterministic sample of 40 claims against the source. Three rounds on one app went 72% (audit), 80%, 85% correct. Errors cluster in claims about what a job does (written from its name) and in operators, floors and caps.
+
+## Per-capability units (2026-10; `--previous`, the unit hash and the capability pin were removed 2026-10-16)
+
+- Test a per-capability task without the whole pipeline: run `headless --until synthesis` through the fake, write the agent outputs with `support.write_agent_outputs`, delete the unit outputs, then call `Headless(Namespace(source=..., agent="fake", ...))._run_task("agent", "domain.behavior")` with `driver.out = sidecar` and `driver.log.attach(sidecar)`. A headless synthesis run includes `report.security`, so append `## Reviewed and accepted` bullets for its candidate ids to `reports/do-not-port.md`, or the full check after the last unit fails.
+- The fake agent writes unit files from `FAKE_AGENT_UNITS` (a folder with `domain.md`, `spec.md`, `oracle.json`), reads the capability from the prompt line `**title** (`id`)`, logs `<task> <capability>` to `fake-units.log`, blocks one capability with `FAKE_AGENT_BLOCK_UNIT`, and copies `FAKE_AGENT_REBUILD` for `rebuild.probe`.
+- Cost cap test: a table with `usage: {cost_usd: total_cost_usd}` and `FAKE_AGENT_USAGE='{"total_cost_usd": 2.0}'`; `max_cost_usd=3.0` stops before the third run with code `cost_cap`.
+- Reuse test: run a unit twice in one sidecar; the second run calls no agent and `reports/units.json` records `reused`. `headless --previous` no longer exists (exits 2).
+
+## Timeouts, milestones and slow steps (2026-11)
+
+- The agent limit is `DEFAULT_TASK_TIMEOUT` (3600 s). `Headless._agent_timed` retries a job that times out with the limit doubled, `TIMEOUT_DOUBLINGS` times, and appends `TIMED_OUT_NOTE`; the limit is passed to `_agent`/`_agent_once`/`_wait` as an argument and is per job (never write it back to `self.s.timeout`). A unit test patches `TIMEOUT_DOUBLINGS` to 0 to stay fast.
+- `FAKE_AGENT_HANG=once:<text>` or `always:<text>` makes the fake agent sleep when its prompt holds `<text>` (a milestone appendix has `Milestone: `<id>``). Wrap `driver._agent_once` to record `(prompt, limit)` of every call and still run it.
+- `spec.capabilities` and `domain.behavior` declare `milestones:` in `task.yaml`; their prompts' Output H2 lists must equal the milestones' sections in order (a test guards it). With `FAKE_AGENT_UNITS` the fake writes the milestone's sections of the canned file into the part path named in the prompt (`Write only this part file: `...``), so a per-capability task is two fake calls per capability and `fake-units.log` has two lines each.
+- `Headless._kit` and the two direct subprocesses (`graft build`, the credential probe) write a `slow_step` row at `SLOW_STEP_S`; patch it to 0 in a test.
+- A scoped `check` must stay fast on a real sidecar: time `check --capability <id> --out <sidecar>` after any change to a gate. A regex with a leading unbounded class (`[\w.\-]*word`) over minified assets is quadratic; walk word runs instead of backtracking.
+- Run the kit's own code against a sidecar without installing: from the legacy checkout, `PYTHONPATH=<kit> python3 -c "import sys;from extractkit_cli.cli import main;sys.exit(main(sys.argv[1:]))" check --out <sidecar>`. `./extractkit` refuses to run from the kit repo.
+- A session on a devkit profile has `AGENTS_HOME` set to that profile, so `agentctl plan resolve` looks in the profile's `plans/` and reports `unresolved`. Prefix `AGENTS_HOME=$HOME/.agents` when the plan lives in `~/.agents/plans`.

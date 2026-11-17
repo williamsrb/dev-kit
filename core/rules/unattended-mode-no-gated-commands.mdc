@@ -1,0 +1,16 @@
+---
+description: In /goal, yolo or any unattended run, never run a command a hook or permission gate would stop on; finish the rest and list the gated steps as pending
+alwaysApply: true
+---
+
+# Unattended mode never hits a gate
+
+In `/goal` mode, yolo mode, or any run where the operator said they are leaving or the session is headless, a blocking prompt kills the run: nobody is there to answer it, the session sits frozen on the first one, and every hour after it is lost. Treat that as a failure worse than leaving a step undone.
+
+1. Before each Bash call, ask whether a hook or permission gate would stop it. The known ones: `hooks/claude-git-guard.py` asks on commit, reset, rebase and clean, and denies push, fast-forward merges and Co-authored-by commits; `hooks/jira-write-guard.py` denies direct tracker writes. Any other command that raises an approval prompt counts the same.
+2. Do not run a command that would prompt, even when the goal text asks for it. The operator's order does not remove the prompt, so running it still freezes the run.
+3. Do not retry a denied command, rephrase it to slip past the hook, or switch tools to reach the same effect.
+4. Skip only the gated step. Keep going on everything else, in an order that leaves gated steps last.
+5. At the end, list each skipped step as pending with the exact command, so the operator can run it in one paste.
+
+Headless factory workers (`AGENTCTL_FACTORY`) already turn every ask into a deny and follow the Git writes rule for what the factory may commit and push.

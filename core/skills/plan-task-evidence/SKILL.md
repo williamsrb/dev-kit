@@ -1,6 +1,6 @@
 ---
 name: plan-task-evidence
-description: "Write ~/.agents/plans/<TASK-ID>/evidence.md from a PRD or impl plan (Jira key or local slug). Legacy ~/.agents/plans/<TASK-ID>-evidence-plan.md still resolves. Planning only — does not capture or post. Jira comment is an optional sink when mode is jira. | recommendedRole: plan | aliases: task-evidence-plan, evidence-plan, jira-evidence, evidence-creation-plan."
+description: "Write ~/.agents/plans/<TASK-ID>/evidence.md from a PRD or impl plan (Jira key or local slug). Legacy ~/.agents/plans/<TASK-ID>-evidence-plan.md still resolves. Planning only — does not capture or post. Jira comment is an optional sink when mode is jira."
 metadata:
   recommendedRole: plan
   aliases: task-evidence-plan, evidence-plan, jira-evidence, evidence-creation-plan
@@ -56,7 +56,8 @@ These apply to plans this skill writes and to **evidence execution** of those pl
    Exit 1 means do not post. One call posts the comment with every image embedded
    inline under its own explanation — never a standalone-attachment pass followed by a
    text-only comment, and never a pass/fail matrix in place of analyst prose. Post via
-   `atlassian-rovo-preview` (`addOrEditJiraIssueComment`) or `addCommentToJiraIssue`;
+   `agentctl jira comment <KEY> --body-file <html> --content-format html --confirm-issue <KEY> --evidence-progress <evidence.progress.md>`
+   (the MCP comment tools are denied by `hooks/jira-write-guard.py`);
    **never** the Atlas PM-assistant MCP.
 3. **Browser MCP = Playwright.** Planning **spawns** `playwright-<TASK-ID>` (`python3 ~/.agents/mcp/playwright.py spawn <TASK-ID> --enable [--storage-state <path>]`) after the auth map is ready (or Auth required is no). That process stays up. Capture is a **fresh** `run-plan` session that uses `playwright-<TASK-ID>` / `user-playwright-<TASK-ID>` / `mcp__playwright-<TASK-ID>__*`. Do **not** capture in the planning chat. Do **not** open `cursor-ide-browser` or `user-browser-control` first unless the user names a different tool. Generated plans must state the browser MCP is `playwright-<TASK-ID>`. Spawn-only after a reboot or outside this skill: `spawn-playwright-mcp`. See `How-to-enable-playwright-mcp.md`.
 4. **Evidence CMS content is persistent.** Display name is the component title. Copy and images come from the prototype. No ticket key in names. Reuse the existing page. Do **not** create throwaway evidence pages (`DELETE-ME`, `delete-me-*`, ticket-keyed paths) and do **not** write KB files under a `disposable-content/` folder. Jira comments follow override 8 — persistent pages are not permission to overwrite an old evidence comment. The evidence path and the site it lives on are project-bound: take them from that project's `~/.agents/kb/testing/<project>/How-to-create-persistent-part-evidence-content-on-review.md`, never from another project's. This repo's `AGENTS.md` § "Jira evidence and comments".
@@ -64,7 +65,7 @@ These apply to plans this skill writes and to **evidence execution** of those pl
 6. **Stamp PNG pixel size before upload.** This is the always-apply Jira screenshot rule (`jira-screenshot-consistency.mdc`), not evidence-only. After capture and the local image gate, run `agentctl image stamp <png> […]` then `agentctl image stamp --check <png> […]`. Exit 1 = do not upload. Pass **file paths** (a directory only auto-stamps `NN-*.png`). Do **not** run raw `mogrify … *.png`. Equivalent: `python3 ~/.agents/skills/plan-task-evidence/scripts/annotate-evidence-resolution.py`. Do not mention the stamp in the Jira comment.
 7. **Evidence links are the pages under test, not the env root.** **Deployed testing environment** names the live URL that was captured (full path) and, when Content Studio was in the run, the CS edit URL labelled Admin. Never the testing base URL with no path. Shape: `<base>/test/evidence/featured-cards ([Admin](<base>/admin/com.enonic.app.contentstudio/main/english/edit/<content-id>))`. CS-only evidence may omit live; live-only may omit Admin. `check-evidence-comment.py` fails a host-only environment URL, using the host patterns in `~/.agents/config/client-overlay.json`.
 8. **Never edit a Jira comment from another day unless the user strictly asked to.** Compare the comment’s **`created`** calendar date (not `updated`) to **today**. If they differ, do **not** pass `commentId` — post a **new** comment. Same-day re-runs may edit today’s evidence comment in place. A plan, KB How-to, or prior run that records an old comment id is **not** permission. “Post it” / “post the evidence” is **not** an order to edit an older comment. Strict ask means the user named that comment (id, or its date) and said to edit it. This **overrides** “edit the existing Jira comment in place” in always-apply rules, KB How-tos, and generated plans.
-9. **Backup before every Jira comment edit.** Jira cannot revert a comment overwrite. Before any `addOrEditJiraIssueComment` (or equivalent) **with** `commentId`: fetch that comment as HTML, write it with `python3 ~/.agents/skills/plan-task-evidence/scripts/backup-jira-comment.py --issue <KEY> --comment-id <ID> --body-file <html>`, and **do not edit** unless the script exits 0. New comments (no `commentId`) skip this. Report the backup path in chat only — never in the Jira body.
+9. **Backup before every Jira comment edit.** Jira cannot revert a comment overwrite. `agentctl jira comment --comment-id` does this itself. For any other edit path, before any comment edit **with** `commentId`: fetch that comment as HTML, write it with `python3 ~/.agents/skills/plan-task-evidence/scripts/backup-jira-comment.py --issue <KEY> --comment-id <ID> --body-file <html>`, and **do not edit** unless the script exits 0. New comments (no `commentId`) skip this. Report the backup path in chat only — never in the Jira body.
 10. **Local image gate before flatten/upload/post.** OCR of a few labels is not enough. For every Jira-bound PNG, in this session, run local tools and **read the image** (preview if the long edge is over 1280). Fail and retake — do not flatten, upload, or post — on any of:
     - **Whitespace / zoom:** `agentctl image whitespace <png> --background auto --grid 3`. A full-viewport overlay (text in one corner, rest white) fails: `blank_percent` ≥ 85 **and** the longest edge ≥ 1200 **and** `border_blank_percent` is low only because a 1px rule or stamp exists, **or** the 3×3 grid has ≥ 6 cells at blank ≥ 0.95. Clip overlays to the overlay element; never screenshot a 1440×900 white page with a few lines of text.
     - **Expected text:** `agentctl evidence inspect <png> --ocr --expected-text '<token from the step>'` (or `tesseract-cli` `ocr.py`). Missing planned labels / URL slug / field names → retake.
@@ -77,7 +78,7 @@ These apply to plans this skill writes and to **evidence execution** of those pl
       `python3 ~/.agents/skills/plan-task-evidence/scripts/verify-jira-comment-images.py --issue <KEY> --comment-id <ID>`
       Exit 1 = the comment is not done. Re-upload the missing files, edit the same-day comment, re-run until 0. Do not report success while this fails.
 12. **One evidence comment per issue per run.** A retried create posts the same body twice, and a replacement that reuses `fileId`s from a deleted comment loses its images; `check-evidence-comment.py` passes both.
-    - Call `addOrEditJiraIssueComment` **once** per issue unless you pass `commentId` (same-day edit). Do not retry a successful create.
+    - Call `agentctl jira comment` **once** per issue unless you pass `--comment-id` (same-day edit); a second create needs `--allow-second` and is refused otherwise. Do not retry a successful create.
     - Immediately after a create, list comments. Two same-body evidence comments → delete the extra before anything else.
     - Replace trash comments in this order only: re-upload **every** PNG this session → post or edit with those new ids → `verify-jira-comment-images.py` exit 0 → delete the trash comments → run the verify script again. Do not delete first. Do not copy `data-id` from the trash comment.
     Full order and commands: `~/.agents/kb/testing/_shared/How-to-post-jira-evidence-comments.md`.
@@ -120,13 +121,13 @@ Resolve `<TASK-ID>` and `mode` per `How-to-resolve-task-context.md`. Do not ask 
 
 ## Workflow
 
-```
+```text
 - [ ] Phase 1: Collect (use existing PRD if present — **do not Jira-fetch that key**; **testing KB scan**, **offline-reference when needed**, local related-task grep, lookups). Shipped code = review host, not a worktree.
 - [ ] First planning step: **Auth required?** (yes/no + surfaces; unknown → yes). Before URL derivation / screenshot steps.
 - [ ] Phase 2: **Write** `~/.agents/plans/<TASK-ID>/evidence.md` from [templates.md](templates.md) — includes **Product concept**, Steps, **and** Execution (E2 only when `mode` is `jira`)
 - [ ] Phase 3: Evaluate & **rewrite the plan file** on disk
 - [ ] Phase 4: Map authentication — run `scripts/find-auth-storage.py --host <testing base URL>`; it reads every candidate's cookie domains and ranks host match first, then newest. Filename is a guess, not a lock. Ask for `npx playwright codegen --save-storage=…` **only** when no candidate covers the host; write the chosen absolute path into the plan file
-- [ ] Spawn `playwright-<TASK-ID>` (`python3 ~/.agents/mcp/playwright.py spawn <TASK-ID> --enable` plus `--storage-state <path>` when Auth required is yes and the file exists). Do not spawn while auth is still `pending`. Do not navigate. Leave the process running for `run-plan`.
+- [ ] Spawn `playwright-<TASK-ID>` (`python3 ~/.agents/mcp/playwright.py spawn <TASK-ID> --enable` plus `--storage-state <path>` when Auth required is yes and the file exists; add `--extra-storage-state <path>` per other realm, see `references/auth-and-companions.md`). Do not spawn while auth is still `pending`. Do not navigate. Leave the process running for `run-plan`.
 - [ ] STOP: confirm plan file exists; present path + auth map + spawn url; ask whether to execute later in a **new** session. Do not run the Execution section.
 ```
 
@@ -163,7 +164,7 @@ After Phase 3/4:
 Load one reference at a time:
 
 1. Read [collect.md](references/collect.md) for source/KB collection (Jira only when `mode` is `jira`) and the mandatory auth decision.
-2. Read [draft-and-evaluate.md](references/draft-and-evaluate.md) only while writing and checking evidence steps, URLs, GitLab evidence, and reachability.
+2. Read [draft-and-evaluate.md](references/draft-and-evaluate.md) only while writing and checking evidence steps, URLs, git host evidence, and reachability.
 3. Read [auth-and-companions.md](references/auth-and-companions.md) only for the auth wait/ask mapping and companion-file contracts.
 
 Do not preload later phases. Finish by running `agentctl plan validate <file> --kind evidence --json`, then hard-stop for approval as required above.
@@ -173,3 +174,11 @@ Do not preload later phases. Finish by running `agentctl plan validate <file> --
 Trigger: user asks to **validate/fix** an evidence or test plan (`agentctl plan resolve <TASK-ID> --kind evidence`).
 
 Read and follow `../validate-plan/SKILL.md` (`called_from: plan-task-evidence`). Do **not** execute Execution, open a capture browser, or post to a tracker from this skill.
+
+## Final reply: next step (always last)
+
+After drafting the evidence plan, put this block right after the 👉 line, as the last thing in the reply, with `<TASK-ID>` expanded (Jira key or slug). The operator pastes it into a fresh session. Skip it when `called_from` is set or `AGENTCTL_FACTORY` is set. In validate/fix mode, emit the `validate-plan` block instead.
+
+```text
+/validate-plan ~/.agents/plans/<TASK-ID>/evidence.md
+```

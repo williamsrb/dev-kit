@@ -5,16 +5,20 @@
 Goal: Render `com.acme.app:article`.
 
 1) Create view:
+
 - `src/main/resources/react4xp/components/content/Article.tsx`
 
-2) Create processor:
+1) Create processor:
+
 - `src/main/resources/react4xp/components/content/ArticleProcessor.ts`
 
-3) Register both:
+1) Register both:
+
 - `componentRegistry.addContentType('com.acme.app:article', { View: Article })`
 - `dataFetcher.addContentType('com.acme.app:article', { processor: articleProcessor })`
 
 Expected outcome:
+
 - Article content renders with shaped props from processor.
 
 ## Example 2: Add a part with config-based processor
@@ -22,10 +26,12 @@ Expected outcome:
 Goal: Render part `com.acme.app:promo-banner`.
 
 Processor pattern:
+
 - Read `params.component.config`
 - Return serializable props only
 
 Registration pattern:
+
 - `componentRegistry.addPart('com.acme.app:promo-banner', { View: PromoBanner })`
 - `dataFetcher.addPart('com.acme.app:promo-banner', { processor: promoBannerProcessor })`
 
@@ -34,13 +40,16 @@ Registration pattern:
 Goal: Render HTML area with embedded custom macro.
 
 Processor pattern:
+
 - Use `processHtml({ value, dataFetcher, component, imageWidths })`
 - Return processed rich text data in props
 
 View pattern:
+
 - Render with `<RichText data={...} meta={meta} common={common} component={component} />`
 
 Macro wiring:
+
 - `componentRegistry.addMacro('factbox', { View: Factbox })`
 - `dataFetcher.addMacro('factbox', { processor: factboxProcessor })`
 
@@ -49,10 +58,12 @@ Macro wiring:
 Goal: Page descriptor `com.acme.app:main`.
 
 View pattern:
+
 - Use `Region` components with exact region names from CMS:
   - `component.regions.main.components`
 
 Registration:
+
 - `componentRegistry.addPage('com.acme.app:main', { View: MainPage })`
 
 ## Example 5: Controller render baseline
@@ -77,6 +88,7 @@ exports.get = function (request) {
 ```
 
 Notes:
+
 - Passing `request` allows mode-aware behavior.
 - Keep `ssr` and `hydrate` intentional for each endpoint/component.
 

@@ -27,7 +27,7 @@
       the evidence need (e.g. `publish`, `page editor`, `new`, `content form`, `layers`).
    3. Open only the matching page file(s); use them to draft CMS steps, expected UI labels,
       and auth/reachability notes. Cite paths in the plan **Sources** section.
-   4. Skip this step only when the evidence plan is clearly unrelated (e.g. pure GitLab
+   4. Skip this step only when the evidence plan is clearly unrelated (e.g. pure git host
       source screenshot, non-Enonic app login only).
 
    | Evidence need | Catalog | LLM index |
@@ -59,7 +59,7 @@
 6. **Identify the change type** — it decides what evidence is needed:
    - **User-visible** (UI, copy, behavior) → app page screenshots.
    - **User-transparent** (removed comments, formatting, changed hard-coded value, refactor)
-     → **GitLab source screenshots** are usually required (diff is the evidence).
+     → **git host source screenshots** are usually required (diff is the evidence).
 7. **Optional — Impeccable (design / frontend UI only).** **Skip by default.** Only when the issue is clearly about **design or frontend presentation** (layout, styling, visual QA of a surface, UX polish) — not for backend, API, schema, or non-UI verification. When it applies, plan **review-env** screenshots that prove the visual/a11y AC. Do **not** run `impeccable detect` on local worktree paths. Do not add Impeccable steps for every UI ticket, invent redesign scope, or treat detect findings as required acceptance criteria unless the task already demands them.
 
 ---
@@ -68,12 +68,12 @@
 
 Do this **before** deriving test URLs or screenshot steps (after Phase 1 sources: PRD, impl plan, comments, testing KB, project docs).
 
-Decide whether the example pages / test URLs need login (CMS admin, preview, SSO, env cookie, Content Studio, `/admin`, GitLab web, `/minside`, etc.).
+Decide whether the example pages / test URLs need login (CMS admin, preview, SSO, env cookie, Content Studio, `/admin`, git host web, `/minside`, etc.).
 
 Record in the plan header:
 
 - **Auth required:** `yes` | `no`
-- **Surfaces:** preview, Content Studio, `/admin`, GitLab, app login, … (or `none`)
+- **Surfaces:** preview, Content Studio, `/admin`, git host, app login, … (or `none`)
 
 If unknown: **Auth required: yes** (safer default). Record it as unknown-treated-as-required. Do not guess credentials; ask via the plan (Execution step 1).
 

@@ -40,6 +40,21 @@ Two rungs run remote installers: nvm (v0.40.1) and `uv` are fetched with
 GitHub release asset by file-name pattern and does not verify a checksum or
 signature. On Arch the package step uses `pacman -Sy` without `-u`.
 
+### Python 3.12
+
+The kit needs Python 3.12 or newer, standard library only. Where `python3` on
+`PATH` already meets that, nothing changes. RHEL 9 and its rebuilds ship 3.9 as
+the system `python3`, which `dnf` depends on, so on that family `bootstrap.sh`
+installs `python3.12` from AppStream next to it and never replaces it. A dry run
+prints that install and stops, because reading the rest of the plan needs 3.12.
+
+`devkit` and `install.py` re-execute themselves under `python3.13` or
+`python3.12` when `python3` is too old, and exit 2 with the fix when none is
+found. A profile sync writes `<profile>/bin/python3` as a link to that
+interpreter, only where `python3` is too old, so hooks and `core/` scripts
+started from a profile run under it. The Desktop auth launcher renders the same
+interpreter. `devkit doctor` reports a link whose target is gone.
+
 ### Third-party repositories
 
 On RHEL derivatives some packages, `ffmpeg` in particular, are not in the base
@@ -177,7 +192,7 @@ Writing a file over an existing one that devkit did not write (it carries no
 whether that file is yours. Projection links are different: a file or link
 where a projection goes is replaced, and only a real directory there refuses.
 
-```
+```text
 error: /home/you/.agents-profiles/enonic/codex/config.toml exists and was not written by devkit
 fix:   re-run with --force to back it up and proceed
 ```

@@ -10,7 +10,7 @@
     "Adding a skill here is a publication decision: run `devkit export --check`",
     "and read the gitleaks report before trusting it.",
     "hard_excludes are anchored at the export root. Prefix with **/ to match a directory of that name at any depth — an unanchored `graft/` would also drop skills/graft/.",
-    "benchmarks/20* keeps the monthly per-source fetches out; the hand-kept inputs and the merged latest.yaml snapshot ship through the benchmarks section."
+    "benchmarks: the monthly per-source files are hand-adjusted inputs to `agentctl bench`, so each month is listed in the benchmarks section; a new month fails test_every_benchmark_on_disk_is_classified until it is added."
   ],
   "source": "${HOME}/.agents",
   "target": "core",
@@ -30,50 +30,91 @@
     "tests/",
     "backups/",
     "graft/",
-    "benchmarks/20*",
     "**/__pycache__/",
     "**/*.pyc",
     "**/.DS_Store",
     "**/*.lock"
   ],
+  "root": {
+    "_comment": "Files at the harness root. .agentctl holds every agentctl default (bin/agentctl_defaults.py writes it when absent); a profile links to it.",
+    "core": [
+      ".agentctl",
+      "docs/harness-guide.md",
+      "harness/checks.json",
+      "docs/dev-process/STEPS.md",
+      "docs/dev-process/decision-classifier.html",
+      "docs/dev-process/single-task.html",
+      "docs/dev-process/multitask.html"
+    ],
+    "excluded": {
+      "_comment": "Root entries that stay out of the export. Records only: export never reads this map, and hard_excludes or the absence of a root.core entry is what keeps them out.",
+      "docs/dev-process/*.workflow.json": "archify sources for the charts; they carry absolute /home output paths",
+      "docs/dev-process/*.visual-check.*": "archify visual-check byproducts (screenshots, JSON, extra HTML)",
+      "cron": "personal crontab job lines with absolute /home paths; the kit installs no cron job",
+      "tools": "one-off apply_patch generators with a hardcoded /home path",
+      "share": "tessdata is symlinks into /usr/share and the harness .packages dir; ocr.py falls back to the system tessdata when absent",
+      "ruff.toml": "lint config for the harness repo; the kit carries its own ruff.toml",
+      ".markdownlint-cli2.jsonc": "lint config for the harness repo",
+      ".codespellrc": "lint config for the harness repo",
+      ".githooks": "pre-commit gate for the harness repo (generated rules must match sources)",
+      ".skill-lock.json": "machine state written by the skills CLI (install timestamps, local paths); agentctl_tools.py only reads it from where that CLI put it",
+      ".ignore": "ripgrep config for the harness repo",
+      ".impeccable": "local tool config and caches",
+      ".claude": "per-machine tool state",
+      ".codex": "per-machine tool state",
+      ".cursor": "per-machine tool state",
+      ".serena": "per-machine tool state",
+      ".security-local": "per-machine tool state"
+    }
+  },
   "skills": {
     "core": [
       "archify",
       "audit-heavy-report",
       "blank-space",
+      "check-disk-cleanup",
       "classify-ticket-autonomy",
       "color-palette",
-      "context7-mcp",
       "describe-image",
+      "develop-godot",
       "diff-image",
       "download-jira-task",
       "draft-commit-message",
       "draw-diagram",
+      "find-related-issues",
       "find-skills",
       "generate-worklogs",
       "google-translate",
       "graft",
-      "grill-me",
       "grilling",
       "handoff",
+      "harvest-kb",
       "humanize-text",
+      "imagine",
+      "imagine-design",
       "lint-and-draft-commit-message",
       "multitask-same-repo",
+      "plan-data-rehearsal",
       "plan-implementation",
       "plan-task-evidence",
       "playwright-cli",
       "ponytail-review",
+      "propose-harness-changes",
       "read-figma",
       "render-diff-patch",
+      "resume-session",
       "run-plan",
       "set-up-worktree",
       "skillspector",
       "spawn-playwright-mcp",
       "tesseract-cli",
+      "validate-evidence",
+      "validate-imagine",
       "validate-impl",
       "validate-plan",
       "wait-what",
-      "write-analyst-message"
+      "write-analyst-message",
+      "write-prd"
     ],
     "enonic": [
       "apply-react4xp-practices",
@@ -90,13 +131,14 @@
     ],
     "excluded": {
       "_comment": "Personal or unshippable. Reason is recorded so the list is auditable.",
-      "develop-godot-2d": "personal, not work tooling",
-      "develop-godot-3d": "personal, not work tooling",
+      "enonic-staged-validation-commit-message": "legacy name stub; the kit has no use for a redirect",
+      "qa-validation": "legacy name stub; the kit has no use for a redirect",
+      "suggest-commit-message": "legacy name stub; the kit has no use for a redirect",
+      "validate-qa": "legacy name stub; the kit has no use for a redirect",
       "dsnote": "personal, not work tooling",
       "enonic-marketplace": "no SKILL.md; a reference directory, not a skill",
       "extract-agentic": "needs the separately installed extractkit",
       "extract-legacy": "names a client review host and needs the separately installed extractkit",
-      "godot-game-dev-shared": "no SKILL.md; shared assets for the godot skills",
       "graphify": "opt-in, heavy, superseded by graft for this kit",
       "ppt-master": "gitignored multi-hundred-MB asset trees; 14 of the 23 broken links"
     },
@@ -144,6 +186,7 @@
       "serena.mdc",
       "session-store-isolation.mdc",
       "user-scope-exclusions.mdc",
+      "unattended-mode-no-gated-commands.mdc",
       "vendor-vision-image-preview.mdc"
     ],
     "enonic": [
@@ -158,6 +201,7 @@
       "token-efficiency-chat.mdc"
     ],
     "excluded": {
+      "claude": "rendered per profile at sync from manifest.json; a snapshot here would go stale",
       "graphify.mdc": "graphify skill is not exported",
       "AGENTS.md": "generated at install from manifest.json plus agents.d; do not export a snapshot"
     }
@@ -168,6 +212,7 @@
       "validation/**",
       "implementation/**",
       "offline-reference/scripts/**",
+      "offline-reference/godot/**",
       "calibration/classify-ticket-autonomy/How-to-calibrate-classify-ticket-autonomy.md",
       "calibration/classify-ticket-autonomy/Calibration-runs-of-classify-ticket-autonomy-anonymized.md"
     ],
@@ -193,8 +238,6 @@
       "testing/**"
     ],
     "excluded": {
-      "offline-reference/godot-2d/**": "personal",
-      "offline-reference/godot-3d/**": "personal",
       "worklog/**": "personal, already a hard exclude",
       "implementation/How-to-import-legacy-claude-personal-sessions-into-the-personal-profile.md": "machine-specific one-off; superseded by `devkit profile session-sync`",
       "calibration/classify-ticket-autonomy/Calibration-runs-of-classify-ticket-autonomy.md": "specific Jira keys; host-local run log",
@@ -206,19 +249,43 @@
   "bin": {
     "core": [
       "agentctl",
+      "agentctl-disk-root-install.py",
       "agentctl.py",
       "agentctl_bench.py",
       "agentctl_code.py",
       "agentctl_common.py",
+      "agentctl_config.py",
+      "agentctl_defaults.py",
+      "agentctl_disk.py",
+      "agentctl_disk_collectors.py",
+      "agentctl_disk_scan.py",
       "agentctl_docs.py",
+      "agentctl_factory.py",
+      "agentctl_factory_watch.py",
+      "agentctl_githost.py",
+      "agentctl_git.py",
+      "agentctl_harness.py",
+      "agentctl_harness_measure.py",
+      "agentctl_harness_proposals.py",
+      "agentctl_harness_schedule.py",
       "agentctl_image.py",
       "agentctl_jira.py",
       "agentctl_kb.py",
+      "agentctl_kb_digest.py",
+      "agentctl_kb_digest_vendors.py",
+      "agentctl_kb_proposals.py",
+      "agentctl_local.py",
       "agentctl_plan.py",
+      "agentctl_release.py",
+      "agentctl_release_integration.py",
       "agentctl_security.py",
       "agentctl_skills.py",
+      "agentctl_subagents.py",
+      "agentctl_sync.py",
+      "agentctl_tools.py",
       "backfill-claude-jsonl-ai-titles.py",
       "backup-claude-mcp.py",
+      "codegen",
       "cursor-recolor-apply.sh",
       "cursor-tgrep-rg-apply.py",
       "export-canvas-html",
@@ -231,8 +298,10 @@
       "install-cursor-recolor.sh",
       "install-cursor-tgrep-rg.sh",
       "merge-claude-config.py",
+      "review-auth",
       "serena-mcp",
       "serena-mcp.py",
+      "sync-agent-projections.py",
       "sync-bin-projections.sh",
       "sync-skill-projections.sh",
       "tgrep-cursor-apply.py",
@@ -243,7 +312,6 @@
       "docker-prune-keep-home-volumes.py": "hardcodes /home/volumes; machine layout, not harness",
       "fix-claude-desktop-personal-perms.sh": "companion to the Personal desktop fork; kit appfork owns profile dest trees",
       "recolor-white-black-icons.sh": "generalized into install.py",
-      "review-auth": "reads the harness .auth/<user>.passwd; client credential flow",
       "scheduled-push-branches.py": "one-shot client cron; hardcodes acme-group keys",
       "sync-claude-desktop-personal.py": "Personal desktop fork worker; kit appfork rebuilds per-profile GUI forks"
     }
@@ -267,8 +335,11 @@
       "cursor-memory.py",
       "memory-recall.sh",
       "kb-router.py",
+      "kb-digest-session-end.py",
       "deny-git-push.sh",
       "claude-deny-git-push.sh",
+      "claude-git-guard.py",
+      "jira-write-guard.py",
       "git-push-policy.sh",
       "history-log-prompt.sh",
       "history-log-response.sh",
@@ -276,17 +347,25 @@
       "graft-hooks.cjs",
       "graft-statusline.cjs",
       "response-format-check.py"
-    ]
+    ],
+    "excluded": {
+      "graft-guard.py": "maintainer guard: git-restores tracked files in the harness git checkout, and the kit does not wire graft hooks"
+    }
   },
   "benchmarks": {
-    "_comment": "Inputs to `agentctl bench place` plus the snapshot ROLES.md was derived from. Monthly fetches stay out via hard_excludes.",
+    "_comment": "Inputs to `agentctl bench place` plus the snapshot ROLES.md was derived from. Monthly per-source files are hand-adjusted, so they ship.",
     "core": [
       "harness.yaml",
       "bands.yaml",
       "models.yaml",
       "overrides.yaml",
       "latest.yaml",
-      "placement.yaml"
+      "placement.yaml",
+      "2026-08-deepswe.yaml",
+      "2026-09-deepswe.yaml",
+      "2026-10-deepswe.yaml",
+      "2026-10",
+      "2026-11"
     ]
   },
   "mcp": {
@@ -297,10 +376,7 @@
       "install.py",
       "playwright.py",
       "serena/auto-onboard.yml",
-      "test_playwright.py",
-      "image-to-disk/README.md",
-      "image-to-disk/server.py",
-      "image-to-disk/test_server.py"
+      "test_playwright.py"
     ],
     "excluded": {
       "graft": "removed from catalog 2026-09-27; directory is .cache, do not re-admit"
@@ -308,7 +384,8 @@
   },
   "config": {
     "core": [
-      "client-overlay.example.json"
+      "client-overlay.example.json",
+      "factory/pipelines"
     ],
     "excluded": {
       "client-overlay.json": "the real client overlay; the client profile ships its own",
@@ -323,6 +400,16 @@
   "vendor": {
     "core": [
       "tgrep-cursor"
+    ]
+  },
+  "docs": {
+    "_comment": "The user guide and the process charts it links to. Listed by file: the dev-process folder also holds visual-check screenshots (about 3 MB) and *.workflow.json diagram sources that carry the maintainer's absolute output path, which stay out.",
+    "core": [
+      "harness-guide.md",
+      "dev-process/STEPS.md",
+      "dev-process/decision-classifier.html",
+      "dev-process/multitask.html",
+      "dev-process/single-task.html"
     ]
   }
 }

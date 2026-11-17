@@ -209,7 +209,7 @@ command is the start (`bootstrap.sh --apply`) or the end
 
 ## Codex warns about helper binaries under a temporary directory
 
-```
+```text
 Refusing to create helper binaries under temporary dir
 ```
 
@@ -219,7 +219,7 @@ proceeds; the install is degraded, not failed.
 
 ## A projected skill directory is a real directory
 
-```
+```text
 error: <path> is a real directory, not a projection
 ```
 

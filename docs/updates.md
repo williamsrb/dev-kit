@@ -124,6 +124,16 @@ profile's `agents/`, `bin/` and `hooks/`, wrappers, launchers, auth dispatchers)
 is not backed up; `devkit profile sync <name> --apply` rewrites it from the
 restored `current`.
 
+Instances on a kit ref (see [Following a branch or pinning a
+tag](profiles.md#following-a-branch-or-pinning-a-tag)) are handled apart. A
+pinned instance is skipped with a line and the fix `devkit profile sync <name>
+--apply`. `fetch` also stages the tip of every branch an instance follows
+(`track-<key>-<commit>` in the cache, ignored when `apply` looks for the kit
+itself), and `apply` moves each followed instance to its staged tip, keeping the
+previous release as its rollback. "The kit is up to date" applies to the kit
+only: branch moves still run. A failed `apply` also flips every moved ref link
+back.
+
 `apply` re-materializes each instance, wrappers and launchers included, but does
 not rebuild desktop forks or relink `~/.local/bin/devkit`. After a kit apply,
 `devkit profile sync <name> --apply` does both: if desktop forks are missing or

@@ -33,7 +33,7 @@ environment, live page, editor, heading, form, validation, screenshot.
 | "Valid submits post to sendFormEmail with server-resolved emailReceiver" | "A valid submit sends mail to the address set in Content Studio, without showing that address on the page." |
 | "At lg+: carousel track/Swiper" | "On a wide desktop window, extra cards sit in a carousel." |
 
-## "So what?" 
+## "So what?"
 
 If you cannot say why the analyst should care, drop the sentence from the
 Jira/Slack body. Implementation detail belongs in chat or the spec, not in

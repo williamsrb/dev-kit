@@ -13,15 +13,17 @@ import json
 import os
 import re
 import secrets
+import subprocess
+import sys
 import urllib.error
 import urllib.parse
 import urllib.request
 import uuid
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Any
 
-DEFAULT_SITE = ""
+import agentctl_config
 
 
 def agents_home() -> Path:
@@ -32,25 +34,34 @@ def agents_home() -> Path:
     return Path.home() / ".agents"
 
 
-TOKEN_PATH = agents_home() / ".auth" / "jira-api-token.yaml"
 PRD_ROOT = agents_home() / "prds"
-RENDER_SCRIPT = (
-    agents_home() / "skills" / "download-jira-task" / "scripts" / "render_issue.py"
-)
-DEFAULT_ISSUE_FIELDS = [
-    "summary",
-    "description",
-    "status",
-    "issuetype",
-    "priority",
-    "assignee",
-    "reporter",
-    "created",
-    "updated",
-    "project",
-    "comment",
-    "attachment",
-]
+
+
+def jira_settings() -> dict[str, Any]:
+    """The [tracker.jira] table of .agentctl: site, token file, default fields. No built-in fallback."""
+    try:
+        return agentctl_config.section(agentctl_config.load(), "tracker.jira")
+    except agentctl_config.ConfigError as exc:
+        raise OSError(str(exc)) from exc
+
+
+def default_token_path() -> Path:
+    return agents_home() / str(jira_settings()["token_file"])
+
+
+def default_site() -> str:
+    return str(jira_settings()["site"])
+
+
+def issue_fields() -> list[str]:
+    return list(jira_settings()["issue_fields"])
+
+
+def render_script() -> Path:
+    skill = str(jira_settings()["download_skill"])
+    return agents_home() / "skills" / skill / "scripts" / "render_issue.py"
+
+
 RICH_TEXT_FIELDS = {"description", "environment", "comment"}
 USER_FIELDS = {"assignee", "reporter"}
 NAME_OBJECT_FIELDS = {"issuetype", "priority", "status"}
@@ -147,7 +158,7 @@ def _unquote(value: str) -> str:
 
 
 def load_credentials(path: Path | None = None, site: str | None = None) -> dict[str, str]:
-    token_path = (path or TOKEN_PATH).expanduser()
+    token_path = (path or default_token_path()).expanduser()
     if not token_path.is_file():
         raise FileNotFoundError(
             f"Jira API token file not found: {token_path}. "
@@ -162,7 +173,7 @@ def load_credentials(path: Path | None = None, site: str | None = None) -> dict[
         "path": str(token_path),
         "user": user,
         "api_token": token,
-        "site": (site or raw.get("site") or raw.get("base_url") or DEFAULT_SITE).rstrip("/"),
+        "site": (site or raw.get("site") or raw.get("base_url") or default_site()).rstrip("/"),
         "token_name": raw.get("token_name", ""),
         "created_at": raw.get("created_at", ""),
         "expires_at": raw.get("expires_at", ""),
@@ -180,7 +191,7 @@ def public_auth(creds: dict[str, str]) -> dict[str, Any]:
     expired = False
     if expires:
         try:
-            expired = date.fromisoformat(expires[:10]) < datetime.now(timezone.utc).date()
+            expired = date.fromisoformat(expires[:10]) < datetime.now(UTC).date()
         except ValueError:
             expired = False
     return {
@@ -408,9 +419,10 @@ def body_to_adf(value: Any, content_format: str = "markdown") -> dict[str, Any]:
 def load_render_issue() -> Any:
     import importlib.util
 
-    spec = importlib.util.spec_from_file_location("render_issue", RENDER_SCRIPT)
+    script = render_script()
+    spec = importlib.util.spec_from_file_location("render_issue", script)
     if spec is None or spec.loader is None:
-        raise FileNotFoundError(f"render_issue.py not found: {RENDER_SCRIPT}")
+        raise FileNotFoundError(f"render_issue.py not found: {script}")
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
@@ -422,7 +434,7 @@ def strip_automated_comments(
     include_bots: bool = False,
     strict_bots: bool = False,
 ) -> int:
-    """Drop GitLab/Jira integration spam. Same rule as render_issue.py / SKILL.md."""
+    """Drop git-host/Jira integration spam. Same rule as render_issue.py / SKILL.md."""
     render = load_render_issue()
     fields = issue.get("fields") or {}
     comment = fields.get("comment")
@@ -469,7 +481,7 @@ def issue_bodies_as_markdown(issue: dict[str, Any]) -> dict[str, Any]:
 
 def pick_fields(raw: str | None) -> list[str]:
     if not raw:
-        return list(DEFAULT_ISSUE_FIELDS)
+        return issue_fields()
     return [item.strip() for item in raw.split(",") if item.strip()]
 
 
@@ -532,7 +544,7 @@ class JiraClient:
             payload: Any
             try:
                 payload = json.loads(err_raw.decode("utf-8"))
-            except Exception:
+            except ValueError:
                 payload = {"raw": err_raw.decode("utf-8", "replace")[:2000]}
             raise JiraError(exc.code, _error_message(payload), payload) from None
 
@@ -583,9 +595,7 @@ class JiraClient:
                 out[key] = self.resolve_user(value)
             elif lowered in NAME_OBJECT_FIELDS and isinstance(value, str):
                 out[key] = {"name": value}
-            elif lowered == "project" and isinstance(value, str):
-                out[key] = {"key": value}
-            elif lowered == "parent" and isinstance(value, str):
+            elif lowered == "project" and isinstance(value, str) or lowered == "parent" and isinstance(value, str):
                 out[key] = {"key": value}
             elif lowered == "labels" and isinstance(value, str):
                 out[key] = [item.strip() for item in value.split(",") if item.strip()]
@@ -610,7 +620,7 @@ class JiraClient:
         issue = self.request(
             "GET",
             f"/rest/api/3/issue/{urllib.parse.quote(key)}",
-            query={"fields": ",".join(fields or DEFAULT_ISSUE_FIELDS)},
+            query={"fields": ",".join(fields or issue_fields())},
         )
         if not isinstance(issue, dict):
             raise JiraError(500, "unexpected issue payload")
@@ -783,7 +793,7 @@ class JiraClient:
             f"--{boundary}\r\n"
             f'Content-Disposition: form-data; name="file"; filename="{filename}"\r\n'
             "Content-Type: application/octet-stream\r\n\r\n"
-        ).encode("utf-8") + payload + f"\r\n--{boundary}--\r\n".encode("ascii")
+        ).encode() + payload + f"\r\n--{boundary}--\r\n".encode("ascii")
         return self.request(
             "POST",
             f"/rest/api/3/issue/{urllib.parse.quote(key)}/attachments",
@@ -885,7 +895,7 @@ def parse_json_arg(raw: str | None) -> dict[str, Any]:
         return {}
     value = json.loads(raw)
     if not isinstance(value, dict):
-        raise ValueError("--fields must be a JSON object")
+        raise ValueError("--fields must be a JSON object")  # noqa: TRY004 - malformed input, not a programming error
     return value
 
 
@@ -907,7 +917,7 @@ def cmd_jira_capabilities(args: argparse.Namespace) -> int:
         auth = public_auth(creds)
         present = True
     except (OSError, ValueError) as exc:
-        auth = {"error": str(exc), "path": str((args.token_file or TOKEN_PATH).expanduser())}
+        auth = {"error": str(exc), "path": str((args.token_file or default_token_path()).expanduser())}
     print(json.dumps({
         "status": "ok",
         "auth": auth,
@@ -1103,6 +1113,68 @@ def cmd_jira_search(args: argparse.Namespace) -> int:
         return emit_error(exc)
 
 
+BACKUP_SCRIPT = agents_home() / "skills" / "plan-task-evidence" / "scripts" / "backup-jira-comment.py"
+
+
+def require_confirmed_issue(args: argparse.Namespace, issue: str | None) -> None:
+    """Writes to Jira need the key restated, so a stray key from context cannot slip through."""
+    confirmed = (getattr(args, "confirm_issue", None) or "").strip()
+    if not confirmed:
+        raise ValueError("refused: pass --confirm-issue <KEY> naming the ticket the operator asked for")
+    if issue and confirmed.upper() != issue.strip().upper():
+        raise ValueError(f"refused: --confirm-issue {confirmed} does not match {issue}")
+
+
+def require_evidence_all_done(progress_file: Path) -> None:
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from agentctl_plan import read_progress_state
+
+    state = read_progress_state(progress_file.expanduser())
+    steps = (state or {}).get("steps") or {}
+    if not steps:
+        raise ValueError(f"refused: no evidence steps recorded in {progress_file}")
+    not_done = sorted(step for step, info in steps.items() if (info or {}).get("status") != "done")
+    if not_done:
+        raise ValueError(f"refused: evidence steps not done: {', '.join(not_done)}")
+
+
+def local_day(created: str) -> str:
+    """Jira stamps comments in the profile's time zone; compare days in this machine's zone."""
+    try:
+        return datetime.strptime(created, "%Y-%m-%dT%H:%M:%S.%f%z").astimezone().date().isoformat()
+    except ValueError:
+        return created[:10]
+
+
+def own_comment_today(client: JiraClient, issue: str) -> str | None:
+    me = client.myself().get("accountId")
+    today = date.today().isoformat()
+    page = client.request(
+        "GET",
+        f"/rest/api/3/issue/{urllib.parse.quote(issue)}/comment",
+        query={"maxResults": 100, "orderBy": "-created"},
+    )
+    for item in (page or {}).get("comments", []):
+        if (item.get("author") or {}).get("accountId") == me and local_day(str(item.get("created", ""))) == today:
+            return str(item.get("id"))
+    return None
+
+
+def backup_comment_before_edit(client: JiraClient, issue: str, comment_id: str) -> None:
+    current = client.request(
+        "GET",
+        f"/rest/api/3/issue/{urllib.parse.quote(issue)}/comment/{urllib.parse.quote(comment_id)}",
+        query={"expand": "renderedBody"},
+    )
+    html = (current or {}).get("renderedBody") or ""
+    result = subprocess.run(
+        [sys.executable, str(BACKUP_SCRIPT), "--issue", issue, "--comment-id", comment_id, "--body-file", "-"],
+        input=html, capture_output=True, text=True, check=False,
+    )
+    if result.returncode != 0:
+        raise ValueError(f"refused: comment backup failed ({result.stderr.strip() or result.returncode})")
+
+
 def cmd_jira_comment(args: argparse.Namespace) -> int:
     try:
         body = args.body
@@ -1110,7 +1182,19 @@ def cmd_jira_comment(args: argparse.Namespace) -> int:
             body = args.body_file.expanduser().read_text(encoding="utf-8")
         if body is None:
             raise ValueError("pass --body or --body-file")
+        require_confirmed_issue(args, args.issue)
+        if getattr(args, "evidence_progress", None):
+            require_evidence_all_done(args.evidence_progress)
         client = client_from_args(args)
+        if args.comment_id:
+            backup_comment_before_edit(client, args.issue, args.comment_id)
+        elif not getattr(args, "allow_second", False):
+            existing = own_comment_today(client, args.issue)
+            if existing:
+                raise ValueError(
+                    f"refused: you already posted comment {existing} on {args.issue} today; "
+                    "edit it with --comment-id, or pass --allow-second"
+                )
         result = client.add_or_edit_comment(
             args.issue,
             body,
@@ -1234,6 +1318,7 @@ def cmd_jira_attach(args: argparse.Namespace) -> int:
             return 0
         if not args.issue or not args.file:
             raise ValueError("upload needs ISSUE FILE; download needs --download ID")
+        require_confirmed_issue(args, args.issue)
         uploaded = client.upload_attachment(args.issue, args.file.expanduser())
         print(json.dumps({
             "status": "ok",
@@ -1313,6 +1398,9 @@ def cmd_jira_request(args: argparse.Namespace) -> int:
             body = json.loads(args.body_file.expanduser().read_text(encoding="utf-8"))
         elif args.body:
             body = json.loads(args.body)
+        if args.method.upper() in ("POST", "PUT") and "/comment" in args.path:
+            found = re.search(r"/issue/([^/?]+)/comment", args.path)
+            require_confirmed_issue(args, found.group(1) if found else None)
         result = client_from_args(args).request(args.method, args.path, body=body)
         print(json.dumps({
             "status": "ok",
@@ -1407,10 +1495,10 @@ def add_jira_parsers(group) -> None:
     parent.add_argument(
         "--token-file",
         type=Path,
-        default=TOKEN_PATH,
-        help="API token YAML (default ~/.agents/.auth/jira-api-token.yaml).",
+        default=None,
+        help="API token YAML (default: .agentctl [tracker.jira] token_file under the harness root).",
     )
-    parent.add_argument("--site", help="Override site URL (default from YAML or the token file).")
+    parent.add_argument("--site", help="Override site URL (default: the token YAML, else .agentctl [tracker.jira] site).")
     parent.add_argument("--timeout", type=float, default=60.0, help="HTTP timeout in seconds.")
 
     capabilities = group.add_parser(
@@ -1441,7 +1529,7 @@ def add_jira_parsers(group) -> None:
         "get",
         parents=[parent],
         help="Fetch one issue as JSON.",
-        description="GET /rest/api/3/issue/{key} with comments filled. Drops Solutions Jira x GitLab comments by default. MCP: getJiraIssue.",
+        description="GET /rest/api/3/issue/{key} with comments filled. Drops the integration authors in .agentctl skip_comment_authors by default. MCP: getJiraIssue.",
     )
     get_parser.add_argument("issue", help="Issue key or id.")
     get_parser.add_argument("--fields", help="Comma-separated Jira fields.")
@@ -1450,12 +1538,12 @@ def add_jira_parsers(group) -> None:
     get_parser.add_argument(
         "--include-bots",
         action="store_true",
-        help="Keep Solutions Jira x GitLab (and other filtered) comments.",
+        help="Keep the filtered integration comments.",
     )
     get_parser.add_argument(
         "--strict-bots",
         action="store_true",
-        help="Also drop authors matching bot|gitlab|github|jenkins|bamboo|automation.",
+        help="Also drop authors matching the bot pattern in .agentctl (tracker bots plus the git host integration).",
     )
     get_parser.set_defaults(func=cmd_jira_get)
 
@@ -1506,6 +1594,9 @@ def add_jira_parsers(group) -> None:
     comment.add_argument("--content-format", choices=("markdown", "html", "adf"), default="markdown")
     comment.add_argument("--visibility", help="group:NAME or role:NAME.")
     comment.add_argument("--internal", action="store_true", help="JSM internal note.")
+    comment.add_argument("--confirm-issue", help="Required: the issue key the operator named; must equal ISSUE.")
+    comment.add_argument("--evidence-progress", type=Path, help="Evidence progress file; refuse unless every step is done.")
+    comment.add_argument("--allow-second", action="store_true", help="Allow a new comment when one by you already exists today.")
     comment.set_defaults(func=cmd_jira_comment)
 
     media = group.add_parser(
@@ -1590,6 +1681,7 @@ def add_jira_parsers(group) -> None:
     attach.add_argument("file", nargs="?", type=Path, help="Local file to upload.")
     attach.add_argument("--download", metavar="ATTACHMENT_ID", help="Download this attachment id.")
     attach.add_argument("--output", type=Path, help="Destination path for --download.")
+    attach.add_argument("--confirm-issue", help="Required for upload: the issue key the operator named.")
     attach.set_defaults(func=cmd_jira_attach)
 
     link = group.add_parser(
@@ -1613,6 +1705,7 @@ def add_jira_parsers(group) -> None:
     request.add_argument("path", help="Absolute URL or site-relative path starting with /.")
     request.add_argument("--body", help="JSON request body.")
     request.add_argument("--body-file", type=Path)
+    request.add_argument("--confirm-issue", help="Required for POST/PUT on a comment path.")
     request.set_defaults(func=cmd_jira_request)
 
     wiki_get = group.add_parser(

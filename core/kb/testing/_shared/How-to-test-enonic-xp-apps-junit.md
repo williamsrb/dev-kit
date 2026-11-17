@@ -9,7 +9,7 @@ prose: caveman-lite
 
 Runs in the XP runtime; best for services, controllers, and XP API usage. Requires the `com.enonic.xp:testing` dependency.
 
-### Gradle
+## Gradle
 
 ```groovy
 repositories {
@@ -24,12 +24,12 @@ dependencies {
 
 The artifact version should match your `xpVersion` property (e.g., `7.16.1`).
 
-### Layout
+## Layout
 
 - JS tests: `xp/src/test/resources/` (mirror main layout, e.g. `lib/foo-test.js`)
 - Java bootstrap: `xp/src/test/java/` — class extending `ScriptRunnerSupport`, returns path to JS test
 
-### Java Bootstrap
+## Java Bootstrap
 
 Each JavaScript test file needs a Java class that extends `ScriptRunnerSupport`:
 
@@ -48,7 +48,7 @@ public class MyModuleTest extends ScriptRunnerSupport {
 
 **Important:** The class is `ScriptRunnerSupport`, not `ScriptTestSupport`.
 
-### Example
+## Example
 
 ```javascript
 // xp/src/test/resources/lib/example-test.js
@@ -68,7 +68,7 @@ exports.testFailurePath = function () {
 
 Every exported function prefixed with `test` is executed as a separate test. Optional `exports.before` and `exports.after` hooks run around each test function.
 
-### Mocking
+## Mocking
 
 `t.mock('/lib/some-module', { fn: function () { return 'fixed'; } })` before requiring the module under test. Reuse the mock object when varying return values:
 
@@ -85,7 +85,7 @@ exports.testScenario1 = function () {
 };
 ```
 
-### Run
+## Run
 
 ```bash
 ./gradlew test   # from xp/
@@ -94,4 +94,3 @@ exports.testScenario1 = function () {
 **Note:** XP Test Framework tests are written in plain JavaScript (CommonJS `require`), not TypeScript.
 
 ---
-

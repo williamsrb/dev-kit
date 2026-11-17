@@ -46,6 +46,7 @@ The migrator never modifies:
 - `tsconfig.json`, `tsup.config.ts`, etc. — TypeScript / bundler config (handled separately)
 - `logback.xml` — logging config (handled separately, see
   <https://raw.githubusercontent.com/enonic/doc-xp/refs/heads/8.0/docs/release/upgrade.adoc>)
+
 ## Summary checklist
 
 When migrating by hand, work through each file in this order:

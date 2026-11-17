@@ -1,6 +1,6 @@
 ---
 name: orchestrate
-description: "Split independent Codex workstreams with spawn_agent (gpt-6-luna, gpt-6.1-sol, gpt-6-astra). Use on `mult`, this skill name, 2+ independent streams, a blocking command, or an independent review. Skip sequential or overlapping edits. Jira same-repo: multitask-same-repo. | recommendedRole: task-owner."
+description: "Split independent Codex workstreams with spawn_agent (gpt-6-luna, gpt-6.1-sol, gpt-6-astra). Use on `mult`, this skill name, 2+ independent streams, a blocking command, or an independent review. Skip sequential or overlapping edits. Jira same-repo: multitask-same-repo."
 metadata:
   recommendedRole: task-owner
   cliDependencies:
@@ -19,7 +19,7 @@ This copy is for Codex (`spawn_agent`) only.
 
 Keep the root responsible for decomposition, user communication, approvals, synthesis, and the final claim. Delegate outcomes, not vague help.
 
-Defaults are the Codex column of `~/.agents/skills-vendor/ROLES.md`: operator picks for `follow`, `plan`, `build`, `plan-review` and `impl-review`, the rest scale `agentctl bench place` (2026-10-09) down so no default is `max`. Retune with `agentctl bench collect` then `agentctl bench place --markdown`. Do not spawn models outside `gpt-6-luna`, `gpt-6.1-sol`, and `gpt-6-astra`; GPT-5.6 Luna/Terra/Sol are never the cheapest config in any band.
+Defaults are the Codex column of `~/.agents/skills-vendor/ROLES.md`: `agentctl bench place` (2026-11-10) against absolute role floors in `benchmarks/bands.yaml`, with GPT-6 Astra kept on the reviews and `quality-gate` so reviewers differ from authors. No default is `max`. Start at the cell and escalate one step only when a review or the checks reject the output. Retune with `agentctl bench collect` then `agentctl bench place --markdown`. Do not spawn models outside `gpt-6-luna`, `gpt-6.1-sol`, and `gpt-6-astra`; GPT-5.6 Luna/Terra/Sol are never the cheapest config in any band.
 
 A reviewer (`plan-review`, `impl-review`) runs on a different model than the author: Astra reviews Sol work. `inherit` skills (`handoff`) get no spawn model; they run on the session's model. `max` effort is never a default; use it only when the user asks.
 
@@ -56,18 +56,18 @@ Choose by ambiguity, coupling, and consequence rather than task size alone. GPT-
 | Model | Effort | Role | Use when |
 |---|---|---|---|
 | `gpt-6-luna` | `medium` | `deterministic` | Tool runs whose result is cheap to verify. |
-| `gpt-6.1-sol` | `medium` | `explore` | Read-only gather: docs, CI inspection, logs. |
-| `gpt-6.1-sol` | `medium` | `follow` | Defined skill procedures. |
-| `gpt-6.1-sol` | `high` | `plan` | Spec or plan of one surface. |
-| `gpt-6.1-sol` | `high` | `build` | Execute a plan or bounded coding. Default coding spawn. |
-| `gpt-6-astra` | `medium` | `impl-review` | Review a delivery against its plan. |
-| `gpt-6-astra` | `high` | `plan-review` | Review and rewrite a plan before work starts. |
-| `gpt-6.1-sol` | `xhigh` | `task-owner` | Substantial independent task; coordination when authorized. |
-| `gpt-6-astra` | `xhigh` | `quality-gate` | Architecture, security, payment, release-risk. Best Codex config, but below the absolute `quality-gate` floor (58.0 vs 62.1 Terminal-Bench points). |
+| `gpt-6.1-sol` | `low` | `explore` | Read-only gather: docs, CI inspection, logs. |
+| `gpt-6.1-sol` | `low` | `follow` | Defined skill procedures. |
+| `gpt-6.1-sol` | `low` | `plan` | Spec or plan of one surface. |
+| `gpt-6.1-sol` | `low` | `build` | Execute a plan or bounded coding. Default coding spawn. |
+| `gpt-6-astra` | `low` | `impl-review` | Review a delivery against its plan. |
+| `gpt-6-astra` | `low` | `plan-review` | Review and rewrite a plan before work starts. |
+| `gpt-6.1-sol` | `medium` | `task-owner` | Substantial independent task; coordination when authorized. |
+| `gpt-6-astra` | `medium` | `quality-gate` | Architecture, security, payment, release-risk. Measured (54.5) and above the `quality-gate` floor (52). |
 
-Sol cells are provisional (Artificial Analysis only, estimated cost, or an operator pick). For extreme-consequence gates, prefer a second opinion from the root or the user over a stronger Codex tier: none exists.
+Sol cells are provisional (Artificial Analysis only or estimated cost); the Astra cells are measured. For extreme-consequence gates, raise Astra to `high` or ask the root or the user for a second opinion.
 
-Do not use GPT-6 Luna below `medium`. Luna never coordinates. GPT-6.1 Sol and GPT-6 Astra may coordinate children only when the root explicitly assigns that, the child work is independently scoped, and slots remain.
+Do not use GPT-6 Luna below `medium`; it has no role above `deterministic`. Luna never coordinates. GPT-6.1 Sol and GPT-6 Astra may coordinate children only when the root explicitly assigns that, the child work is independently scoped, and slots remain.
 
 ## Disclose Every Spawn
 
@@ -84,58 +84,58 @@ Prefer `fork_turns: "none"` with explicit `model` and `reasoning_effort`. When a
 
 ```text
 Spawning:
-- `log_explore` — `gpt-6.1-sol`, reasoning `medium` — read-only gather
-- `impl_auth` — `gpt-6.1-sol`, reasoning `high` — build
-- `impl_review` — `gpt-6-astra`, reasoning `medium` — impl-review
+- `log_explore` — `gpt-6.1-sol`, reasoning `low` — read-only gather
+- `impl_auth` — `gpt-6.1-sol`, reasoning `low` — build
+- `impl_review` — `gpt-6-astra`, reasoning `low` — impl-review
 - `ci_watch` — `gpt-6-luna`, reasoning `medium` — deterministic
-- `quality_gate` — `gpt-6-astra`, reasoning `xhigh` — quality-gate
+- `quality_gate` — `gpt-6-astra`, reasoning `medium` — quality-gate
 ```
 
 ## Personas
 
 Assignment shapes, not permanent project agents. Role slugs match `~/.agents/skills-vendor/ROLES.md`.
 
-### `explore` — 6.1 Sol medium
+### `explore` — 6.1 Sol low
 
 Read-only gather: logs, diffs, docs, health. Return paths, commands, timestamps, exact failures, and confidence. Do not use Luna. Not Jira evidence capture.
 
-### `follow` — 6.1 Sol medium, or Luna medium if `deterministic`
+### `follow` — 6.1 Sol low, or Luna medium if `deterministic`
 
 Run an already-written skill or procedure with explicit inputs and completion checks. Luna only when the CLI is the worker and the result is cheap to verify (wait for CI, copy a path, grep).
 
-### `plan` — 6.1 Sol high
+### `plan` — 6.1 Sol low
 
 Write the spec or plan of one surface from a PRD. Return the plan file path, open decisions and risks.
 
-### `build` — 6.1 Sol high
+### `build` — 6.1 Sol low
 
 Own one bounded code surface or execute one plan. Run targeted checks. Report changed files, checks, and residual risk. Distinct file ownership.
 
-### `impl-review` — Astra medium
+### `impl-review` — Astra low
 
 Review a delivery against its plan on a different model than the author. Report findings by severity with file and line; do not fix unless assigned.
 
-### `plan-review` — Astra high
+### `plan-review` — Astra low
 
 Review and rewrite a plan before work starts, on a different model than the author. Report gaps in scope, acceptance criteria and risk.
 
-### `task-owner` — 6.1 Sol xhigh
+### `task-owner` — 6.1 Sol medium
 
 Own a substantial independent task (worktree / key). Coordinate children only when explicitly authorized. Return one integrated result.
 
-### `quality-gate` — Astra xhigh
+### `quality-gate` — Astra medium
 
 Challenge architecture, diagnosis, security, financial correctness, or release readiness. Ask for the strongest competing explanation. Return a recommendation; keep the final decision with the root and user.
 
 ## Delegation Patterns
 
-- **Production incident:** 6.1 Sol medium (`explore`) for live health/logs; 6.1 Sol high (`build`) for the relevant code path; 6.1 Sol xhigh (`task-owner`) only if it becomes a coordinated task. Root separates cause from mitigation.
-- **PR or release:** 6.1 Sol medium (`explore`) for exact-head diff/CI; Astra medium (`impl-review`) for substantive review; Astra xhigh (`quality-gate`) for merge-risk. Approval, merge, deploy stay with the root unless the user delegates those actions.
-- **Analytics or payments:** separate 6.1 Sol medium `explore` gathers; 6.1 Sol high to reconcile; Astra xhigh for money-sensitive ambiguity.
-- **UI work:** 6.1 Sol high (`build`) for bounded implementation; 6.1 Sol xhigh (`task-owner`) for a larger independent task.
-- **Plan then build:** Sol high (`plan`), Astra high (`plan-review`), Sol high (`build`) per worktree, Astra medium (`impl-review`).
-- **Long-running procedure:** 6.1 Sol medium (`follow`), or Luna medium when `deterministic`, so the root stays available.
-- **Consulting or research:** 6.1 Sol medium (`explore`) for sources; 6.1 Sol high to normalize; Astra or the root for the recommendation.
+- **Production incident:** 6.1 Sol low (`explore`) for live health/logs; 6.1 Sol low (`build`) for the relevant code path; 6.1 Sol medium (`task-owner`) only if it becomes a coordinated task. Root separates cause from mitigation.
+- **PR or release:** 6.1 Sol low (`explore`) for exact-head diff/CI; Astra low (`impl-review`) for substantive review; Astra medium (`quality-gate`) for merge-risk. Approval, merge, deploy stay with the root unless the user delegates those actions.
+- **Analytics or payments:** separate 6.1 Sol low `explore` gathers; 6.1 Sol low to reconcile; Astra medium (high if the stakes justify it) for money-sensitive ambiguity.
+- **UI work:** 6.1 Sol low (`build`) for bounded implementation; 6.1 Sol medium (`task-owner`) for a larger independent task.
+- **Plan then build:** Sol low (`plan`), Astra low (`plan-review`), Sol low (`build`) per worktree, Astra low (`impl-review`).
+- **Long-running procedure:** 6.1 Sol low (`follow`), or Luna medium when `deterministic`, so the root stays available.
+- **Consulting or research:** 6.1 Sol low (`explore`) for sources; 6.1 Sol low to normalize; Astra or the root for the recommendation.
 
 ## Assignment Contract
 
@@ -149,8 +149,26 @@ Default to `fork_turns: "none"`. Pass only the context required to succeed:
 6. Read-only or authorized to mutate.
 7. Leaf, or an explicitly authorized 6.1 Sol / Astra coordinator. Luna is always a leaf.
 8. The exact model and reasoning effort disclosed to the user.
+9. The checkpoint file path, for a worker that mutates files or runs long (see Checkpoints and Resume).
 
 Use a history fork only when the subtask depends on conversation context too dense or fragile to restate. Never send two agents overlapping implementation ownership in the same checkout.
+
+## Checkpoints and Resume
+
+A usage limit, crash or stop ends a worker mid-task, and its final report never arrives. The checkpoint file is what survives.
+
+Every assignment that mutates files or will run more than about ten tool calls names a checkpoint file: `~/.agents/runs/<run-id>/<agent-name>.md`, where `<run-id>` is `<YYYY-MM-DD>-<task key or slug>`. The root creates the directory before spawning. The brief tells the worker to:
+
+- Write the checkpoint before its first change, then rewrite it after each completed step (a step, not a tool call).
+- Keep it under 40 lines with these sections: `Objective`, `Done` (step, files, evidence), `Findings`, `Next` (the exact next step), `Open questions`.
+- Record findings there as they appear, not only in the final report.
+
+After a limit or crash, resume with the least loss first:
+
+1. Session still open: follow up with the stopped agent. It keeps its full context.
+2. Otherwise spawn a fresh worker on the same model and effort with the original assignment plus the checkpoint file, and the same checkpoint path. `agentctl subagents` reads Claude Code transcripts only.
+
+Never respawn the original assignment from scratch while a checkpoint or transcript exists.
 
 ## Coordinate and Integrate
 

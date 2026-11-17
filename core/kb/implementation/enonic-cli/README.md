@@ -17,7 +17,7 @@ Skill `use-enonic-cli` owns **critical rules** (always `-f` when accepted, local
 
 ## Command syntax
 
-```
+```bash
 enonic <group> <action> [positional-args] [flags]
 ```
 

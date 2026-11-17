@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "name": "release-replay",
+  "mode": "local",
+  "steps": [
+    {
+      "id": "run-evidence",
+      "skill": "run-plan",
+      "args": "Execute the evidence plan (kind evidence), capture only (E1). This is a release replay on a copy of the plan: do NOT post anywhere, skip E2 and E2b, write nothing to the original task's plan or evidence folders.",
+      "pre": [
+        "auth_state"
+      ],
+      "post": [
+        "evidence_pass",
+        "evidence_folder"
+      ],
+      "park_on_fail": true,
+      "allowed_tools_extra": [
+        "mcp__playwright-{task}"
+      ]
+    }
+  ]
+}

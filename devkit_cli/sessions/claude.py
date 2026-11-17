@@ -10,6 +10,7 @@ them where the sidebar never looks.
 
 from __future__ import annotations
 
+import json
 import os
 import shutil
 import time
@@ -18,7 +19,7 @@ from pathlib import Path
 
 from ..common import relative_to_home
 from ..errors import DevkitError
-from .common import Side, Step, files_under, plan_copy, read_proc
+from .common import Copy, Side, Step, files_under, plan_copy, read_proc
 
 SESSIONS = "claude-code-sessions"
 INDEXEDDB = "IndexedDB"
@@ -48,6 +49,93 @@ def _target_org(desktop: Path) -> Path:
             f"{relative_to_home(desktop)} has no signed-in organization folder yet",
             "open that Desktop, sign in, start one chat, quit it, then re-run")
     return max(orgs, key=lambda p: (sum(1 for _ in p.glob("local_*.json")), p.name))
+
+
+def desktop_entries(desktop: Path) -> Iterable[tuple[Path, dict]]:
+    """Every Desktop index file that parses, with its decoded content."""
+    for path in sorted((desktop / SESSIONS).glob("*/*/local_*.json")):
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        if isinstance(data, dict):
+            yield path, data
+
+
+def transcripts(code: Path, session_id: str) -> list[Path]:
+    """Every projects/*/<id>.jsonl: one session id can sit under two folders."""
+    return sorted((code / "projects").glob(f"*/{session_id}.jsonl"))
+
+
+def transcript_title(path: Path) -> str | None:
+    """The last custom-title record, else the last ai-title record.
+
+    Only lines holding the record type are parsed: transcripts reach hundreds
+    of MB, and decoding every line would miss the finder's time target.
+    """
+    found: dict[str, str] = {}
+    try:
+        with path.open(encoding="utf-8", errors="replace") as handle:
+            for line in handle:
+                for kind, key in (("custom-title", "customTitle"), ("ai-title", "aiTitle")):
+                    if f'"{kind}"' in line:
+                        try:
+                            record = json.loads(line)
+                        except ValueError:
+                            continue
+                        if record.get("type") == kind and record.get(key):
+                            found[kind] = str(record[key])
+    except OSError:
+        return None
+    return found.get("custom-title") or found.get("ai-title")
+
+
+def transcript_cwd(path: Path, limit: int = 200) -> str | None:
+    """Working folder of a transcript-only session: the first record with `cwd`."""
+    try:
+        with path.open(encoding="utf-8", errors="replace") as handle:
+            for _, line in zip(range(limit), handle):
+                if '"cwd"' in line:
+                    try:
+                        cwd = json.loads(line).get("cwd")
+                    except ValueError:
+                        continue
+                    if cwd:
+                        return str(cwd)
+    except OSError:
+        return None
+    return None
+
+
+def target_org(dst: Side, org: Path | None) -> Path:
+    if org is None:
+        return _target_org(dst.desktop)
+    sessions = dst.desktop / SESSIONS
+    if not org.is_dir() or org.resolve().parent.parent != sessions.resolve():
+        raise DevkitError(f"{org} is not an organization folder of {dst.name}",
+                          f"pass one of {relative_to_home(sessions)}/<account>/<org>")
+    return org
+
+
+def plan_one(src: Side, dst: Side, session_id: str, org: Path | None = None) -> Copy:
+    """One session: its transcripts, their sidecar folders and its Desktop index file."""
+    found = transcripts(src.code, session_id)
+    indexes = [p for p, data in desktop_entries(src.desktop)
+               if data.get("cliSessionId") == session_id]
+    if not found and not indexes:
+        raise DevkitError(f"session {session_id} is not on {src.name}",
+                          "'devkit profile session-find --title ...' lists ids")
+    root = src.code / "projects"
+    wanted: list[tuple[Path, Path]] = []
+    for transcript in found:
+        wanted.append((transcript, dst.code / "projects" / transcript.relative_to(root)))
+        sidecar = transcript.with_suffix("")
+        for path in files_under(sidecar) if sidecar.is_dir() else ():
+            wanted.append((path, dst.code / "projects" / path.relative_to(root)))
+    if indexes:
+        newest = max(indexes, key=lambda p: p.stat().st_mtime)
+        wanted.append((newest, target_org(dst, org) / newest.name))
+    return plan_copy(f"session {session_id}", wanted)
 
 
 def _accounts(desktop: Path) -> set[str]:

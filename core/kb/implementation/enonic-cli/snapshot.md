@@ -11,7 +11,7 @@ prose: caveman-lite
 
 Create a snapshot of one or all repositories.
 
-```
+```bash
 enonic snapshot create [flags]
 ```
 
@@ -26,7 +26,7 @@ enonic snapshot create [flags]
 
 List all snapshots. Alias: `enonic snapshot ls`.
 
-```
+```bash
 enonic snapshot ls [flags]
 ```
 
@@ -39,7 +39,7 @@ enonic snapshot ls [flags]
 
 Restore a snapshot.
 
-```
+```bash
 enonic snapshot restore [flags]
 ```
 
@@ -57,7 +57,7 @@ enonic snapshot restore [flags]
 
 Delete snapshots by name or date. Alias: `del`.
 
-```
+```bash
 enonic snapshot delete [flags]
 ```
 

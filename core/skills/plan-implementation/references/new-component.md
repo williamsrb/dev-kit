@@ -6,11 +6,12 @@ Use when the task type is **New Component**. Fill `Suggested Technical Approach`
 
 Parse the component type and name from the issue title. Expected pattern:
 
-```
+```text
 [...] (Backend|Frontend|Fullstack) <ComponentType>: <ComponentName>
 ```
 
 Examples:
+
 - `(Backend) Part: Info Card` → type=`part`, name=`info-card`
 - `(Fullstack) Layout: Article` → type=`layout`, name=`article`
 - `(Backend) Content Type: Product` → type=`content-type`, name=`product`
@@ -25,7 +26,7 @@ If the title does not follow this pattern, infer type and name from the descript
 
 ### Part
 
-```
+```text
 site/parts/{name}/
 ├── {name}.xml           # Descriptor
 └── {name}.d.ts          # TypeScript interfaces: {PascalName}PartData + {PascalName}PartProps
@@ -36,12 +37,13 @@ react4xp/components/parts/{name}/
 ```
 
 Registration (both files required):
+
 - `react4xp/dataFetcher.ts` → `dataFetcher.addPart(\`${app.name}:{name}\`, { processor })`
 - `react4xp/componentRegistry.tsx` → `componentRegistry.addPart('com.example.{PROJECT}:{name}', { View })`
 
 ### Layout
 
-```
+```text
 site/layouts/{name}/
 ├── {name}.xml           # Descriptor (includes <regions> block)
 └── {name}.d.ts          # TypeScript interface: {PascalName}LayoutProps only (no LayoutData)
@@ -52,12 +54,13 @@ react4xp/components/layouts/{name}/
 ```
 
 Registration:
+
 - `react4xp/dataFetcher.ts` → `dataFetcher.addLayout(...)`
 - `react4xp/componentRegistry.tsx` → `componentRegistry.addLayout(...)`
 
 ### Content Type
 
-```
+```text
 site/content-types/{name}/
 ├── {name}.xml           # Descriptor
 └── {name}.d.ts          # TypeScript interface: {PascalName}Data
@@ -67,7 +70,7 @@ No React component or processor — content types define the data schema only.
 
 ### Macro
 
-```
+```text
 site/macros/{name}/
 ├── {name}.xml           # Descriptor (no HtmlArea or item-set — not allowed in macro forms)
 └── {name}.d.ts          # TypeScript interface: {PascalName}MacroProps
@@ -78,6 +81,7 @@ react4xp/components/macros/{name}/
 ```
 
 Registration:
+
 - `react4xp/dataFetcher.ts` → `dataFetcher.addMacro(...)`
 - `react4xp/componentRegistry.tsx` → `componentRegistry.addMacro(...)`
 
@@ -100,6 +104,7 @@ If no field table exists, infer the minimum viable set from the title and accept
 criteria, and list every assumption explicitly in the spec for dev review.
 
 **TypeScript type mapping:**
+
 - `TextLine`, `TextArea`, `HtmlArea` → `string` in `*Data`; `HtmlArea`/`TextArea` → `ExtendedRichTextData` in `*Props` after `processHtml`
 - `ImageSelector` → `string` in both (raw ID in `*Data`, URL after `myImageUrl(...).link` in `*Props`)
 - `CheckBox` → `boolean`
@@ -123,6 +128,7 @@ Key patterns by type:
 | Macro | `macro.{name}.display_name` / `macro.{name}.{field_name}` |
 
 **Both files must always be updated:**
+
 - `i18n/phrases.properties` — English (default/fallback)
 - `i18n/phrases_no.properties` — Norwegian
 

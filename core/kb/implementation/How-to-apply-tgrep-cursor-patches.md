@@ -14,7 +14,7 @@ Recorded series under `~/.agents/vendor/tgrep-cursor/patches/` onto a disposable
 
 ## Scope
 
-Replay FR-1–FR-7 (hidden meta, serve, watcher, search, tests) after an upstream tgrep upgrade.
+Replay the patch set (hidden meta, serve, watcher, search, tests) after an upstream tgrep upgrade.
 
 ## Prerequisites
 

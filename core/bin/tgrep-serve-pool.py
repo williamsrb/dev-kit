@@ -17,7 +17,7 @@ import re
 import subprocess
 import sys
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 HOME = Path.home()
@@ -226,7 +226,7 @@ def start_serve(root: Path, pool: dict) -> dict | None:
     rec = {
         "index_path": str(index_dir),
         "pid": proc.pid,
-        "started_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "started_at": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
     }
     return rec
 

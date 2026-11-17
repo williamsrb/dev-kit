@@ -22,9 +22,19 @@ import re
 import sys
 from html.parser import HTMLParser
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 
-JIRA_BASE = "https://example.atlassian.net/browse"
+for _root in (Path(__file__).resolve().parents[3], Path.home() / ".agents"):
+    if (_root / "bin" / "agentctl_config.py").is_file():
+        sys.path.insert(0, str(_root / "bin"))
+        break
+import agentctl_config
+
+_JIRA = agentctl_config.section(agentctl_config.load(), "tracker.jira")  # site and bot authors live in .agentctl
+
+# Placeholder that download-jira-task Step 3b replaces with RC entries.
+REQUIREMENT_CHANGES_PENDING = "Not extracted yet."
+JIRA_BASE = str(_JIRA["site"]).rstrip("/") + str(_JIRA["browse_path"])
 
 
 def agents_home() -> Path:
@@ -36,12 +46,12 @@ def agents_home() -> Path:
 
 PRD_ROOT = agents_home() / "prds"
 
-# SKILL.md mandates skipping this exact author (GitLab commit/MR mention spam).
-SKIP_AUTHORS = {"Solutions Jira x GitLab"}
+# SKILL.md mandates skipping these authors (the Jira git-host integration's mention spam); the list is in .agentctl.
+SKIP_AUTHORS = set(_JIRA["skip_comment_authors"])
 
 # Broader automation filter, opt-in via --strict-bots. Left off by default
 # because it also matches humans whose display name contains e.g. "bot".
-BOT_RE = re.compile(r"bot|gitlab|github|jenkins|bamboo|automation", re.IGNORECASE)
+BOT_RE = agentctl_config.bot_author_pattern()  # tracker bots plus the git host integration, from .agentctl
 
 BLOB_RE = re.compile(r"blob:https://media\.[^\s\)\"']+")
 # An <img> whose src is a blob becomes a Markdown image first; strip the
@@ -189,7 +199,7 @@ class _HtmlToMarkdown(HTMLParser):
     importable. This exists so the skill keeps working on a machine without it.
     """
 
-    INLINE = {
+    INLINE: ClassVar[dict[str, str]] = {
         "strong": "**", "b": "**",
         "em": "*", "i": "*",
         "code": "`",
@@ -366,9 +376,7 @@ def keep_comment(author: str, include_bots: bool, strict_bots: bool) -> bool:
         return True
     if author in SKIP_AUTHORS:
         return False
-    if strict_bots and BOT_RE.search(author):
-        return False
-    return True
+    return not (strict_bots and BOT_RE.search(author))
 
 
 # --------------------------------------------------------------------------
@@ -407,21 +415,31 @@ def render(
     lines = [
         f"# {key} — {fields.get('summary', '')}",
         "",
+        "**Source:** jira",
+        f"**WORK-ID:** {key}",
+        f"**Type:** {name(fields.get('issuetype')) or 'not stated'}",
+        f"**Created:** {fields.get('created', '') or 'not stated'}",
+        f"**Updated:** {fields.get('updated', '') or 'not stated'}",
         f"**Jira:** {JIRA_BASE}/{key}",
         f"**Project:** {project.get('name', '')} ({project.get('key', '')})",
-        f"**Type:** {name(fields.get('issuetype'))}",
-        f"**Status:** {name(fields.get('status'))}",
-        f"**Priority:** {name(fields.get('priority'))}",
+        f"**Status:** {name(fields.get('status')) or 'not stated'}",
+        f"**Priority:** {name(fields.get('priority')) or 'not stated'}",
         f"**Reporter:** {name(fields.get('reporter')) or 'Unassigned'}",
         f"**Assignee:** {name(fields.get('assignee')) or 'Unassigned'}",
-        f"**Created:** {fields.get('created', '')}",
-        f"**Updated:** {fields.get('updated', '')}",
         "",
         "---",
         "",
         "## Description",
         "",
         body_to_md(fields.get("description"), declared) or "No description",
+        "",
+        "---",
+        "",
+        "## Requirement Changes",
+        "",
+        REQUIREMENT_CHANGES_PENDING if kept else "None detected.",
+        "",
+        "Checked through: none",
         "",
         "---",
         "",
@@ -470,7 +488,7 @@ def render(
 # --------------------------------------------------------------------------
 
 def write(payload: dict[str, Any], target: Path, args: argparse.Namespace) -> dict[str, Any]:
-    key, markdown, metadata = render(payload, args.include_bots, args.strict_bots)
+    _key, markdown, metadata = render(payload, args.include_bots, args.strict_bots)
     target = target.expanduser().resolve()
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(markdown, encoding="utf-8")

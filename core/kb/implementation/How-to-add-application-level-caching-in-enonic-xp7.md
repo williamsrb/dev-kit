@@ -42,7 +42,7 @@ var contentGetSite = function () {
 
 Prefer delegating the duplicate to the now-cached primary implementation — **but check the require graph first**:
 
-```
+```bash
 grep -n "require.*util" module-with-primary-impl.js       # does A require B?
 grep -n "require.*module-with-primary-impl" util.js        # does B require A?
 grep -rn "require('/lib/util')" **/*.js                    # does anything B depends on require B back?

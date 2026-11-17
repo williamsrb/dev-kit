@@ -1,6 +1,6 @@
 ---
 name: humanize-text
-description: "Rewrite AI-sounding prose so it reads naturally, without changing meaning. Use for inflated claims, stock AI words, filler, or when asked to humanize text or write as a human. | recommendedRole: build | aliases: write-as-human, text-to-human."
+description: "Rewrite AI-sounding prose so it reads naturally, without changing meaning. Use for inflated claims, stock AI words, filler, or when asked to humanize text or write as a human."
 license: MIT
 metadata:
   recommendedRole: build

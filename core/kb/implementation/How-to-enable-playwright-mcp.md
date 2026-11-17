@@ -58,7 +58,7 @@ Do not put five servers in a session that only needs one. Token cost is ~80 tool
 
 Parked MCP: `slack-workspace-leanon`. Parked plugins: Cursor marketplace Slack (`plugin-slack-slack`, plugin id `674`), Codex `slack@openai-curated` and `slack@claude-plugins-official`. Snippets: `~/.agents/.auth/mcp-on-demand/`.
 
-### Procedure
+### Slack procedure
 
 1. Merge parked `slack-workspace-leanon` into the vendor live MCP file. Codex: move the nested `[mcp_servers.slack-workspace-leanon.http_headers]` table with it.
 2. Cursor: enable the Slack marketplace plugin (Settings → Plugins), or restore plugin id `674` on `cursor.plugins.installedIds.*` as recorded in `cursor-slack-plugin.json`.
@@ -74,3 +74,8 @@ Do not register `graft mcp`. Use the `graft` CLI plus `graft.mdc`. `graft build`
 ## Other parked snippets
 
 `browser-control` stays in `~/.agents/.auth/mcp-on-demand/`. Merge it only when the operator named that surface.
+
+## Auth storage state notes
+
+- Pick a storage state by host with `find-auth-storage.py`, never by filename; keep it under `~/.agents/.auth` (mode 700).
+- A storage state omits sessionStorage. A token kept there needs init-script seeding or a headed spawn.

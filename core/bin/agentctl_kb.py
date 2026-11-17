@@ -14,7 +14,7 @@ import shutil
 import subprocess
 import tarfile
 import tempfile
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -114,6 +114,76 @@ def add_kb_parsers(group) -> None:
     list_parser.add_argument("--json", action="store_true", help=argparse.SUPPRESS)
     list_parser.set_defaults(func=cmd_list)
 
+    proposals = group.add_parser(
+        "proposals",
+        help="Review KB proposals from factory runs and chat harvests.",
+        description=(
+            "List, check, apply or reject proposals in kb-proposals.md files under "
+            "$AGENTS_HOME/factory and $AGENTS_HOME/kb-inbox. Apply never stages."
+        ),
+    )
+    proposal_sub = proposals.add_subparsers(dest="proposals_cmd", required=True)
+
+    p_list = proposal_sub.add_parser("list", help="List proposals and their state.")
+    p_list.add_argument("--task", help="Only proposals of this factory task or chat session.")
+    p_list.add_argument("--state", choices=("pending", "applied", "rejected", "invalid", "all"), default="pending")
+    p_list.add_argument("--source", choices=("factory", "chat", "all"), default="all")
+    p_list.add_argument("--json", action="store_true")
+    p_list.set_defaults(func=cmd_proposals_list)
+
+    p_show = proposal_sub.add_parser("show", help="Show one proposal by ref.")
+    p_show.add_argument("ref", help="<TASK>:<step-id>:<n> or <session-id>:chat:<n>")
+    p_show.add_argument("--json", action="store_true")
+    p_show.set_defaults(func=cmd_proposals_show)
+
+    p_check = proposal_sub.add_parser("check", help="Validate every proposal in one file; exit 1 when any is invalid.")
+    p_check.add_argument("path", help="A kb-proposals.md file.")
+    p_check.add_argument("--json", action="store_true")
+    p_check.set_defaults(func=cmd_proposals_check)
+
+    p_apply = proposal_sub.add_parser("apply", help="Apply one pending proposal (unstaged).")
+    p_apply.add_argument("ref")
+    p_apply.add_argument("--json", action="store_true")
+    p_apply.set_defaults(func=cmd_proposals_apply)
+
+    p_reject = proposal_sub.add_parser("reject", help="Reject one pending or invalid proposal.")
+    p_reject.add_argument("ref")
+    p_reject.add_argument("--reason", required=True)
+    p_reject.add_argument("--json", action="store_true")
+    p_reject.set_defaults(func=cmd_proposals_reject)
+
+    digest = group.add_parser(
+        "digest",
+        help="Build the deterministic chat digest of one Claude session (or the memories digest).",
+        description="Writes $AGENTS_HOME/kb-inbox/<session-id>/digest.json. Makes no model call.",
+    )
+    which = digest.add_mutually_exclusive_group(required=True)
+    which.add_argument("--session", help="A Claude session id (the transcript file name without .jsonl).")
+    which.add_argument("--latest", action="store_true", help="The newest transcript of the current folder's project.")
+    which.add_argument("--memories", action="store_true", help="Feedback memories instead of a session.")
+    digest.add_argument("--vendor", choices=("claude", "codex", "cursor"), default="claude",
+                        help="Whose transcript to read (default claude).")
+    digest.add_argument("--json", action="store_true")
+    digest.set_defaults(func=cmd_digest)
+
+    harvest = group.add_parser(
+        "harvest",
+        help="Run harvest-kb over pending chat digests (operator command; makes model calls).",
+        description="With --pending: one harvest-kb run per inbox folder that has a digest with signals and no proposals.",
+    )
+    harvest.add_argument("--pending", action="store_true", required=True)
+    harvest.add_argument("--limit", type=int, default=5, help="Most folders per run (default 5).")
+    harvest.add_argument("--dry-run", action="store_true", help="List the folders only; no model call.")
+    harvest.add_argument("--json", action="store_true")
+    harvest.set_defaults(func=cmd_harvest)
+
+    inbox = group.add_parser("inbox", help="Chat inbox housekeeping.")
+    inbox_sub = inbox.add_subparsers(dest="inbox_cmd", required=True)
+    prune = inbox_sub.add_parser("prune", help="Remove old inbox folders that hold no proposals or decisions.")
+    prune.add_argument("--older-than", default="30d", help="Age cutoff in whole days (default 30d).")
+    prune.add_argument("--json", action="store_true")
+    prune.set_defaults(func=cmd_inbox_prune)
+
 
 def cmd_export(args: argparse.Namespace) -> int:
     root = resolve_kb_root(args.root)
@@ -176,6 +246,149 @@ def cmd_list(args: argparse.Namespace) -> int:
             "missing_frontmatter": missing,
         })
     emit({"status": "ok", "root": str(root), "buckets": rows})
+    return 0
+
+def _proposal_error(message: str) -> int:
+    emit({"status": "error", "message": message})
+    return 2
+
+
+def cmd_digest(args: argparse.Namespace) -> int:
+    from agentctl_kb_digest import memory_digest, write_digest
+    from agentctl_kb_digest_vendors import digest_for, resolve_for
+    from agentctl_kb_proposals import ProposalError
+
+    home = agents_home()
+    try:
+        if args.memories:
+            digest = memory_digest(home)
+            folder = home / "kb-inbox" / "memories"
+            folder.mkdir(parents=True, exist_ok=True)
+            target = folder / "digest.json"
+            target.write_text(json.dumps(digest, indent=2, ensure_ascii=False), encoding="utf-8")
+        else:
+            path = resolve_for(args.vendor, args.session, args.latest)
+            digest = digest_for(args.vendor, path, home)
+            target = write_digest(home, path, digest)
+    except (KbError, ProposalError) as exc:
+        return _proposal_error(str(exc))
+    summary = {"status": "ok", "digest": str(target), "session_id": digest.get("session_id"),
+               "first_prompt": digest.get("first_prompt"), "signals": len(digest["signals"]),
+               "has_signals": digest["has_signals"]}
+    if args.json:
+        emit(summary)
+    else:
+        print(f"{target}  signals={summary['signals']}  session={summary['session_id']}")
+        print(f"first prompt: {summary['first_prompt']}")
+    return 0
+
+
+def cmd_harvest(args: argparse.Namespace) -> int:
+    from agentctl_kb_digest import harvest_pending
+
+    rows = harvest_pending(agents_home(), limit=args.limit, dry_run=args.dry_run)
+    if args.json:
+        emit({"status": "ok", "dry_run": args.dry_run, "runs": rows})
+    else:
+        print("\n".join(f"{r.get('action', 'harvested')}: {r['folder']}" for r in rows) or "no pending digests")
+    return 0
+
+
+def cmd_inbox_prune(args: argparse.Namespace) -> int:
+    from agentctl_kb_digest import parse_age, prune_inbox
+
+    try:
+        removed = prune_inbox(agents_home(), parse_age(args.older_than))
+    except KbError as exc:
+        return _proposal_error(str(exc))
+    if args.json:
+        emit({"status": "ok", "removed": removed})
+    else:
+        print("\n".join(f"removed {name}" for name in removed) or "nothing to prune")
+    return 0
+
+
+def cmd_proposals_list(args: argparse.Namespace) -> int:
+    from agentctl_kb_proposals import collect
+
+    rows = collect(agents_home())
+    if args.task:
+        rows = [r for r in rows if r["owner"] == args.task]
+    if args.source != "all":
+        rows = [r for r in rows if r["source"] == args.source]
+    if args.state != "all":
+        rows = [r for r in rows if r["state"] == args.state]
+    if args.json:
+        emit({"status": "ok", "count": len(rows), "rows": rows})
+    else:
+        for r in rows:
+            print(f"{r['state']:<9} {r['ref']}  {r['kind']:<6} {r['target']}")
+        if not rows:
+            print("no proposals")
+    return 0
+
+
+def cmd_proposals_show(args: argparse.Namespace) -> int:
+    from agentctl_kb_proposals import ProposalError, find, load_proposal
+
+    try:
+        row = find(agents_home(), args.ref)
+        proposal = load_proposal(row)
+    except ProposalError as exc:
+        return _proposal_error(str(exc))
+    body = proposal.body if len(proposal.body) <= 8000 else proposal.body[:8000] + "\n[truncated]"
+    if args.json:
+        emit({"status": "ok", "row": row, "body": body})
+    else:
+        print(f"{row['ref']}  {row['state']}  {row['kind']}  {row['target']}")
+        print(f"evidence: {row['evidence']}")
+        for reason in row["reasons"]:
+            print(f"invalid: {reason}")
+        print(body)
+    return 0
+
+
+def cmd_proposals_check(args: argparse.Namespace) -> int:
+    from agentctl_kb_proposals import check
+
+    results = check(Path(args.path).expanduser(), agents_home())
+    ok = all(r["valid"] for r in results)
+    if args.json:
+        emit({"status": "ok" if ok else "invalid", "file": str(args.path), "proposals": results})
+    else:
+        for r in results:
+            mark = "valid" if r["valid"] else "invalid: " + "; ".join(r["reasons"])
+            print(f"{r['n']}  {r['target']}  {mark}")
+        if not results:
+            print("no proposals")
+    return 0 if ok else 1
+
+
+def cmd_proposals_apply(args: argparse.Namespace) -> int:
+    from agentctl_kb_proposals import ProposalError, apply
+
+    try:
+        result = apply(args.ref, agents_home())
+    except ProposalError as exc:
+        return _proposal_error(str(exc))
+    if args.json:
+        emit({"status": "ok", **result})
+    else:
+        print(f"applied {result['ref']} {result['kind']} {result['target']} index: {result['index']}")
+    return 0
+
+
+def cmd_proposals_reject(args: argparse.Namespace) -> int:
+    from agentctl_kb_proposals import ProposalError, reject
+
+    try:
+        result = reject(args.ref, agents_home(), reason=args.reason)
+    except ProposalError as exc:
+        return _proposal_error(str(exc))
+    if args.json:
+        emit({"status": "ok", **result})
+    else:
+        print(f"rejected {result['ref']}: {result['reason']}")
     return 0
 
 
@@ -295,7 +508,7 @@ def build_manifest(entries: list[dict[str, Any]], buckets: list[str]) -> dict[st
     return {
         "version": FORMAT_VERSION,
         "source": str(agents_home()),
-        "created": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "created": datetime.now(UTC).isoformat(timespec="seconds"),
         "buckets": buckets,
         "files": [
             {"path": item["path"], "sha256": item["sha256"], "bytes": item["bytes"]}

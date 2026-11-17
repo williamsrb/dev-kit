@@ -22,7 +22,6 @@ import os
 import shutil
 import stat
 import subprocess
-import sys
 import tomllib
 import urllib.request
 from pathlib import Path
@@ -69,8 +68,7 @@ def load_env_file(path: Path) -> dict[str, str]:
         line = raw.strip()
         if not line or line.startswith("#"):
             continue
-        if line.startswith("export "):
-            line = line[7:]
+        line = line.removeprefix("export ")
         if "=" not in line:
             continue
         key, _, val = line.partition("=")
@@ -99,7 +97,7 @@ def env_file_path(catalog: dict, key: str | None) -> Path | None:
 
 
 def server_env(catalog: dict, spec: dict, existing: dict | None) -> dict[str, str]:
-    values: dict[str, str] = {}
+    values: dict[str, str] = {k: str(v) for k, v in (spec.get("env") or {}).items()}
     path = env_file_path(catalog, spec.get("env_file"))
     if path:
         values.update(load_env_file(path))
@@ -224,7 +222,7 @@ def run(cmd: list[str], env: dict | None = None, dry_run: bool = False) -> int:
     print("  $ " + " ".join(printable))
     if dry_run:
         return 0
-    proc = subprocess.run(cmd, env=env)
+    proc = subprocess.run(cmd, env=env, check=False)
     return proc.returncode
 
 
@@ -235,7 +233,7 @@ def fetch_gitlab(meta: dict, dry_run: bool) -> int:
     dest = expand_path(meta["dest"])
     version = meta["version"]
     if dest.is_file():
-        got = subprocess.run([str(dest), "--version"], capture_output=True, text=True)
+        got = subprocess.run([str(dest), "--version"], capture_output=True, text=True, check=False)
         if version in (got.stdout or ""):
             print(f"  gitlab-mcp-server {version} already at {dest}")
             return 0
@@ -264,18 +262,18 @@ def fetch_browser_control(meta: dict, dry_run: bool) -> int:
         print(f"  build in {dest}")
         if dry_run:
             return 0
-        if subprocess.run(cmd, cwd=dest).returncode != 0:
+        if subprocess.run(cmd, cwd=dest, check=False).returncode != 0:
             return 1
-        return subprocess.run(["npm", "run", "build"], cwd=dest).returncode
+        return subprocess.run(["npm", "run", "build"], cwd=dest, check=False).returncode
     print(f"  git clone {meta['repo']} {dest}")
     if dry_run:
         return 0
     dest.parent.mkdir(parents=True, exist_ok=True)
-    if subprocess.run(["git", "clone", "--depth", "1", meta["repo"], str(dest)]).returncode:
+    if subprocess.run(["git", "clone", "--depth", "1", meta["repo"], str(dest)], check=False).returncode:
         return 1
-    if subprocess.run(["npm", "install"], cwd=dest).returncode:
+    if subprocess.run(["npm", "install"], cwd=dest, check=False).returncode:
         return 1
-    return subprocess.run(["npm", "run", "build"], cwd=dest).returncode
+    return subprocess.run(["npm", "run", "build"], cwd=dest, check=False).returncode
 
 
 def fetch_npx(package: str, dry_run: bool) -> int:
@@ -283,7 +281,7 @@ def fetch_npx(package: str, dry_run: bool) -> int:
     print(f"  warm npx cache: {package}")
     if dry_run:
         return 0
-    proc = subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    proc = subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
     return proc.returncode
 
 

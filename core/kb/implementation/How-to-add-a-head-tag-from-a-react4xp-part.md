@@ -35,12 +35,12 @@ return render(component, props, request, {
 `headBegin`, `headEnd`, `bodyBegin`, `bodyEnd` are the four positions. Values are
 plain text and duplicates are de-duplicated by the Site Engine.
 
-2. Confirm nothing else already emits the same tag. In a site running third-party
+1. Confirm nothing else already emits the same tag. In a site running third-party
    admin apps (SEO Meta Fields, Security Headers, Favicon…) the tag may be
    injected outside the repository, so grepping the source proves nothing —
    `curl` the live page.
 
-3. Verify the scoping on a **running** site, not from the source:
+2. Verify the scoping on a **running** site, not from the source:
 
 ```bash
 # present where the part is placed

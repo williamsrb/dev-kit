@@ -27,7 +27,7 @@ Delivery scope: staged | unstaged | branch diff vs main/master
 
 ## Requirement fit
 
-&nbsp;&nbsp;&nbsp;&nbsp;✅&nbsp;&nbsp;&nbsp; AC `<AC text>`: PASS
+&nbsp;&nbsp;&nbsp;&nbsp;✅&nbsp;&nbsp;&nbsp; AC `<AC text>`: PASS (<ran: command | read: file:line>)
 
 &nbsp;&nbsp;&nbsp;&nbsp;⛔&nbsp;&nbsp;&nbsp; AC `<AC text>`: FAIL. <deciding evidence>
 
@@ -46,6 +46,18 @@ Delivery scope: staged | unstaged | branch diff vs main/master
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;•&nbsp;&nbsp;&nbsp;&nbsp; Implicit requirements: n/a
 
 &nbsp;&nbsp;&nbsp;&nbsp;🔹&nbsp;&nbsp;&nbsp; <other requirement finding>
+
+## Spec alignment
+
+&nbsp;&nbsp;&nbsp;&nbsp;✅&nbsp;&nbsp;&nbsp; PRD `<path>`: <n> statements. <n> met, <n> waived, <n> open, <n> unproven
+
+&nbsp;&nbsp;&nbsp;&nbsp;⛔&nbsp;&nbsp;&nbsp; `<id>` "<short quote>": unmet | contradicted. <plan gap | delivery gap>: <what is missing, plan item or file:line>
+
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;•&nbsp;&nbsp;&nbsp;&nbsp; `<id>` "<short quote>": waived (<authorized deviation>)
+
+&nbsp;&nbsp;&nbsp;&nbsp;⚠️&nbsp;&nbsp;&nbsp; PRD stale: comments <ids> arrived after the marker. Refresh: <command>
+
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;•&nbsp;&nbsp;&nbsp;&nbsp; n/a: no PRD, the plan is the only contract
 
 ## Impact on other features
 
@@ -100,6 +112,8 @@ Delivery scope: staged | unstaged | branch diff vs main/master
 - Separate confirmed facts from assumptions.
 - List every source edit under **Fixes applied** (file + brief reason). If no fixes were needed, write `None`.
 - Re-run delivery diff commands after fixes so the report reflects final state.
+- **Spec alignment** lists every `unmet` and `contradicted` row, every `waived` row with its deviation, and counts for the rest. `unproven` rows are named under **Not verified**.
+- An AC line says PASS only with its proof (`ran` or `read`). Without proof it moves to **Not verified**.
 - Verdict is **post-fix**: **FAIL** only if a Blocker remains; unfixed Concerns → **PASS WITH NOTES**; Notes / less-code nits / AI slop / Impeccable polish never **FAIL**.
 - Blocker/Concern items include the one-line evidence certificate (`Premise → Path → Verdict`). Notes use `Premise → Improvement → Fix`.
 - One finding per root cause; extra sites as `also applies: path:line`.

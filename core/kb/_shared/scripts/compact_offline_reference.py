@@ -20,13 +20,13 @@ SKIP_NAMES = {"llm-index.md", "index.md", "README.md"}
 _SCRIPTS = Path(__file__).resolve().parent
 if str(_SCRIPTS) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS))
-from llm_index import write_bucket_indexes  # noqa: E402
+from llm_index import write_bucket_indexes
 
-FENCE_SPLIT = re.compile(r"(^```[^\n]*\n.*?^```[ \t]*\n?)", re.M | re.S)
+FENCE_SPLIT = re.compile(r"(^```[^\n]*\n.*?^```[ \t]*\n?)", re.MULTILINE | re.DOTALL)
 
 GODOT_ADMONITION = re.compile(
     r"^(Tip|Note|Warning|Caution|Important|Attention|See also|See Also)\s*$",
-    re.M,
+    re.MULTILINE,
 )
 PILCROW_CHARS = "\uf0c1\uf0b6\u00b6\u1f517"
 SPHINX_FOOTER = re.compile(
@@ -46,34 +46,34 @@ USER_NOTES = re.compile(
     r"(?:Built with\nSphinx\nusing a\ntheme\nprovided by\nRead the Docs\n\.?\n*)?"
     r"\Z",
 )
-PREV_NEXT = re.compile(r"^(Previous|Next)\s*$", re.M)
+PREV_NEXT = re.compile(r"^(Previous|Next)\s*$", re.MULTILINE)
 LINK_EMOJI = "\U0001f517"
-READY_API = re.compile(r"^You are now ready to use the API\.\s*\n?", re.M)
+READY_API = re.compile(r"^You are now ready to use the API\.\s*\n?", re.MULTILINE)
 ADD_GRADLE = re.compile(
     r"^Add the following to your `build\.gradle` file:\s*\n+",
-    re.M,
+    re.MULTILINE,
 )
-ADD_IMPORT = re.compile(r"^Add the `import` statement to your code:\s*\n+", re.M)
+ADD_IMPORT = re.compile(r"^Add the `import` statement to your code:\s*\n+", re.MULTILINE)
 THIS_PAGE_WILL = re.compile(
     r"^This page will show you[^\n]*\n",
-    re.M | re.I,
+    re.MULTILINE | re.IGNORECASE,
 )
 IF_YOU_WOULD_LIKE = re.compile(
     r"^If you would like to get an introduction to[^\n]*\n",
-    re.M | re.I,
+    re.MULTILINE | re.IGNORECASE,
 )
 THIS_DOC_COVERS = re.compile(
     r"^This documentation covers[^\n]*\n+"
     r"(?:- \[[^\n]+\]\([^\n]+\)[^\n]*\n+)*",
-    re.M,
+    re.MULTILINE,
 )
 MARKET_NOTE = re.compile(
     r"^> \*\*Note:\*\* \[Enonic Market\].*\n(?:^> .*\n)*",
-    re.M,
+    re.MULTILINE,
 )
 DEVELOPERS_MAY_ADAPT = re.compile(
     r"^Developers may adapt the platform[^\n]+\n",
-    re.M,
+    re.MULTILINE,
 )
 BLANK3 = re.compile(r"\n{3,}")
 
@@ -106,7 +106,7 @@ def compact_prose(prose: str) -> str:
     s = THIS_DOC_COVERS.sub("", s)
     s = MARKET_NOTE.sub("", s)
     s = DEVELOPERS_MAY_ADAPT.sub("", s)
-    s = re.sub(r"^[^\n]*Demo available on the Asset Library\.\s*\n", "", s, flags=re.M)
+    s = re.sub(r"^[^\n]*Demo available on the Asset Library\.\s*\n", "", s, flags=re.MULTILINE)
     s = PREV_NEXT.sub("", s)
     s = BLANK3.sub("\n\n", s)
     return s
@@ -148,4 +148,7 @@ def main() -> None:
 
 
 if __name__ == "__main__":
+    from apply_gate import gate
+
+    gate(__doc__)
     main()

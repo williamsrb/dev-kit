@@ -143,6 +143,9 @@
     "devkit.yaml": [
       "tilde-in-machine-position"
     ],
+    "export-overlays.json": [
+      "tilde-in-machine-position"
+    ],
     "tests/test_devkit.py": [
       "literal-home",
       "literal-home-macos",

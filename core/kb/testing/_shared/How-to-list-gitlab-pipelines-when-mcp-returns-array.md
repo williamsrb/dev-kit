@@ -13,7 +13,7 @@ prose: caveman-lite
 
 List tools (`gitlab_pipeline_list`, `gitlab_job_list`, `gitlab_project_search`, `gitlab_ci_variable_list`, `gitlab_package_list`) return a **record**:
 
-```
+```text
 {"items": [ ... ]}
 ```
 
@@ -33,7 +33,7 @@ If that schema error still appears, the vendor is running a stale stdio process.
 
 REST only if MCP is unavailable (server not running, 401/403, or a still-stale process after reload):
 
-```
+```text
 GET https://git.example.com/api/v4/projects/<urlencoded-path>/pipelines?ref=<branch>&per_page=8
 Header: PRIVATE-TOKEN: <token>
 ```

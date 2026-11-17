@@ -21,7 +21,7 @@ Untrack + ignore (keep on disk):
 | Repo | Ignored bloat |
 |------|----------------|
 | `~/.codex` | `backups/` (session archives), `history.jsonl`, `installation_id`, `version.json`, `hooks.premigration/`, `skills/.system/`, `vendor_imports/skills-curated-cache.json`, `chrome-native-hosts-v2.json` |
-| `~/.agents` | `bin/actionlint`, ppt-master `references/ai-image-comparison/`, `templates/sounds/`, `templates/icons/`, archify `examples/` + `test/`, `skills/render-diff-patch/diff2html-ui.min.js`. Already ignored: `prds/`, `plans/` (files and `{TASK-ID}/` folders), `history/`, `deliverables/`, `diagrams/` (ticket scratch, not kit content), `.packages/`, `.auth/`, caches, tmp |
+| `~/.agents` | `bin/actionlint`, archify `examples/` + `test/`, `skills/render-diff-patch/diff2html-ui.min.js`. Already ignored: `prds/`, `plans/` (files and `{TASK-ID}/` folders), `history/`, `deliverables/`, `diagrams/` (ticket scratch, not kit content), `.packages/`, `.auth/`, caches, tmp |
 | `~/.claude` | `.claude.json`, `.claude.json.backup`, `claude_settings_backup/`, `agents.premigration/`, `settings.json.premigration`, `settings.json.bak-*`, `history.jsonl`, `remote-settings.json`, `stats-cache.json`, `policy-limits.json`, `skills/synced/`, `plugins/synced/` (`backups/` already ignored) |
 | `~/.cursor` | `cli-config.json` |
 
@@ -50,13 +50,14 @@ git reflog expire --expire=now --all
 git gc --prune=now --aggressive
 ```
 
-4. Drop leftover non-commit refs if `git rev-list --objects --all` still lists purged paths. Codex/Cursor checkpoint refs under `refs/codex/turn-diffs/checkpoints/` can point at **trees**, not commits. `git filter-repo` skips them (`Unexpected object of type tree`). Delete with `git update-ref -d <ref>`, then expire + gc again. That is not `git reset`.
-5. Verify: path exists on disk, absent from `git ls-files`, ignored (`git check-ignore -v`). Live `~/.agents/plans` and `prds` dirs still present. Sample Tier C paths still tracked.
+1. Drop leftover non-commit refs if `git rev-list --objects --all` still lists purged paths. Codex/Cursor checkpoint refs under `refs/codex/turn-diffs/checkpoints/` can point at **trees**, not commits. `git filter-repo` skips them (`Unexpected object of type tree`). Delete with `git update-ref -d <ref>`, then expire + gc again. That is not `git reset`.
+2. Verify: path exists on disk, absent from `git ls-files`, ignored (`git check-ignore -v`). Live `~/.agents/plans` and `prds` dirs still present. Sample Tier C paths still tracked.
 
 ## Pitfalls
 
 - `git add -A` before ignore rules re-stages session archives and icons. Check `git check-ignore -v` first.
 - `git rm` without `--cached` deletes harness data.
+- An unanchored rule (`imagine/`) matches at any depth and hides a skill of the same name (`skills/imagine/`). Anchor a new top-level output folder (`/imagine/`) and confirm with `git check-ignore -v skills/<name>/SKILL.md` (exit 1 = still tracked).
 - filter-repo rewrites SHAs. After `reflog expire` + `gc --prune=now`, only a pre-rewrite copy can roll back.
 - Tree-typed extra refs pin old blobs after a successful-looking filter-repo run. Inspect `git for-each-ref --format='%(objecttype) %(refname)'` before declaring the pack shrunk.
 - Cursor `.git/cursor/` is vendor metadata; `git gc` does not remove it. Pack size (`git count-objects -vH`) is the git-history signal, not `du -sh .git` alone.

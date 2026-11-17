@@ -2,19 +2,21 @@
 
 Create and update macros.
 
-Reference: https://developer.enonic.com/docs/xp/stable/cms/macros
+Reference: <https://developer.enonic.com/docs/xp/stable/cms/macros>
 
 ## Location and Files
 
 **Descriptor + interfaces** (site layer):
-```
+
+```text
 site/macros/{macro-name}/
 ├── {macro-name}.xml       # Descriptor
 └── {macro-name}.d.ts      # TypeScript interface
 ```
 
 **React4XP 6 implementation** (react4xp layer):
-```
+
+```text
 react4xp/components/macros/{macro-name}/
 ├── {macro-name}.tsx       # React macro component
 └── processor.ts            # Data processor
@@ -25,12 +27,14 @@ The macro name follows kebab-case (e.g., `image`, `video-embed`).
 ## Registration
 
 **`react4xp/dataFetcher.ts`:**
+
 ```typescript
 import { myMacroProcessor } from './components/macros/my-macro/processor';
 dataFetcher.addMacro('my-macro', { processor: myMacroProcessor });
 ```
 
 **`react4xp/componentRegistry.tsx`:**
+
 ```typescript
 import { MyMacro } from './components/macros/my-macro/my-macro';
 componentRegistry.addMacro('my-macro', { View: MyMacro });
@@ -52,6 +56,7 @@ Note: macros use just the name (no `app.name:` prefix).
 ```
 
 **Constraints:**
+
 - `item-set` elements are **not allowed** in macro config forms.
 - `HtmlArea` input type is **not allowed** in macro config forms.
 
@@ -119,6 +124,7 @@ export const MacroName = ({ data, children }: MacroComponentParams) => {
 ## Example
 
 **`image.xml`**
+
 ```xml
 <macro>
     <display-name i18n="macro.image.display-name">Image</display-name>
@@ -134,6 +140,7 @@ export const MacroName = ({ data, children }: MacroComponentParams) => {
 ```
 
 **`image.d.ts`**
+
 ```typescript
 export interface ImageMacroProps {
     images: {
@@ -144,6 +151,7 @@ export interface ImageMacroProps {
 ```
 
 **`processor.ts`**
+
 ```typescript
 import { Content, NestedRecord } from '@enonic-types/core';
 import type { ComponentProcessor, MacroProcessorParams } from '@enonic-types/lib-react4xp/DataFetcher';
@@ -177,6 +185,7 @@ function getComponentProps(config: NestedRecord, content: Content) {
 ```
 
 **`image.tsx`**
+
 ```typescript
 import { MacroComponentParams } from '@enonic/react-components';
 import React from 'react';
@@ -202,7 +211,7 @@ export const ImageMacro = ({ data, children }: MacroComponentParams) => {
 
 See [i18n.md](./i18n.md) for the full key pattern. Macro keys follow:
 
-```
+```text
 macro.{name}.display-name
 macro.{name}.{field_name}
 ```

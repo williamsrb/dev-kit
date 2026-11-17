@@ -39,7 +39,9 @@ The single `site/site.xml` becomes two YAML files:
     </mapping>
   </mappings>
   ```
+
   ↓
+
   ```yaml
   kind: "Site"
   mappings:
@@ -59,7 +61,9 @@ The single `site/site.xml` becomes two YAML files:
     <form/>
   </site>
   ```
+
   ↓
+
   ```yaml
   kind: "CMS"
   mixins:
@@ -73,9 +77,9 @@ The single `site/site.xml` becomes two YAML files:
   ```
 
   Notes:
-    - The `<x-data name="X">` reference is qualified to `<applicationKey>:X`.
-    - `optional:` is added with default `false` when the XML didn't specify it.
-    - The XML attribute `allowContentTypes` (plural) is preserved as-is (it's a regex string here, not a list).
+  - The `<x-data name="X">` reference is qualified to `<applicationKey>:X`.
+  - `optional:` is added with default `false` when the XML didn't specify it.
+  - The XML attribute `allowContentTypes` (plural) is preserved as-is (it's a regex string here, not a list).
 
 ### 6.3 `site/styles.xml`
 

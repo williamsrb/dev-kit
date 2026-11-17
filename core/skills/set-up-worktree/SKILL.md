@@ -4,7 +4,7 @@ description: >-
   Create a sibling git worktree at REPO-NAME-multitask/SLUG on branch SLUG,
   based on the start checkout's current branch tip. Use when setting up a task
   worktree, adding a task-id branch folder (Jira key or other slug), or preparing multitask isolation.
-  Use only when the operator or an orchestrator names this skill. | recommendedRole: follow | aliases: setup-worktree, create-worktree, add-worktree.
+  Use only when the operator or an orchestrator names this skill.
 metadata:
   recommendedRole: follow
   aliases: setup-worktree, create-worktree, add-worktree

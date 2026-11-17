@@ -14,7 +14,7 @@ Open only the matching `###` heading. Do not read the REST fallback unless UI dr
 - Logged-in XP admin session
 - Content Studio admin tool URL (XP 8 — note **no** `/tool/` segment):
 
-```
+```text
 <base>/admin/com.enonic.app.contentstudio/main
 ```
 
@@ -24,7 +24,7 @@ Legacy `/admin/tool/com.enonic.app.contentstudio/main` returns 404 on XP 8.
 
 Anonymous `/admin` is HTTP 401. Cold automation (e.g. Playwright without cookies) can obtain a session with:
 
-```
+```text
 POST <base>/admin/_/idprovider/system
 Content-Type: application/json
 
@@ -33,14 +33,14 @@ Content-Type: application/json
 
 Default **dev/review** credentials (Enonic stock `su`, widely known — use these unless the env documents otherwise):
 
-```
+```yaml
 login: su
 password: password
 ```
 
 or
 
-```
+```yaml
 login: su
 password: mofser8
 ```
@@ -65,7 +65,7 @@ Success returns `{"authenticated":true,…}` and sets `JSESSIONID` (often also `
 
 Prefer direct navigation (avoids popup-blocker issues with toolbar **Edit**):
 
-```
+```text
 <base>/admin/com.enonic.app.contentstudio/main/<project>/edit/<content-id>
 ```
 
@@ -103,7 +103,7 @@ component list until you click it.
 
 Authenticated browser `fetch` (session cookies). Verified on XP 8 / CS 6 review (PROJ-341):
 
-```
+```text
 POST /admin/rest-v2/cs/cms/<project>/content/content/page/update
 Content-Type: application/json
 ```
@@ -119,13 +119,13 @@ Rename / displayName (same session): `POST …/content/content/update` with `{ c
 
 Reload `/edit/<id>` (or draft site URL) after update. Draft preview without wizard:
 
-```
+```text
 <base>/admin/com.enonic.app.contentstudio/site/edit/<project>/draft/<site-path>/<page-name>
 ```
 
 The `/site/preview/…` variant renders the same draft page **without** the editor chrome or iframe, so accessibility snapshots and DOM queries reach the page directly — prefer it for draft evidence (verified PROJ-388):
 
-```
+```text
 <base>/admin/com.enonic.app.contentstudio/site/preview/<project>/draft/<site-path>/<page-name>
 ```
 
@@ -136,7 +136,7 @@ The `/site/preview/…` variant renders the same draft page **without** the edit
   `500 Unrecognized field` — there is no validation escape hatch on this endpoint.
 - **It revalidates the whole stored content**, so orphaned x-data blocks the save:
 
-  ```
+  ```text
   500 Not allowed mixinName: com.example.app:macros
   ```
 

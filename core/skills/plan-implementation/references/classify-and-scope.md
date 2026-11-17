@@ -45,6 +45,7 @@ If the task involves Enonic XP, CMS, platform APIs, or React4XP, **prefer offlin
 | React4XP **5.x** (XP 7, legacy maintenance only) | `develop-react4xp-v5` (`react4xp-v5`) | `~/.agents/kb/offline-reference/react4xp-5.x/llm-index.md` | `~/.agents/kb/offline-reference/react4xp-5.x/learn/react4xp-tutorial/5.x` |
 | React4XP **6.x** (XP 7, new React4XP work) | `develop-react4xp-v6` (`react4xp-v6`) | `~/.agents/kb/offline-reference/react4xp-6.x/llm-index.md` | `~/.agents/kb/offline-reference/react4xp-6.x/{learn/react4xp-tutorial,docs/react4xp}/6.x/` |
 | React4XP **stable / 7.x** (XP 8 default) | `develop-react4xp-v7` (`react4xp-v7`) | `~/.agents/kb/offline-reference/react4xp-stable/llm-index.md` | `~/.agents/kb/offline-reference/react4xp-stable/{learn/react4xp-tutorial,docs/react4xp}/stable/` |
+| Godot **4.7** game work (GDScript, 2D or 3D) | `develop-godot` (`godot-2d`, `godot-3d`, `gdscript`) | `~/.agents/kb/offline-reference/godot/llm-index.md` | `~/.agents/kb/offline-reference/godot/{classes,tutorials,getting_started}/` |
 
 **Version hints:** XP 8 / `platform/stable` → XP8 + React4XP stable (7.x / `develop-react4xp-v7`). XP 7 new React4XP → React4XP 6.x (`develop-react4xp-v6`). XP 7 existing 5.x apps → React4XP 5.x maintenance only (`develop-react4xp-v5`). If unclear and the project already has React4XP files, infer from `package.json` / React4XP major or existing skill conventions; default to the version already used in the workspace.
 
@@ -53,14 +54,18 @@ If the task involves Enonic XP, CMS, platform APIs, or React4XP, **prefer offlin
 Skip this step if the task type is **API Integration** or **Performance / Security**.
 
 1. Run the following command from the project root to sync prototype assets:
+
    ```bash
    make copyComponents
    ```
+
 2. Determine the component's kebab-case name from the issue title (same parsing as the reference files), then convert it to **PascalCase** for the prototype path. Examples: `hero` → `Hero`, `info-card` → `InfoCard`.
 3. Check whether a frontend component file exists at:
-   ```
+
+   ```text
    xp/src/main/resources/react4xp/components/prototype/<PascalName>/index.tsx
    ```
+
    Also check `index.jsx` and `index.js` if `index.tsx` is not found.
 4. If a prototype file is found:
    - Record its path as `<prototype-component-path>`.
@@ -94,6 +99,8 @@ Record as TBD when any of these are true:
 - Backend vs frontend ownership unclear
 - Related-ticket dependency mentioned but not specified in this PRD (do **not** fetch sibling PRDs unless the user asked; list the gap)
 - Anything else that would be a silent product decision
+
+Technical choices the ticket leaves open (auth strategy, data store, caching, state management, a new dependency) are **decision points**, not analyst TBD. Resolve and record them with [decision-points.md](decision-points.md).
 
 Each harvested gap carries **2-3 options with the recommendation first**.
 
@@ -155,6 +162,7 @@ ls <plans-dir>/<ISSUE-KEY>.md 2>/dev/null
 - **If it already exists**: read the current file, preserve the `## Implementation Plan` section if it has been manually edited by the user (check for content beyond the default template), and update the Jira-derived sections from the offline copy. Add `## TBD (ask analyst before implement)` and `## Implicit requirements (techlead tick)` if missing. If the file has `## Questions`, `## Open issues`, or similar, **fold those items into TBD** and remove the old heading — do not keep both. **local:** then auto-select leftover TBD (3f) and auto-tick implicit extras (3g).
 
 Create the folder if needed:
+
 ```bash
 mkdir -p <plans-dir>
 ```

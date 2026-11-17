@@ -7,10 +7,13 @@ kit did not author aborts and names itself unless `--force` backs it up first.
 
 from __future__ import annotations
 
+import contextlib
+import importlib.util
 import json
 import os
 import shutil
 import sys
+from contextlib import contextmanager
 from pathlib import Path
 
 from . import (
@@ -20,6 +23,7 @@ from . import (
     globalignore,
     instances,
     kithome,
+    kitsource,
     manifest,
     mcp,
     migrations,
@@ -88,7 +92,8 @@ def _write(plan: Plan, target: Path, content: str, force: bool,
 
 def _link_layer(plan: Plan, config_dir: Path, name: str, entries: list[str],
                 core_root: Path, link_core: Path,
-                excludes: list[str] | None = None) -> None:
+                excludes: list[str] | None = None,
+                extra: dict[str, Path] | None = None) -> None:
     """Project one layer (skills/rules/kb) into the instance as symlinks.
 
     Symlinks, not copies: this is the contract sync-skill-projections.sh already
@@ -106,6 +111,8 @@ def _link_layer(plan: Plan, config_dir: Path, name: str, entries: list[str],
     for rel in sorted(dirs):
         _projection_dir(plan, dest_root.joinpath(*rel), "/".join((name, *rel)))
     wanted = {rel: source_root.joinpath(*rel) for rel in links}
+    for entry, source in (extra or {}).items():
+        wanted.setdefault((entry,), source)
     for rel, source in sorted(wanted.items()):
         link = dest_root.joinpath(*rel)
         if link.is_symlink() and link.readlink() == source:
@@ -122,6 +129,90 @@ def _link_layer(plan: Plan, config_dir: Path, name: str, entries: list[str],
                 link.unlink()
             link.symlink_to(source)
     _prune_layer(plan, dest_root, name, (), set(wanted), dirs, source_root)
+
+
+VENDOR_SKILLS = ("orchestrate",)
+
+
+def _vendor_skills(core_root: Path, link_core: Path, vendor: str) -> dict[str, Path]:
+    """Skills that exist once per vendor, linked from skills-vendor/<vendor>/."""
+    return {name: link_core / "skills-vendor" / vendor / name for name in VENDOR_SKILLS
+            if (core_root / "skills-vendor" / vendor / name).is_dir()}
+
+
+CLAUDE_RULES_MARKER = "<!-- devkit: rendered at profile sync; do not edit -->"
+
+
+def _claude_rule_files(core_root: Path, layers: list[str]) -> dict[str, str] | None:
+    """The per-section Claude rule files, from the kit's generator.
+
+    None when the kit predates the folder render, which a profile pinned to an
+    older ref still reads.
+
+    The generator is loaded, not run: its CLI writes AGENTS.md and BASE.mdc
+    into the tree it lives in, which here is the kit.
+    """
+    script = core_root / "bin" / "generate-agents-md.py"
+    spec = importlib.util.spec_from_file_location("devkit_generate_agents_md", script)
+    if not script.is_file() or spec is None or spec.loader is None:
+        return None
+    module = importlib.util.module_from_spec(spec)
+    # The script lives in an installed release, which must stay as installed.
+    previous, sys.dont_write_bytecode = sys.dont_write_bytecode, True
+    try:
+        spec.loader.exec_module(module)
+    finally:
+        sys.dont_write_bytecode = previous
+    if not hasattr(module, "render_claude_dir"):
+        return None
+    try:
+        files = module.render_claude_dir(module.load_manifest(), set(layers))
+    except module.GenerateError as exc:
+        raise DevkitError(f"the rules generator failed: {exc}") from exc
+    # The generator's notice names no devkit, and `_write` refuses a file without it.
+    return {name: text.replace("\n", f"\n{CLAUDE_RULES_MARKER}\n", 1)
+            for name, text in files.items()}
+
+
+def _render_claude_rules(plan: Plan, config_dir: Path, profile: dict,
+                         core_root: Path, link_core: Path, force: bool) -> bool:
+    """Claude reads a rules folder of .md files, not the raw rules tree.
+
+    Rendered at sync, per the policy that the generator ships and a snapshot
+    does not. Layer links from earlier versions are pruned first, since `_write`
+    would read through them.
+    """
+    files = _claude_rule_files(core_root, manifest.rules_layers(profile.get("lineage", [])))
+    if files is None:
+        return False
+    dest = config_dir / "rules"
+    label = "rules"
+    if dest.is_symlink():
+        plan.record(f"prune  {label}")
+        if plan.apply:
+            dest.unlink()
+    else:
+        _prune_layer(plan, dest, label, (), set(), set(), link_core / "rules")
+    for name, text in sorted(files.items()):
+        target = dest / name
+        if target.is_symlink() or not target.exists():
+            plan.record(f"write  {label}/{name}")
+            if plan.apply:
+                ensure_dir(dest)
+                if target.is_symlink():
+                    target.unlink()
+                target.write_text(text, encoding="utf-8")
+                target.chmod(FILE_MODE)
+        else:
+            _write(plan, target, text, force, label=f"{label}/{name}")
+    if dest.is_dir() and not dest.is_symlink():
+        for entry in sorted(dest.glob("*.md")):
+            if (entry.name not in files and entry.is_file()
+                    and CLAUDE_RULES_MARKER in entry.read_text(encoding="utf-8")):
+                plan.record(f"prune  {label}/{entry.name}")
+                if plan.apply:
+                    entry.unlink()
+    return True
 
 
 def _projection(entries: list[str], excludes: list[str], layer_root: Path
@@ -225,7 +316,9 @@ def _prune_layer(plan: Plan, dest_root: Path, name: str, rel: tuple[str, ...],
 
 def materialize(profile: dict, vendors: list[str] | None, home: Path,
                 plan: Plan, force: bool, kit_root: Path | None = None,
-                source_commit: str | None = None) -> None:
+                source_commit: str | None = None,
+                content: tuple[Path, Path] | None = None,
+                kit_ref: dict | None = None) -> None:
     """Write one profile's instances from the kit.
 
     The kit is first installed into the kit home (a no-op when `kit_root`, or
@@ -233,13 +326,21 @@ def materialize(profile: dict, vendors: list[str] | None, home: Path,
     linked through `current`, so nothing devkit writes names the checkout. A
     dry run installs nothing: it reads the source tree and prints the `current`
     paths the links would have.
+
+    `content` is `(ref link, tree to read)` for a profile on a kit ref: skills,
+    rules, kb and the rest of `core/` come from that tree and every link names
+    the ref link. A dry run has no ref link yet, so the tree read is then the
+    checkout. Templates, wrappers, vendor config and auth stay on the running
+    kit and `current`.
     """
     src = kit_root or REPO_ROOT
-    link_core = kithome.current_link(home) / "core"
     root = kithome.ensure_installed(src, home, plan)
     kit = _kit_metadata(root)
     commit = source_commit or instances.kit_commit(root)
-    core_root = root / "core"
+    if content:
+        link_core, core_root = content[0] / "core", content[1] / "core"
+    else:
+        link_core, core_root = kithome.current_link(home) / "core", root / "core"
     if not core_root.is_dir():
         raise DevkitError(f"{core_root} has not been exported yet",
                           "run 'devkit export --apply' first")
@@ -260,9 +361,15 @@ def materialize(profile: dict, vendors: list[str] | None, home: Path,
                     ensure_dir(directory)
 
         for layer in ("skills", "rules", "kb"):
+            if vendor == "claude" and layer == "rules":
+                if _render_claude_rules(plan, layout["config_dir"], profile, core_root,
+                                        link_core, force):
+                    continue
+                plan.record("note   this kit cannot render Claude rules; linking the raw rules layer")
             _link_layer(plan, layout["config_dir"], layer,
                         profile.get(layer, []), core_root, link_core,
-                        profile.get(f"{layer}_excludes"))
+                        profile.get(f"{layer}_excludes"),
+                        _vendor_skills(core_root, link_core, vendor) if layer == "skills" else None)
         hooks_dir = layout["harness_dir"] / "hooks"
         if hooks_dir.is_dir():
             _symlink(plan, layout["config_dir"] / "hooks", hooks_dir,
@@ -276,7 +383,7 @@ def materialize(profile: dict, vendors: list[str] | None, home: Path,
                                  force, root)):
             wrote_desktop = True
 
-        prov = instances.provenance(profile, vendor, home, kit, commit)
+        prov = instances.provenance(profile, vendor, home, kit, commit, kit_ref=kit_ref)
         existing = instances.read_provenance(layout["config_dir"])
         if existing:
             prov["history"] = existing.get("history", [])
@@ -407,12 +514,21 @@ def _bind_profile_runtime(plan: Plan, profile: dict, home: Path, core_root: Path
     for layer in ("skills", "rules", "kb"):
         _link_layer(plan, agents_dir, layer, profile.get(layer, []), core_root,
                     link_core, profile.get(f"{layer}_excludes"))
-    for name in ("bin", "bin-vendor", "benchmarks", "mcp", "share", "config"):
+    for name in ("bin", "bin-vendor", "benchmarks", "mcp", "share", "config", "docs", ".agentctl"):
         if name == "config" and profile.get("client_overlay"):
             _write_client_config(plan, agents_dir / name, profile["client_overlay"],
                                  core_root, link_core, force)
         elif (core_root / name).exists():
             _symlink(plan, agents_dir / name, link_core / name, f"agents/{name}")
+    if (core_root / "skills-vendor" / "ROLES.md").is_file():
+        # agentctl bench and agentctl factory read $AGENTS_HOME/skills-vendor/ROLES.md; link only that file
+        # (the per-vendor skill folders beside it stay out of the profile).
+        vendor_dir = agents_dir / "skills-vendor"
+        if not vendor_dir.is_dir():
+            plan.record(f"mkdir  {relative_to_home(vendor_dir)}")
+            if plan.apply:
+                ensure_dir(vendor_dir)
+        _symlink(plan, vendor_dir / "ROLES.md", link_core / "skills-vendor" / "ROLES.md", "agents/skills-vendor/ROLES.md")
     _project_hooks(plan, harness / "hooks", core_root, link_core, tokens, force, root)
     _symlink(plan, agents_dir / "hooks", harness / "hooks", "agents/hooks")
     for name in ("prds", "plans", "history", ".cache", ".playwright-mcp"):
@@ -424,6 +540,7 @@ def _bind_profile_runtime(plan: Plan, profile: dict, home: Path, core_root: Path
             ensure_dir(dest)
     _isolate_auth(plan, agents_dir, home)
     _write_profile_tools(plan, layout, tokens, force, root, core_root)
+    _sync_python_shim(plan, layout, tokens)
 
 
 def _prune_core_symlink(plan: Plan, harness: Path) -> None:
@@ -534,6 +651,33 @@ def _write_profile_tools(plan: Plan, layout: dict, tokens: dict,
             continue
         _write(plan, layout["bin_dir"] / name, rendered, force, executable=True,
                label=relative_to_home(layout["bin_dir"] / name))
+
+
+def _sync_python_shim(plan: Plan, layout: dict, tokens: dict) -> None:
+    """`<profile>/bin/python3` -> a 3.12+ interpreter, only where `python3` is too old.
+
+    The CLI wrappers and `bind_profile_env` put this bin/ first on PATH, so
+    hooks and `env python3` scripts started from a profile get the floor
+    without touching the system python3.
+    """
+    dest = layout["bin_dir"] / "python3"
+    wanted = tokens["PROFILE_PYTHON"]
+    if wanted == "python3":
+        if dest.is_symlink():
+            plan.record(f"unlink {relative_to_home(dest)} (system python3 meets the floor)")
+            if plan.apply:
+                dest.unlink()
+        return
+    target = Path(wanted)
+    if dest.is_symlink() and dest.readlink() == target:
+        return
+    plan.record(f"link   {relative_to_home(dest)} -> {target}")
+    if not plan.apply:
+        return
+    ensure_dir(dest.parent)
+    if dest.is_symlink() or dest.exists():
+        dest.unlink()
+    dest.symlink_to(target)
 
 
 def _link_profile_cli(plan: Plan, vendor: str, layout: dict) -> None:
@@ -709,26 +853,95 @@ def _refuse_duplicate(home: Path, name: str) -> None:
             f"{name} --apply' to re-materialize")
 
 
+def ref_spec(args) -> dict | None:
+    """The kit ref the flags ask for, or None."""
+    track, pin = getattr(args, "track", None), getattr(args, "pin", None)
+    source = getattr(args, "from_source", None)
+    if track and pin:
+        raise DevkitError("--track and --pin are exclusive",
+                          "follow a branch with --track, or fix a tag or commit with --pin")
+    if not (track or pin):
+        if source:
+            raise DevkitError("--from names a kit to read a ref from, and no ref was given",
+                              "add --track <branch> or --pin <tag|commit>")
+        return None
+    return {"kind": "track" if track else "pin", "ref": track or pin, "source": source}
+
+
+@contextmanager
+def ref_checkout(home: Path, spec: dict, name: str):
+    """A checked clone of the ref: lineage, fork and release layout verified."""
+    kit = _kit_metadata()
+    source = kitsource.resolve_source(spec["source"], home)
+    with kitsource.checkout(source, spec["ref"], spec["kind"], kit) as (tree, facts):
+        kitsource.refuse_other_fork(facts, kit, name)
+        kitsource.refuse_layout(tree)
+        yield tree, facts
+
+
+def install_ref(home: Path, plan: Plan, name: str, tree: Path, facts: dict,
+                prior: dict | None) -> tuple[tuple[Path, Path], dict]:
+    """Install the ref's tree as a release and point `refs/<name>` at it.
+
+    Returns the `content` pair for `materialize` and the provenance `kit_ref`.
+    A dry run installs and flips nothing and reads the checkout.
+    """
+    files = kithome.payload_files(tree)
+    digest = kithome.payload_digest(tree, files)
+    release = kithome.releases_dir(home) / digest[:12]
+    previous = kithome.ref_release(home, name)
+    held = previous.name if previous and previous != release.resolve() else (
+        (prior or {}).get("previous_release"))
+    kit_ref = {"kind": facts["kind"], "source": facts["source"], "ref": facts["ref"],
+               "commit": facts["commit"], "release": digest[:12], "previous_release": held}
+    link = kithome.ref_link(home, name)
+    plan.record(f"ref    {name} -> {facts['kind']} {facts['ref']} @ {facts['commit'][:8]} "
+                f"(release {digest[:12]})")
+    if plan.apply:
+        kithome.install_checked(tree, home, files, digest, {**facts, "dirty": False})
+        kithome.flip_ref(home, name, release)
+    return (link, link if plan.apply else tree), kit_ref
+
+
+def _ref_note(kit_ref: dict) -> str:
+    if kit_ref["kind"] == "pin":
+        return (f"pinned to {kit_ref['ref']} @ {kit_ref['commit'][:8]}: "
+                "moves only on 'devkit profile sync NAME --pin REF --apply'")
+    return (f"tracking {kit_ref['ref']} @ {kit_ref['commit'][:8]}: "
+            "moves on 'devkit update fetch' + 'devkit update apply --apply'")
+
+
 def cmd_create(args) -> int:
     user = privilege.refuse_root(getattr(args, "user", None))
     home = Path(user.pw_dir)
-    profile = load_for_create(args.name, getattr(args, "type", None))
-    _refuse_duplicate(home, profile["name"])
-    instances.apply_headless(profile, getattr(args, "headless", None), home)
-    plan = Plan(args.apply)
-    if profile["headless"]:
-        if getattr(args, "color", None):
-            raise DevkitError("--color has no meaning for a headless profile",
-                              "drop --color, or drop --headless")
-    else:
-        pair = instances.assign_profile_color(
-            profile, home, explicit=getattr(args, "color", None))
-        plan.record(f"color  {pair['light']}")
-    materialize(profile, args.vendor, home, plan, args.force)
+    spec = ref_spec(args)
+    with contextlib.ExitStack() as stack:
+        tree = None
+        if spec:
+            tree, facts = stack.enter_context(ref_checkout(home, spec, args.name))
+        profile = load_for_create(args.name, getattr(args, "type", None), kit_root=tree)
+        _refuse_duplicate(home, profile["name"])
+        instances.apply_headless(profile, getattr(args, "headless", None), home)
+        plan = Plan(args.apply)
+        if profile["headless"]:
+            if getattr(args, "color", None):
+                raise DevkitError("--color has no meaning for a headless profile",
+                                  "drop --color, or drop --headless")
+        else:
+            pair = instances.assign_profile_color(
+                profile, home, explicit=getattr(args, "color", None))
+            plan.record(f"color  {pair['light']}")
+        extra = {}
+        if spec:
+            content, kit_ref = install_ref(home, plan, profile["name"], tree, facts, None)
+            extra = {"content": content, "kit_ref": kit_ref, "source_commit": facts["commit"]}
+        materialize(profile, args.vendor, home, plan, args.force, **extra)
     uninstaller.ensure(home, plan)
     globalignore.ensure(home, plan)
     cli_link.ensure(home, plan)
     result = plan.report(f"profile {args.name}")
+    if spec:
+        print(_ref_note(kit_ref).replace("NAME", args.name))
     if plan.apply and plan.actions:
         _report_home_root_rules(home)
         finish_appforks(home, profile, user.pw_name)
@@ -738,21 +951,54 @@ def cmd_create(args) -> int:
 def cmd_sync(args) -> int:
     user = privilege.refuse_root(getattr(args, "user", None))
     home = Path(user.pw_dir)
-    profile = load_for_instance(args.name, home,
-                                headless=getattr(args, "headless", None))
-    if not profile["headless"]:
-        prov = next(row[3] for row in instances.discover_instances(home)
-                    if row[0] == args.name)
-        if not prov.get("color"):
-            instances.assign_profile_color(profile, home)
+    spec = ref_spec(args)
+    unpin = bool(getattr(args, "unpin", False))
+    rows = [row for row in instances.discover_instances(home) if row[0] == args.name]
+    prior = next((row[3].get("kit_ref") for row in rows if row[3].get("kit_ref")), None)
+    if unpin and rows and not prior:
+        raise DevkitError(f"{args.name} is not on a kit ref, so there is nothing to unpin",
+                          f"devkit profile sync {args.name} --apply")
+    if spec and not spec["source"] and prior:
+        spec["source"] = prior["source"]  # a profile keeps the source it came from
     plan = Plan(args.apply)
-    materialize(profile, None, home, plan, force=True)
+    extra: dict = {}
+    with contextlib.ExitStack() as stack:
+        kit_root = None
+        if spec:
+            kit_root, facts = stack.enter_context(ref_checkout(home, spec, args.name))
+        elif prior and not unpin:
+            if kithome.ref_release(home, args.name) is None:
+                raise DevkitError(
+                    f"{args.name}: its {prior['kind']} {prior['ref']} release is gone "
+                    f"(refs/{args.name} is missing or dangling)",
+                    f"devkit profile sync {args.name} --{prior['kind']} {prior['ref']} --apply")
+            kit_root = kithome.ref_link(home, args.name)
+        profile = load_for_instance(args.name, home, kit_root=kit_root,
+                                    headless=getattr(args, "headless", None))
+        if not profile["headless"]:
+            prov = next(row[3] for row in rows)
+            if not prov.get("color"):
+                instances.assign_profile_color(profile, home)
+        if spec:
+            content, kit_ref = install_ref(home, plan, args.name, kit_root, facts, prior)
+            extra = {"content": content, "kit_ref": kit_ref, "source_commit": facts["commit"]}
+        elif prior and not unpin:
+            link = kithome.ref_link(home, args.name)
+            extra = {"content": (link, link), "kit_ref": prior,
+                     "source_commit": prior["commit"]}
+        if unpin:
+            plan.record(f"unref  {args.name} ({prior['kind']} {prior['ref']}): back to current")
+        materialize(profile, None, home, plan, force=True, **extra)
+    if unpin and plan.apply:
+        kithome.drop_ref(home, args.name)
     uninstaller.ensure(home, plan)
     globalignore.ensure(home, plan)
     cli_link.ensure(home, plan)
     if plan.apply:
         migrations.run_needed(home, plan)
     result = plan.report(f"profile {args.name} (sync)")
+    if spec:
+        print(_ref_note(extra["kit_ref"]).replace("NAME", args.name))
     if plan.apply:
         finish_appforks(home, profile, user.pw_name)
     return result
@@ -767,8 +1013,10 @@ def cmd_list(args) -> int:
     print(f"{'PROFILE':16s} {'TYPE':14s} {'VENDOR':8s} {'STATE':12s} CONFIG DIR")
     for name, vendor, config_dir, prov in found:
         type_name = instances.instance_type(prov, name)
+        ref = prov.get("kit_ref")
+        state = f"{ref['kind']} {ref['ref']}" if ref else "installed"
         print(f"{name:16s} {type_name:14s} {vendor:8s} "
-              f"{'installed':12s} {relative_to_home(config_dir)}")
+              f"{state:12s} {relative_to_home(config_dir)}")
     return 0
 
 
@@ -873,10 +1121,18 @@ def cmd_doctor(args) -> int:
         if name not in installed:
             installed.append(name)
         label = f"{name}/{vendor}"
-        if _bare_commit(prov.get("source_commit")) != _bare_commit(kit_commit):
+        ref = prov.get("kit_ref")
+        expected = ref["commit"] if ref else kit_commit
+        if ref and kithome.ref_release(home, name) is None:
+            link = kithome.ref_link(home, name)
+            problems.append(
+                f"{label}: its {ref['kind']} {ref['ref']} release is gone "
+                f"(refs/{name} is {'dangling' if link.is_symlink() else 'missing'})\n"
+                f"    fix: devkit profile sync {name} --{ref['kind']} {ref['ref']} --apply")
+        elif _bare_commit(prov.get("source_commit")) != _bare_commit(expected):
             problems.append(
                 f"{label}: stale — installed from {str(prov.get('source_commit'))[:8]}, "
-                f"kit is at {kit_commit[:8]}\n"
+                f"{'its ref is at' if ref else 'kit is at'} {expected[:8]}\n"
                 f"    fix: devkit profile sync {name} --apply")
         if prov.get("profile_schema_version", 0) > instances.PROFILE_SCHEMA_VERSION:
             problems.append(
@@ -884,6 +1140,12 @@ def cmd_doctor(args) -> int:
                 f"(schema {prov['profile_schema_version']} > {instances.PROFILE_SCHEMA_VERSION})\n"
                 f"    fix: update this kit; there is no override")
         problems += _legacy_problems(home, name, config_dir, seen_legacy)
+        shim = instances.paths_for(name, vendor, home)["bin_dir"] / "python3"
+        if shim.is_symlink() and not shim.exists():
+            problems.append(
+                f"{label}: {relative_to_home(shim)} points at {shim.readlink()}, "
+                f"which is gone; every hook would fail\n"
+                f"    fix: devkit profile sync {name} --apply")
         offenders = privilege.find_root_owned(config_dir, uid, limit=5)
         if offenders:
             listed = ", ".join(relative_to_home(p) for p in offenders[:3])

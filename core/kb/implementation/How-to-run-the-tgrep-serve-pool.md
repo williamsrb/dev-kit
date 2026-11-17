@@ -10,11 +10,11 @@ prose: caveman-lite
 
 # Run the tgrep serve pool
 
-Cap 7 ranked git repos plus at most one extra for the current chat git root (cap 8). Indexes at `~/.cache/tgrep/<sha256-16 of canonical root>/` (TBD-1 **(a)**, operator 2026-09-12). Deny `$HOME`, `~/Downloads`, `~/.config`, `~/.cursor`, `~/.agents`, `~/.cache`, `~/.wine` as serve roots. Do not `git` from `~/.cursor/projects/<slug>` (that repo is `~/.cursor`).
+Cap 7 ranked git repos plus at most one extra for the current chat git root (cap 8). Indexes at `~/.cache/tgrep/<sha256-16 of canonical root>/` (operator 2026-09-12). Deny `$HOME`, `~/Downloads`, `~/.config`, `~/.cursor`, `~/.agents`, `~/.cache`, `~/.wine` as serve roots. Do not `git` from `~/.cursor/projects/<slug>` (that repo is `~/.cursor`).
 
 ## Scope
 
-US-004 / FR-10 / FR-13. XFCE autostart + sessionStart ensure.
+XFCE autostart + sessionStart ensure.
 
 ## Prerequisites
 

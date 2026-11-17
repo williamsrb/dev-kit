@@ -8,6 +8,7 @@
 - Page templates, regions, parts, and layouts match rendering logic.
 
 Docs:
+
 - CMS root: <https://developer.enonic.com/docs/xp/stable/cms>
 - Content types: <https://developer.enonic.com/docs/xp/stable/cms/content-types>
 - Pages/components: <https://developer.enonic.com/docs/xp/stable/cms/pages>
@@ -20,6 +21,7 @@ Docs:
 - User/group lookup and authorization checks are done at boundaries.
 
 Docs:
+
 - IAM root: <https://developer.enonic.com/docs/xp/stable/iam>
 - ID providers: <https://developer.enonic.com/docs/xp/stable/iam/idproviders>
 - Roles: <https://developer.enonic.com/docs/xp/stable/iam/roles>
@@ -31,6 +33,7 @@ Docs:
 - Query behavior validated for NoQL or DSL, including filters/aggregations.
 
 Docs:
+
 - Storage root: <https://developer.enonic.com/docs/xp/stable/storage>
 - NoQL: <https://developer.enonic.com/docs/xp/stable/storage/noql>
 - DSL: <https://developer.enonic.com/docs/xp/stable/storage/dsl>
@@ -44,6 +47,7 @@ Docs:
 - Upgrade notes reviewed for version-sensitive behavior.
 
 Docs:
+
 - Runtime root: <https://developer.enonic.com/docs/xp/stable/runtime>
 - Hosting/deployment: <https://developer.enonic.com/docs/xp/stable/deployment>
 - Release notes: <https://developer.enonic.com/docs/xp/stable/release>

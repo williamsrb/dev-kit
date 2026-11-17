@@ -18,6 +18,7 @@ devkit project build .                                      # dry run: lists eve
 devkit project build . --apply
 devkit project status .
 devkit project clean . --apply                              # removes what the build wrote
+devkit project scaffold . --layer core --apply              # or: copy the harness into the repo (see below)
 ```
 
 Every write command is a dry run without `--apply`. `PATH` defaults to `.` and
@@ -34,12 +35,71 @@ One skills tree, linked twice, the layout `extract-kit` already uses:
 | `.agents/skills/<name>` for a repo-owned skill | relative link to `../../harness/skills/<name>` | no |
 | `.claude/skills/<name>` for a repo-owned skill | relative link to `../../.agents/skills/<name>` | no |
 | `AGENTS.md` | generated, only when the repo has neither `AGENTS.md` nor `CLAUDE.md` and there is content | yes |
-| `CLAUDE.md` | relative link to `AGENTS.md`, written with it | yes |
+| `CLAUDE.md` | relative link to `AGENTS.md`, written with it; with `--rules`, a link to `harness/AGENTS.md`, or none when that file is empty | yes |
 | `.devkit-project.json` | stamp: what the build wrote | yes |
 
 Base links name `current`, so a kit update reaches the project without a
 rebuild. A rebuild is needed only when the set of skills changes (`status` says
 so).
+
+## Scaffold (copy mode)
+
+`build` links into the kit home, so the kit owns the content and a repo cannot
+change its own harness. `devkit project scaffold` is the other shape: it copies
+the skills into the repo once, and from then on the repo owns them. A tech lead
+edits them, commits them, and takes a newer kit version only on purpose.
+
+```bash
+devkit project scaffold . --layer core --layer enonic-xp8          # dry run
+devkit project scaffold . --layer core --apply                     # copy from the installed kit
+devkit project scaffold . --layer core --track develop --from <git URL or checkout> --apply
+devkit project scaffold . --layer core --pin v1.2 --apply          # a tag or a commit
+devkit project scaffold . --overwrite --apply                      # rebuild from the recorded source
+```
+
+| Path | Is | Excluded from git |
+|------|----|-------------------|
+| `harness/skills/<name>/` | the copy: real files, yours to edit and commit | no |
+| `.agents/skills/<name>`, `.claude/skills/<name>` | relative links to the copy | no |
+| `AGENTS.md` | `harness/AGENTS.md` if present, then the kit's rules (`--no-rules` leaves them out) | no |
+| `CLAUDE.md` | relative link to `AGENTS.md` | no |
+| `harness/project.json` | `{"schema": 1, "mode": "copy", "layers", "rules", "origin"}` | no |
+| `harness/.origin.json` | the origin commit and a sha256 per scaffolded skill, so `--overwrite` can tell an edit from the original | no |
+| `.devkit-project.json` | stamp: the links the build placed | yes |
+
+`origin` records `kind` (`installed`, `track` or `pin`), `source`, the `ref` as
+given, the resolved `commit` and, for `installed`, the `release`. A local
+source path is recorded as resolved, so on another machine `--overwrite` refuses
+it and names `--from`.
+
+**Ownership.** In copy mode `build`, `status` and `clean` read no kit and never
+write inside `harness/`. `build` links every directory in `harness/skills/`, so a
+skill you add there is linked too. `status` checks links only: an edited skill is
+not drift. `clean` removes the links and the stamp, never `harness/`, `AGENTS.md`
+or `CLAUDE.md`. These commands keep working with no `current` in the kit home;
+only `~/.local/bin/devkit` itself resolves through it.
+
+**Refs.** `--track BRANCH` copies from the tip of a kit branch and `--pin
+TAG_OR_SHA` from a tag or commit, from a throwaway clone of `--from` (a git URL
+or a local git checkout; default: the source the installed kit recorded), never
+from `current`. A branch given to `--pin`, a tag given to `--track`, a missing
+ref, a ref of another lineage and a ref without `core/` are each refused before
+anything is written. A scaffolded project never moves by itself.
+
+**Overwrite.** A scaffold over existing targets is refused and names
+`--overwrite`. `--overwrite` rebuilds from source: with no other flag it reads
+the recorded origin again (a followed branch at its tip, a pin at its commit,
+`installed` from `current`); `--layer`, `--track`, `--pin`, `--from` and
+`--rules` replace the recorded value and are written back. Each skill gets one
+line in the plan: `replace`, `add`, `remove` (recorded in `.origin.json`, no
+longer resolved) or `keep` (a skill you added: untouched). A `replace` or
+`remove` of a skill that differs from its recorded digest is shown as `edited`.
+Before the first write every replaced or removed path is copied to
+`harness/.devkit-backup-<time>/`, which the command prints and which no build
+links. There is no merge: take the changes you want from the backup.
+
+Scaffold does not install a ref anywhere, project `kb`, hooks, MCP or settings,
+or change linked mode. `init` and `build` accept no ref flags.
 
 ## Configuration
 
@@ -95,7 +155,7 @@ does not offer it.
   file there makes `flavors`, `build`, `status` and `init` fail, even for layers
   that do not use it.
 
-```
+```bash
 devkit project flavors                  # every valid layer name, tier, skill count
 devkit project flavors enonic-xp8       # includes and resolved skills, in order
 devkit project flavors --path ~/work/app   # also reads ~/work/app/harness/flavors
@@ -105,9 +165,9 @@ devkit project flavors --path ~/work/app   # also reads ~/work/app/harness/flavo
 
 | Flavor | Tier | Includes | Skills |
 |--------|------|----------|--------|
-| `enonic-base` | kit | `core` | 41 |
-| `enonic-xp7` | kit | `enonic-base` | 45 |
-| `enonic-xp8` | kit | `enonic-base` | 43 |
+| `enonic-base` | kit | `core` | 51 |
+| `enonic-xp7` | kit | `enonic-base` | 55 |
+| `enonic-xp8` | kit | `enonic-base` | 53 |
 
 <!-- /devkit:generated:flavor-table -->
 
@@ -127,6 +187,9 @@ Anything under `harness/` is the repo's:
   purpose: a profile already projects them, and loading them twice costs tokens.
   `status` and later builds reuse the choice the stamp recorded; pass
   `--rules` or `--no-rules` to change it.
+  With `--rules`, `CLAUDE.md` links to `harness/AGENTS.md` instead, because a
+  Claude profile loads the rules from its own `rules/` folder; with no
+  `harness/AGENTS.md` content there is no `CLAUDE.md`.
 
 Only the base layer needs devkit. The committed repo-owned links are the
 no-devkit path.
@@ -198,8 +261,8 @@ a repo-owned skill, and `CLAUDE.md -> AGENTS.md`.
 
 ## Not in v1
 
-No static `export` of a project, no config lookup by repo name, no list-valued
-`extends`, no `devkit doctor` check of built projects, no `CLAUDE.local.md` or
+No config lookup by repo name, no list-valued
+`extends`, no `devkit doctor` check of built projects, no `project diff` or merge of upstream changes into edited skills, no ref for a linked project, no `CLAUDE.local.md` or
 `AGENTS.override.md` fallback for a repo that already tracks `AGENTS.md`, and no
 rules or kb projected into `.claude/rules`. Each waits for a consumer or an
 unconfirmed vendor behaviour.

@@ -1,6 +1,6 @@
 ---
 name: blank-space
-description: "Measure blank/background fraction of a local screenshot (overall ratio, border-trim, optional grid). Use for empty evidence shots, collapsed layout QA, or whitespace questions — not whether whitespace is correct. | recommendedRole: deterministic | aliases: whitespace-ratio, whitespace-check, image-whitespace."
+description: "Measure blank/background fraction of a local screenshot (overall ratio, border-trim, optional grid). Use for empty evidence shots, collapsed layout QA, or whitespace questions — not whether whitespace is correct."
 metadata:
   recommendedRole: deterministic
   aliases: whitespace-ratio, whitespace-check, image-whitespace

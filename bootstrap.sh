@@ -167,13 +167,49 @@ say "  family:         $FAMILY ($PKG_MANAGER)"
 say "  mode:           $([ "$APPLY" -eq 1 ] && echo apply || echo 'dry run')"
 say ""
 
+# ---------------------------------------------------------------- python floor
+
+# The kit runs on Python 3.12 or newer (devkit_cli/pyfloor.py has the same
+# order). RHEL 9 ships 3.9 as the system python3, which dnf itself depends on,
+# so 3.12 is installed next to it from AppStream and never replaces it.
+py_ok() { "$1" -c 'import sys; sys.exit(sys.version_info < (3, 12))' >/dev/null 2>&1; }
+find_py() {
+  local c
+  for c in python3 python3.13 python3.12; do
+    if command -v "$c" >/dev/null 2>&1 && py_ok "$c"; then
+      command -v "$c"
+      return 0
+    fi
+  done
+  return 1
+}
+
+PY="$(find_py || true)"
+if [ -z "$PY" ] && [ "$FAMILY" = rhel ]; then
+  warn "python3 is older than 3.12 or absent; installing python3.12 next to it"
+  if [ "$APPLY" -eq 1 ]; then
+    announce_elevation "the kit needs Python 3.12 or newer, and python3.12 is installed alongside the system python3."
+  fi
+  elevate dnf install -y python3.12
+  if [ "$APPLY" -eq 0 ]; then
+    say ""
+    say "Dry run stops here: the rest of the plan needs python3.12 to read the manifest."
+    exit 0
+  fi
+  PY="$(find_py || true)"
+fi
+if [ -z "$PY" ] && command -v python3 >/dev/null 2>&1; then
+  die "the kit needs Python 3.12 or newer and $(python3 --version 2>&1) is the newest found" \
+      "install Python 3.12 or newer from your distribution, then re-run"
+fi
+
 # ---------------------------------------------------------------- the plan
 
-# devkit needs only python3 stdlib, and python3 is itself a dependency, so read
-# the manifest with python3 when it exists and fall back to a minimal parse when
-# it does not.
-if command -v python3 >/dev/null 2>&1; then
-  PLAN="$(python3 "$KIT_DIR/devkit_cli/bootstrap_plan.py" --profile "$PROFILE" --manager "$PKG_KEY" --family "$FAMILY")"
+# devkit needs only python stdlib, and python is itself a dependency, so read
+# the manifest with it when it exists and fall back to a minimal parse when it
+# does not.
+if [ -n "$PY" ]; then
+  PLAN="$("$PY" "$KIT_DIR/devkit_cli/bootstrap_plan.py" --profile "$PROFILE" --manager "$PKG_KEY" --family "$FAMILY")"
 else
   warn "python3 is absent; installing it first, then re-reading the plan"
   if [ "$APPLY" -eq 1 ]; then
@@ -194,7 +230,10 @@ else
     say "Dry run stops here: the rest of the plan needs python3 to read the manifest."
     exit 0
   fi
-  PLAN="$(python3 "$KIT_DIR/devkit_cli/bootstrap_plan.py" --profile "$PROFILE" --manager "$PKG_KEY" --family "$FAMILY")"
+  PY="$(find_py || true)"
+  [ -n "$PY" ] || die "python3 was installed but is older than 3.12" \
+                      "install Python 3.12 or newer from your distribution, then re-run"
+  PLAN="$("$PY" "$KIT_DIR/devkit_cli/bootstrap_plan.py" --profile "$PROFILE" --manager "$PKG_KEY" --family "$FAMILY")"
 fi
 
 PACKAGES="$(printf '%s\n' "$PLAN" | awk -F'\t' '$1=="pkg"     {print $2}')"
@@ -416,13 +455,13 @@ if [ -n "$FAILED_OPTIONAL" ]; then
   say ""
 fi
 
-if [ "$APPLY" -eq 1 ] && command -v python3 >/dev/null 2>&1; then
+if [ "$APPLY" -eq 1 ] && [ -n "$PY" ]; then
   say "Verifying what the profile declares:"
   VERIFY_ARGS=(--profile "$PROFILE" --manager "$PKG_KEY" --family "$FAMILY" --verify)
   if [ "${ALLOW_THIRD_PARTY:-}" = "no" ]; then
     VERIFY_ARGS+=(--third-party-declined)
   fi
-  python3 "$KIT_DIR/devkit_cli/bootstrap_plan.py" "${VERIFY_ARGS[@]}" \
+  "$PY" "$KIT_DIR/devkit_cli/bootstrap_plan.py" "${VERIFY_ARGS[@]}" \
     || die "some required dependencies are still missing" \
            "re-run, or install the named tools by hand and re-run --verify"
   say ""

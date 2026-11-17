@@ -18,6 +18,8 @@ import sqlite3
 import subprocess
 import sys
 import tempfile
+import time
+import types
 import unittest
 from contextlib import redirect_stdout
 from pathlib import Path
@@ -41,7 +43,9 @@ from devkit_cli import (
     paths,
     privilege,
     profiles,
+    pyfloor,
     scrub,
+    session_find,
     session_sync,
     update,
 )
@@ -146,6 +150,48 @@ class ExportBoundaryTests(unittest.TestCase):
         self.assertFalse(export._excluded("skills/graft/SKILL.md", hard))
         self.assertTrue(export._excluded("skills/x/__pycache__/a.pyc", hard))
 
+    def test_an_executable_bit_alone_is_drift(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            src, dest = _put(Path(tmp), "src/run.py", mode=0o755), _put(Path(tmp), "dest/run.py")
+            self.assertFalse(export._same(src, dest, src.read_bytes()))
+            dest.chmod(0o755)
+            self.assertTrue(export._same(src, dest, src.read_bytes()))
+
+    def test_overlay_is_injected_and_a_missing_anchor_fails(self):
+        overlays = [{"path": "rules/B.md", "after": "anchor", "insert": "kit line"}]
+        self.assertEqual(export.render_text("rules/B.md", "a\nanchor\nb", overlays),
+                         "a\nanchor\n\nkit line\nb")
+        self.assertEqual(export.render_text("rules/C.md", "a\nanchor\nb", overlays), "a\nanchor\nb")
+        with self.assertRaises(DevkitError):
+            export.render_text("rules/B.md", "no match", overlays)
+
+    def test_only_committed_source_work_is_exported(self):
+        """In-flight harness work must not ride along with an export."""
+        with tempfile.TemporaryDirectory() as tmp:
+            source = Path(tmp)
+
+            def git(*argv):
+                subprocess.run(["git", "-C", tmp, "-c", "user.name=t", "-c", "user.email=t@t", *argv],
+                               check=True, capture_output=True)
+
+            with self.assertRaises(DevkitError):
+                export.uncommitted(source, ["a.md"], [])
+            git("init", "-q")
+            for name in ("clean.md", "edited.md", "staged.md", "deleted.md", "gone.md"):
+                _put(source, name)
+            git("add", ".")
+            git("commit", "-q", "-m", "base")
+            git("rm", "-q", "gone.md")
+            git("commit", "-q", "-m", "drop gone")
+            (source / "edited.md").write_text("changed", encoding="utf-8")
+            (source / "staged.md").write_text("changed", encoding="utf-8")
+            git("add", "staged.md")
+            _put(source, "new.md")
+            (source / "deleted.md").unlink()
+            held = export.uncommitted(source, ["clean.md", "edited.md", "staged.md", "new.md"],
+                                      ["deleted.md", "gone.md", "never-tracked.md"])
+            self.assertEqual(held, ["deleted.md", "edited.md", "new.md", "staged.md"])
+
     @NEEDS_SOURCE
     def test_every_skill_on_disk_is_classified(self):
         allowlist = json.loads((REPO / "export-allowlist.json").read_text())
@@ -195,11 +241,11 @@ class ExportBoundaryTests(unittest.TestCase):
         on_disk = {p.name for p in root.iterdir() if p.name != "__pycache__"}
         self.assertEqual(on_disk - listed, set(), "unclassified vendor trees would ship or vanish silently")
 
-    def test_benchmark_monthly_fetches_are_hard_excluded(self):
+    def test_benchmark_monthly_files_are_not_hard_excluded(self):
         allowlist = json.loads((REPO / "export-allowlist.json").read_text())
         hard = allowlist["hard_excludes"]
-        self.assertTrue(export._excluded("benchmarks/2026-10/aa.yaml", hard))
-        self.assertTrue(export._excluded("benchmarks/2026-10-deepswe.yaml", hard))
+        self.assertFalse(export._excluded("benchmarks/2026-10/aa.yaml", hard))
+        self.assertFalse(export._excluded("benchmarks/2026-10-deepswe.yaml", hard))
         self.assertFalse(export._excluded("benchmarks/harness.yaml", hard))
 
     def test_skills_vendor_layer_excludes_apply(self):
@@ -250,6 +296,10 @@ class ExportBoundaryTests(unittest.TestCase):
         self._assert_top_level_classified(
             "skills_vendor", "skills-vendor", ("core", "files"),
         )
+
+    @NEEDS_SOURCE
+    def test_every_docs_on_disk_is_classified(self):
+        self._assert_top_level_classified("docs", "docs", ("core",))
 
     @NEEDS_SOURCE
     def test_every_kb_on_disk_is_classified(self):
@@ -1175,6 +1225,7 @@ class UpdateApplyTests(unittest.TestCase):
             else:
                 shutil.copy2(source, payload / item)
         (payload / "core" / "skills").mkdir(parents=True)
+        _put(payload, "core/bin/generate-agents-md.py", _RULES_STUB, 0o755)
         catalog = REPO / "core" / "mcp" / "catalog.json"
         if catalog.is_file():
             mcp_dir = payload / "core" / "mcp"
@@ -2594,6 +2645,197 @@ class SessionSyncTests(unittest.TestCase):
         self.assertIn("--source", result.stdout)
 
 
+class SessionResumeBase(unittest.TestCase):
+    """Fake homes for session-find and session-pull; borrows the sync helpers."""
+    ORG = SessionSyncTests.ORG
+    quiet = SessionSyncTests.quiet
+    setUp = SessionSyncTests.setUp
+    _desktop = SessionSyncTests._desktop
+    _code = SessionSyncTests._code
+    _write = SessionSyncTests._write
+    SID = "11111111-1111-1111-1111-111111111111"
+
+    def _transcript(self, name, sid, title=None, mtime=None, project="p", cwd="/work/x", ai=False):
+        lines = [json.dumps({"type": "user", "cwd": cwd})]
+        if title:
+            kind, key = ("ai-title", "aiTitle") if ai else ("custom-title", "customTitle")
+            lines.append(json.dumps({"type": kind, key: title}))
+        path = self._code(name) / project / f"{sid}.jsonl"
+        self._write(path, "\n".join(lines) + "\n", mtime or time.time() - 3600)
+        return path
+
+    def _index(self, name, sid, title, last_ms, org=SessionSyncTests.ORG):
+        path = self._desktop(name, org) / f"local_{sid}.json"
+        self._write(path, json.dumps({"cliSessionId": sid, "title": title, "cwd": "/work/x",
+                                      "lastActivityAt": last_ms}), last_ms / 1000)
+        return path
+
+    def _find(self, title, **kwargs):
+        return session_find.find_sessions(self.home, title, **kwargs)
+
+
+class SessionFindTests(SessionResumeBase):
+    def test_title_matches_across_three_sides_with_surface_and_paths(self):
+        now = time.time()
+        self._transcript("stock", "a" * 8, "Quota Fix")
+        self._transcript("one", "b" * 8, "quota fix two", ai=True)
+        self._transcript("two", "c" * 8, "quota", cwd="/work/y")
+        self._index("two", "c" * 8, "quota", int(now * 1000))
+        rows, total = self._find("quota")
+        self.assertEqual(total, 3)
+        self.assertEqual(rows[0]["profile"], "two")
+        self.assertEqual(rows[0]["surface"], "both")
+        self.assertTrue(Path(rows[0]["index"]).is_file())
+        self.assertTrue(all(Path(p).is_file() for r in rows for p in r["transcripts"]))
+        self.assertEqual({r["surface"] for r in rows[1:]}, {"code"})
+
+    def test_profile_filter_stock_and_unknown_profile(self):
+        self._transcript("stock", "a" * 8, "quota")
+        self._transcript("one", "b" * 8, "quota")
+        rows, _ = self._find("quota", profile="stock")
+        self.assertEqual([r["profile"] for r in rows], ["stock"])
+        with self.assertRaises(DevkitError) as raised:
+            self._find("quota", profile="nope")
+        self.assertIn("stock", raised.exception.fix)
+        self.assertIn("one", raised.exception.fix)
+
+    def test_since_and_the_default_thirty_day_window(self):
+        now = time.time()
+        self._transcript("one", "a" * 8, "quota", mtime=now - 40 * 86400)
+        self._transcript("one", "b" * 8, "quota", mtime=now - 5 * 86400)
+        rows, _ = self._find("quota")
+        self.assertEqual([r["session_id"] for r in rows], ["b" * 8])
+        old = time.strftime("%Y-%m-%d", time.localtime(now - 60 * 86400))
+        rows, _ = self._find("quota", since=old)
+        self.assertEqual(len(rows), 2)
+        recent = time.strftime("%Y-%m-%d", time.localtime(now - 10 * 86400))
+        self.assertEqual(len(self._find("quota", since=recent)[0]), 1)
+        with self.assertRaises(DevkitError):
+            self._find("quota", since="yesterday")
+
+    def test_no_match_and_cli_exit_zero(self):
+        self._transcript("one", "a" * 8, "other")
+        self.assertEqual(self._find("zz"), ([], 0))
+        buffer = io.StringIO()
+        user = types.SimpleNamespace(pw_dir=str(self.home))
+        args = argparse.Namespace(title="zz", since=None, profile=None, json=True)
+        with mock.patch.object(privilege, "refuse_root", return_value=user), \
+                redirect_stdout(buffer):
+            self.assertEqual(session_find.cmd_session_find(args), 0)
+        self.assertEqual(json.loads(buffer.getvalue())["sessions"], [])
+
+    def test_same_id_under_two_project_folders_lists_both(self):
+        self._transcript("one", self.SID, "quota", project="p1")
+        self._transcript("one", self.SID, "quota", project="p2")
+        rows, _ = self._find("quota")
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(len(rows[0]["transcripts"]), 2)
+
+    def test_exact_ranks_before_substring_and_cap(self):
+        self._transcript("one", "a" * 8, "big quota fix")
+        self._transcript("one", "b" * 8, "quota")
+        rows, _ = self._find("quota")
+        self.assertEqual(rows[0]["session_id"], "b" * 8)
+        for i in range(25):
+            self._transcript("two", f"{i:08d}", "quota many")
+        rows, total = self._find("quota many")
+        self.assertEqual((len(rows), total), (session_find.CAP, 25))
+
+
+class SessionPullTests(SessionResumeBase):
+    def _pull(self, source, target=None, apply=True, env=None, running=None, **kwargs):
+        plan = Plan(apply)
+        session_sync.pull_session(self.home, self.SID, source, target, plan,
+                                  env=env or {}, find_running=running or self.quiet, **kwargs)
+        return plan
+
+    def _seed(self, name):
+        transcript = self._transcript(name, self.SID, "quota", mtime=time.time() - 3600)
+        sidecar = transcript.with_suffix("") / "subagents" / "t.jsonl"
+        self._write(sidecar, "sub", time.time() - 3600)
+        index = self._index(name, self.SID, "quota", int((time.time() - 3600) * 1000))
+        self._desktop("two", ("acctB", "orgB"))
+        return transcript, sidecar, index
+
+    def test_profile_to_profile_with_devkit_profile_default(self):
+        transcript, _sidecar, index = self._seed("one")
+        self._pull("one", env={"DEVKIT_PROFILE": "two"})
+        self.assertEqual((self._code("two") / "p" / transcript.name).read_text(),
+                         transcript.read_text())
+        self.assertTrue((self._code("two") / "p" / self.SID / "subagents" / "t.jsonl").is_file())
+        self.assertTrue((self._desktop("two", ("acctB", "orgB")) / index.name).is_file())
+        self.assertFalse((self._desktop("two") / index.name).exists())
+
+    def test_stock_to_profile_and_profile_to_stock(self):
+        self._seed("stock")
+        self._pull("stock", env={"DEVKIT_PROFILE": "two"})
+        self.assertTrue((self._code("two") / "p" / f"{self.SID}.jsonl").is_file())
+        shutil.rmtree(self._code("stock"))
+        self._desktop("stock")
+        self._pull("two", env={})
+        self.assertTrue((self._code("stock") / "p" / f"{self.SID}.jsonl").is_file())
+
+    def test_org_override_and_dry_run(self):
+        _, _, index = self._seed("one")
+        other = self._desktop("two", ("acctC", "orgC"))
+        plan = self._pull("one", "two", apply=False, org=str(other))
+        self.assertTrue(any(str(other) in a for a in plan.actions))
+        self.assertFalse(self._code("two").exists())
+        self._pull("one", "two", org=str(other))
+        self.assertTrue((other / index.name).is_file())
+
+    def test_source_is_untouched_and_unknown_id_refused(self):
+        transcript, _, index = self._seed("one")
+        before = [(p, p.stat().st_size, p.stat().st_mtime)
+                  for p in (transcript, index)]
+        self._pull("one", "two")
+        self.assertEqual(before, [(p, p.stat().st_size, p.stat().st_mtime) for p, *_ in before])
+        with self.assertRaises(DevkitError):
+            session_sync.pull_session(self.home, "missing", "one", "two", Plan(True),
+                                      env={}, find_running=self.quiet)
+        with self.assertRaises(DevkitError):
+            self._pull("one", "one")
+
+    def test_add_only_while_running_and_replace_refused(self):
+        transcript, _, _ = self._seed("one")
+        busy = lambda *args, **kwargs: [("Code", "4242")]
+        self._pull("one", "two", running=busy)
+        self.assertTrue((self._code("two") / "p" / transcript.name).is_file())
+        os.utime(transcript, (time.time() - 60, time.time() - 60))
+        with self.assertRaises(DevkitError) as raised:
+            self._pull("one", "two", running=busy)
+        self.assertIn("4242", str(raised.exception))
+
+    def test_newer_target_is_kept_and_reported(self):
+        transcript, _, _ = self._seed("one")
+        self._pull("one", "two")
+        target = self._code("two") / "p" / transcript.name
+        target.write_text("continued", encoding="utf-8")
+        os.utime(target, (time.time(), time.time()))
+        buffer = io.StringIO()
+        with redirect_stdout(buffer):
+            plan = self._pull("one", "two")
+        self.assertEqual(target.read_text(), "continued")
+        self.assertEqual(plan.actions, [])
+        self.assertIn("target is newer", buffer.getvalue())
+
+    def test_recent_write_warns(self):
+        transcript, _, _ = self._seed("one")
+        os.utime(transcript, (time.time(), time.time()))
+        buffer = io.StringIO()
+        with redirect_stdout(buffer):
+            self._pull("one", "two", apply=False)
+        self.assertIn("snapshot", buffer.getvalue())
+        self.assertIn("claude-two --resume", buffer.getvalue())
+
+    def test_same_id_under_two_project_folders_keeps_both_paths(self):
+        self._transcript("one", self.SID, "quota", project="p1")
+        self._transcript("one", self.SID, "quota", project="p2")
+        self._pull("one", "two")
+        for project in ("p1", "p2"):
+            self.assertTrue((self._code("two") / project / f"{self.SID}.jsonl").is_file())
+
+
 class GlobalIgnoreWithoutGitTests(unittest.TestCase):
     def test_no_git_writes_nothing(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -2651,6 +2893,11 @@ class UninstallDocTests(unittest.TestCase):
 # ---------------------------------------------------------------- standalone
 
 LINEAGE = "a" * 40
+
+
+def run_devkit_help(*argv: str) -> str:
+    return subprocess.run([sys.executable, str(REPO / "devkit"), *argv, "--help"],
+                          capture_output=True, text=True, check=True).stdout
 GIT_ENV = {"GIT_CONFIG_GLOBAL": "/dev/null", "GIT_CONFIG_SYSTEM": "/dev/null",
            "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@example.com",
            "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@example.com"}
@@ -2824,6 +3071,63 @@ class KitHomeTests(unittest.TestCase):
         self.assertIn("three", (kithome.previous_release(self.home)
                                 / "core/skills/s/SKILL.md").read_text())
 
+    def test_prune_keeps_a_release_a_ref_names(self):
+        _put(self.kit, "core/skills/s/SKILL.md", "held\n")
+        self._install()
+        held = kithome.current_release(self.home)
+        kithome.flip_ref(self.home, "p", held)
+        self.assertEqual(os.readlink(kithome.ref_link(self.home, "p")), f"../releases/{held.name}")
+        for text in ("two\n", "three\n", "four\n", "five\n"):
+            _put(self.kit, "core/skills/s/SKILL.md", text)
+            self._install()
+        self.assertIn(held.name, self._releases())
+        self.assertEqual(len(self._releases()), 3)
+        kithome.drop_ref(self.home, "p")
+        kithome.prune(self.home)
+        self.assertNotIn(held.name, self._releases())
+
+    def test_prune_keeps_the_previous_release_an_instance_records(self):
+        _put(self.kit, "core/skills/s/SKILL.md", "rollback\n")
+        self._install()
+        rollback = kithome.current_release(self.home)
+        config = self.home / ".agents-profiles/p/claude"
+        write_json(config / instances.PROVENANCE_NAME,
+                   {"vendor": "claude", "kit_ref": {"previous_release": rollback.name}})
+        for text in ("two\n", "three\n", "four\n"):
+            _put(self.kit, "core/skills/s/SKILL.md", text)
+            self._install()
+        self.assertIn(rollback.name, self._releases())
+
+    def test_flip_ref_never_exposes_a_missing_link(self):
+        import threading
+        self._install()
+        first = kithome.current_release(self.home)
+        _put(self.kit, "core/skills/s/SKILL.md", "two\n")
+        self._install()
+        second = kithome.current_release(self.home)
+        kithome.flip_ref(self.home, "p", first)
+        stop, bad = threading.Event(), []
+
+        def flipper():
+            while not stop.is_set():
+                for release in (first, second):
+                    kithome.flip_ref(self.home, "p", release)
+
+        thread = threading.Thread(target=flipper)
+        thread.start()
+        try:
+            link = kithome.ref_link(self.home, "p")
+            for _ in range(3000):
+                try:
+                    if not (os.readlink(link) and (link / "devkit.py").exists()):
+                        bad.append("dangling")
+                except OSError as exc:
+                    bad.append(str(exc))
+        finally:
+            stop.set()
+            thread.join()
+        self.assertEqual(bad, [])
+
     def test_running_from_current_copies_nothing(self):
         self._install()
         plan = Plan(True)
@@ -2987,6 +3291,112 @@ class KitSourceTests(unittest.TestCase):
             self.assertIn("--from", caught.exception.fix)
 
 
+class KitCheckoutTests(unittest.TestCase):
+    """'A ref of a kit is read from a throwaway clone: lineage checked, nothing kept.'"""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.tmp = Path(self._tmp.name)
+        self.repo = self.tmp / "repo"
+        self.lineage = _git_kit(self.repo)
+        self.kit = {"lineage_id": self.lineage}
+        _git(self.repo, "tag", "v1")
+        self.v1 = _git(self.repo, "rev-parse", "HEAD")
+        _git(self.repo, "checkout", "-q", "-b", "feature")
+        _put(self.repo, "core/skills/s/SKILL.md", "feature\n")
+        _git(self.repo, "commit", "-q", "-am", "feature")
+        self.feature = _git(self.repo, "rev-parse", "HEAD")
+        _git(self.repo, "checkout", "-q", "main")
+        _put(self.repo, "core/skills/s/SKILL.md", "dirty\n")  # never read
+        self.made: list[Path] = []
+        real = tempfile.mkdtemp
+
+        def spy(*args, **kwargs):
+            self.made.append(Path(real(*args, **kwargs)))
+            return str(self.made[-1])
+
+        patcher = mock.patch.object(kitsource.tempfile, "mkdtemp", spy)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def read(self, ref, kind, source=None, kit=None):
+        with kitsource.checkout(str(source or self.repo), ref, kind, kit or self.kit) as (tree, facts):
+            return (tree / "core/skills/s/SKILL.md").read_text(), facts
+
+    def assertCleaned(self):
+        self.assertTrue(self.made)
+        self.assertFalse([d for d in self.made if d.exists()])
+
+    def test_pin_of_a_tag_resolves_to_its_commit(self):
+        text, facts = self.read("v1", "pin")
+        self.assertEqual(text, "one\n")
+        self.assertEqual((facts["commit"], facts["kind"], facts["ref"]), (self.v1, "pin", "v1"))
+        self.assertEqual(facts["lineage_id"], self.lineage)
+        self.assertEqual(facts["fork_id"], "t")
+        self.assertCleaned()
+
+    def test_track_of_a_branch_resolves_through_origin(self):
+        text, facts = self.read("feature", "track")
+        self.assertEqual((text, facts["commit"]), ("feature\n", self.feature))
+
+    def test_a_local_checkout_is_read_at_the_ref_not_the_working_tree(self):
+        self.assertEqual(self.read("main", "track")[0], _git(
+            self.repo, "show", "main:core/skills/s/SKILL.md") + "\n")
+
+    def test_a_foreign_lineage_is_refused(self):
+        with self.assertRaises(DevkitError) as caught:
+            self.read("v1", "pin", kit={"lineage_id": "b" * 40})
+        self.assertIn("lineage mismatch", str(caught.exception))
+        self.assertCleaned()
+
+    def test_a_missing_ref_is_refused(self):
+        for kind in ("pin", "track", None):
+            with self.subTest(kind=kind), self.assertRaises(DevkitError) as caught:
+                self.read("no-such-ref", kind)
+            self.assertIn("does not exist", str(caught.exception))
+        self.assertCleaned()
+
+    def test_a_ref_without_core_skills_is_refused(self):
+        _git(self.repo, "checkout", "-q", "main")
+        _git(self.repo, "rm", "-rqf", "core")
+        _git(self.repo, "commit", "-q", "-m", "drop core")
+        _git(self.repo, "tag", "nocore")
+        with self.assertRaises(DevkitError) as caught:
+            self.read("nocore", "pin")
+        self.assertIn("predates core/", str(caught.exception))
+        self.assertCleaned()
+
+    def test_the_kind_must_match_the_ref(self):
+        with self.assertRaises(DevkitError) as pinned:
+            self.read("feature", "pin")
+        self.assertIn("is a branch", str(pinned.exception))
+        self.assertIn("--track", pinned.exception.fix)
+        with self.assertRaises(DevkitError) as tracked:
+            self.read("v1", "track")
+        self.assertIn("is not a branch", str(tracked.exception))
+        self.assertIn("--pin", tracked.exception.fix)
+        self.assertCleaned()
+
+    def test_pin_of_a_short_sha_resolves(self):
+        text, facts = self.read(self.feature[:8], "pin")
+        self.assertEqual((text, facts["commit"]), ("feature\n", self.feature))
+
+    def test_a_directory_without_git_is_refused(self):
+        plain = self.tmp / "plain"
+        shutil.copytree(self.repo, plain, symlinks=True)
+        shutil.rmtree(plain / ".git")
+        with self.assertRaises(DevkitError) as caught:
+            self.read("v1", "pin", source=plain)
+        self.assertIn("--from", caught.exception.fix)
+
+    def test_a_git_url_source_is_cloned(self):
+        bare = self.tmp / "remote.git"
+        _git(self.tmp, "clone", "-q", "--bare", str(self.repo), str(bare))
+        text, facts = self.read("feature", "track", source=f"file://{bare}")
+        self.assertEqual((text, facts["source"]), ("feature\n", f"file://{bare}"))
+
+
 class _HomePatched(unittest.TestCase):
     """A temp home that `Path.home()`, the staging cache and the root guard see."""
 
@@ -3049,6 +3459,167 @@ class _HomePatched(unittest.TestCase):
                     if path.is_symlink():
                         found[str(path)] = os.readlink(path)
         return found
+
+
+_RULES_STUB = """
+class GenerateError(Exception):
+    pass
+
+
+def load_manifest():
+    return {}
+
+
+def render_claude_dir(manifest, layers):
+    notice = "<!-- Generated by bin/generate-agents-md.py; do not edit. -->"
+    files = {"00-base.md": notice + "\\n\\nbase\\n"}
+    for layer in sorted(layers or ()):
+        files[f"01-{layer}.md"] = notice + f"\\n\\n{layer}\\n"
+    return files
+"""
+
+
+class ClaudeRulesProjectionTests(_HomePatched):
+    """The Claude rules layer is rendered at sync; the other vendors still link."""
+
+    def setUp(self):
+        super().setUp()
+        _put(self.checkout, "core/bin/generate-agents-md.py", _RULES_STUB, 0o755)
+
+    def _materialize(self, name: str, kind: str, vendor: str, apply: bool = True,
+                     force: bool = False) -> Plan:
+        profile = instances.bind_instance(manifest.load(kind, kit_root=self.checkout), name, kind)
+        plan = Plan(apply)
+        with redirect_stdout(io.StringIO()):
+            materialize(profile, [vendor], self.home, plan, force=force, kit_root=self.checkout)
+        return plan
+
+    def _rules(self, name: str, vendor: str = "claude") -> Path:
+        return self.home / ".agents-profiles" / name / vendor / "rules"
+
+    def test_core_profile_gets_the_core_render(self):
+        self._materialize("core", "core", "claude")
+        rules = self._rules("core")
+        self.assertEqual(sorted(p.name for p in rules.iterdir()), ["00-base.md", "01-core.md"])
+        for path in rules.iterdir():
+            self.assertFalse(path.is_symlink(), path)
+            self.assertIn("devkit", path.read_text())
+
+    def test_client_profile_adds_the_client_layer(self):
+        self._materialize("acme", "client", "claude")
+        self.assertEqual(sorted(p.name for p in self._rules("acme").iterdir()),
+                         ["00-base.md", "01-client.md", "01-core.md"])
+
+    def test_old_raw_links_are_pruned(self):
+        link_core = kithome.current_link(self.home) / "core" / "rules"
+        rules = self._rules("core")
+        (rules / "agents.d").mkdir(parents=True)
+        (rules / "agents.d" / "git.md").symlink_to(link_core / "agents.d" / "git.md")
+        (rules / "BASE.mdc").symlink_to(link_core / "BASE.mdc")
+        (rules / "_intro.md").symlink_to(link_core / "_intro.md")
+        self._materialize("core", "core", "claude")
+        self.assertEqual(sorted(p.name for p in rules.iterdir()), ["00-base.md", "01-core.md"])
+
+    def test_links_beside_the_rules_folder_are_left_alone(self):
+        self._materialize("core", "core", "claude")
+        hooks = self._rules("core").parent / "hooks"
+        self.assertTrue(hooks.is_symlink())
+        plan = self._materialize("core", "core", "claude", apply=False)
+        self.assertFalse([a for a in plan.actions if a.startswith("prune  rules")], plan.actions)
+
+    def test_a_whole_directory_link_is_replaced(self):
+        rules = self._rules("core")
+        rules.parent.mkdir(parents=True)
+        rules.symlink_to(kithome.current_link(self.home) / "core" / "rules")
+        self._materialize("core", "core", "claude")
+        self.assertFalse(rules.is_symlink())
+        self.assertTrue((rules / "00-base.md").is_file())
+
+    def test_second_sync_overwrites_and_drops_stale_files(self):
+        self._materialize("core", "core", "claude")
+        rules = self._rules("core")
+        (rules / "01-core.md").write_text("edited devkit\n")
+        (rules / "09-gone.md").write_text(profiles.CLAUDE_RULES_MARKER + "\n")
+        (rules / "mine.md").write_text("hand written\n")
+        self._materialize("core", "core", "claude")
+        self.assertIn("core", (rules / "01-core.md").read_text())
+        self.assertFalse((rules / "09-gone.md").exists())
+        self.assertTrue((rules / "mine.md").exists())
+
+    def test_dry_run_records_writes_and_leaves_disk_alone(self):
+        plan = self._materialize("core", "core", "claude", apply=False)
+        self.assertIn("write  rules/00-base.md", plan.actions)
+        self.assertFalse(self._rules("core").exists())
+
+    def test_orchestrate_is_linked_per_vendor_and_nothing_dangles(self):
+        self._materialize("core", "core", "claude")
+        skills = self._rules("core").parent / "skills"
+        link = skills / "orchestrate"
+        self.assertEqual(link.readlink(), kithome.current_link(self.home) / "core"
+                         / "skills-vendor" / "claude" / "orchestrate")
+        self.assertTrue((link / "SKILL.md").is_file())
+        self.assertEqual([p.name for p in skills.iterdir() if p.is_symlink() and not p.exists()], [])
+
+    def test_dangling_skill_links_are_pruned(self):
+        skills = self._rules("core").parent / "skills"
+        skills.mkdir(parents=True)
+        (skills / "fish-audio-sdk").symlink_to("../../../../.agents/skills/fish-audio-sdk")
+        plan = self._materialize("core", "core", "claude", apply=False)
+        self.assertIn("prune  skills/fish-audio-sdk", plan.actions)
+
+    def test_a_kit_without_the_folder_render_keeps_the_linked_layer(self):
+        _put(self.checkout, "core/bin/generate-agents-md.py", "x = 1\n", 0o755)
+        plan = self._materialize("core", "core", "claude")
+        self.assertTrue(any("cannot render Claude rules" in a for a in plan.actions))
+        self.assertTrue(any(p.is_symlink() for p in self._rules("core").rglob("*")))
+
+    def test_codex_rules_stay_linked(self):
+        self._materialize("php", "php", "codex")
+        rules = self._rules("php", "codex")
+        self.assertTrue(any(p.is_symlink() for p in rules.rglob("*")))
+        self.assertFalse((rules / "00-base.md").exists())
+
+
+class ClaudeSettingsTemplateTests(unittest.TestCase):
+    def _hooks(self, home: Path, kind: str) -> dict:
+        profile = instances.bind_instance(manifest.load(kind), "t", kind)
+        text = (REPO / "templates/claude/settings.json").read_text(encoding="utf-8")
+        return json.loads(instances.render(
+            text, instances.render_tokens(profile, "claude", home)))
+
+    def test_history_adapter_gets_its_mode_for_every_lineage(self):
+        for kind in ("core", "client"):
+            hooks = self._hooks(Path("/h"), kind)["hooks"]
+            commands = {event: [h["command"] for g in groups for h in g["hooks"]]
+                        for event, groups in hooks.items()}
+            self.assertTrue(any(c.endswith("claude-history-adapter.py prompt")
+                                for c in commands["UserPromptSubmit"]), kind)
+            self.assertTrue(any(c.endswith("claude-history-adapter.py stop")
+                                for c in commands["Stop"]), kind)
+            self.assertTrue(any(c.endswith("kb-router.py") for c in commands["UserPromptSubmit"]))
+            pre = {g["matcher"]: g["hooks"][0]["command"] for g in hooks["PreToolUse"]}
+            self.assertTrue(pre["Bash"].endswith("claude-git-guard.py"))
+            self.assertTrue(any(c.endswith("jira-write-guard.py") for c in pre.values()))
+
+    def test_ancestor_user_rules_are_excluded(self):
+        data = self._hooks(Path("/h"), "core")
+        self.assertEqual(data["claudeMdExcludes"], ["/h/.claude/rules/**"])
+
+    def test_every_hook_is_exported(self):
+        shipped = set(json.loads((REPO / "export-allowlist.json").read_text())["hooks"]["core"])
+        text = (REPO / "templates/claude/settings.json").read_text()
+        for name in re.findall(r"hooks/([\w.-]+)", text):
+            if name != "profile-statusline.sh":
+                self.assertIn(name, shipped)
+
+    def test_kb_router_is_silent_without_an_index(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            done = subprocess.run(
+                [sys.executable, str(REPO / "core/hooks/kb-router.py")],
+                input=json.dumps({"prompt": "hello"}), capture_output=True, text=True,
+                check=False, env={**os.environ, "AGENTS_HOME": tmp})
+        self.assertEqual(done.returncode, 0)
+        self.assertEqual(done.stdout.strip(), "")
 
 
 class StandaloneInstallTests(_HomePatched):
@@ -3258,6 +3829,363 @@ class StandaloneUpgradeTests(_HomePatched):
         self.assertEqual(stamp["source"], f"file://{remote}")
         self.assertEqual(stamp["commit"], _git(remote, "rev-parse", "HEAD"))
         self.assertFalse(stamp["dirty"])
+
+
+class ProfileRefTests(_HomePatched):
+    """'A profile follows a kit branch or is pinned to a tag; update moves only the followed.'"""
+
+    def setUp(self):
+        super().setUp()
+        patcher = mock.patch.object(
+            privilege, "refuse_root",
+            lambda *_a, **_k: types.SimpleNamespace(pw_dir=str(self.home), pw_name="t"))
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        fin = mock.patch.object(profiles, "finish_appforks")
+        fin.start()
+        self.addCleanup(fin.stop)
+        self._install()
+        self.first = kithome.current_release(self.home)
+        self.skill = self._core_skill(self.checkout).name
+        self.original = (self.checkout / "core/skills" / self.skill / "SKILL.md").read_text()
+        self.clone = self.tmp / "kit-clone"
+        subprocess.run(["git", "clone", "-q", str(REPO), str(self.clone)], check=True,
+                       capture_output=True)
+        # CI checks out a detached HEAD, and a clone of that has no branch to return to.
+        self.main = "kit-main"
+        _git(self.clone, "checkout", "-q", "-B", self.main)
+
+    # -- fixtures
+    def _commit(self, text: str, *, tag: str | None = None, branch: str | None = None,
+                rel: str | None = None) -> str:
+        if branch:
+            _git(self.clone, "checkout", "-q", "-B", branch)
+        _put(self.clone, rel or f"core/skills/{self.skill}/SKILL.md", text)
+        _git(self.clone, "add", "-A")
+        _git(self.clone, "commit", "-q", "-m", f"change {text.strip()[:20]}")
+        if tag:
+            _git(self.clone, "tag", tag)
+        sha = _git(self.clone, "rev-parse", "HEAD")
+        _git(self.clone, "checkout", "-q", self.main)
+        return sha
+
+    def _create(self, name: str, **flags) -> str:
+        ns = {"name": name, "type": "core", "vendor": ["claude"], "color": None,
+              "headless": True, "apply": True, "force": False, "track": None, "pin": None,
+              "from_source": str(self.clone)}
+        out = io.StringIO()
+        with redirect_stdout(out):
+            self.assertEqual(profiles.cmd_create(argparse.Namespace(**{**ns, **flags})), 0)
+        return out.getvalue()
+
+    def _sync(self, name: str, **flags) -> str:
+        ns = {"name": name, "apply": True, "headless": None, "track": None, "pin": None,
+              "from_source": None, "unpin": False}
+        out = io.StringIO()
+        with redirect_stdout(out):
+            self.assertEqual(profiles.cmd_sync(argparse.Namespace(**{**ns, **flags})), 0)
+        return out.getvalue()
+
+    def _visible(self, name: str) -> str:
+        return (self.home / ".agents-profiles" / name / "agents/skills" / self.skill
+                / "SKILL.md").read_text()
+
+    def _prov(self, name: str) -> dict:
+        return instances.read_provenance(self.home / ".agents-profiles" / name / "claude")
+
+    def _main_variant(self, text: str) -> Path:
+        copy = self.tmp / f"main-{abs(hash(text))}"
+        kithome.copy_payload(self.checkout, copy, kithome.payload_files(self.checkout))
+        _put(copy, f"core/skills/{self.skill}/SKILL.md", text)
+        return copy
+
+    def _fetch(self, source: Path) -> str:
+        out = io.StringIO()
+        with redirect_stdout(out):
+            update.cmd_fetch(argparse.Namespace(from_source=str(source), ref="HEAD"))
+        return out.getvalue()
+
+    def _update(self, apply: bool = True) -> str:
+        out = io.StringIO()
+        with redirect_stdout(out):
+            update.cmd_apply(argparse.Namespace(profile=None, apply=apply, from_source=None,
+                                                ref=None))
+        return out.getvalue()
+
+    def _releases(self) -> set[str]:
+        return {p.name for p in kithome.releases_dir(self.home).iterdir()}
+
+    # -- pins
+    def test_a_pin_projects_from_the_tag_while_other_profiles_stay_on_current(self):
+        pinned = self._commit("pinned text\n", tag="v-pin")
+        self._commit("later text\n")
+        out = self._create("pinned", pin="v-pin")
+        self.assertIn("pinned to v-pin", out)
+        self.assertEqual(self._visible("pinned"), "pinned text\n")
+        self.assertEqual(self._visible("core"), self.original)
+        link = os.readlink(self.home / ".agents-profiles/pinned/agents/skills" / self.skill)
+        self.assertIn("/refs/pinned/core/skills/", link)
+        ref = self._prov("pinned")["kit_ref"]
+        self.assertEqual((ref["kind"], ref["ref"], ref["commit"]), ("pin", "v-pin", pinned))
+        self.assertEqual(self._prov("pinned")["source_commit"], pinned)
+        self.assertEqual(os.readlink(kithome.ref_link(self.home, "pinned")),
+                         f"../releases/{ref['release']}")
+        self.assertIsNone(self._prov("core").get("kit_ref"))
+
+    def test_update_apply_leaves_a_pinned_profile_on_its_pin_and_says_so(self):
+        self._commit("pinned text\n", tag="v-pin")
+        self._create("pinned", pin="v-pin")
+        out = self._fetch(self._main_variant("moved current\n")) + self._update()
+        self.assertEqual(self._visible("core"), "moved current\n")
+        self.assertEqual(self._visible("pinned"), "pinned text\n")
+        self.assertIn("skip   pinned/claude (pinned to v-pin @", out)
+        self.assertIn("devkit profile sync pinned --apply", out)
+        self.assertTrue((self.home / ".agents-profiles/pinned/agents/skills" / self.skill
+                         / "SKILL.md").exists())
+        self.assertIn(self._prov("pinned")["kit_ref"]["release"], self._releases())
+
+    def test_sync_unpin_returns_the_profile_to_current(self):
+        self._commit("pinned text\n", tag="v-pin")
+        self._create("pinned", pin="v-pin")
+        self._sync("pinned", unpin=True)
+        self.assertEqual(self._visible("pinned"), self.original)
+        link = os.readlink(self.home / ".agents-profiles/pinned/agents/skills" / self.skill)
+        self.assertIn("/current/core/skills/", link)
+        self.assertNotIn("kit_ref", self._prov("pinned"))
+        self.assertFalse(os.path.lexists(kithome.ref_link(self.home, "pinned")))
+        with self.assertRaises(DevkitError):
+            self._sync("pinned", unpin=True)
+
+    def test_sync_pin_repins_and_a_bare_sync_keeps_the_ref_without_fetching(self):
+        self._commit("one\n", tag="v1")
+        self._commit("two\n", tag="v2")
+        self._create("pinned", pin="v1")
+        first = self._prov("pinned")["kit_ref"]
+        self._sync("pinned", pin="v2")
+        self.assertEqual(self._visible("pinned"), "two\n")
+        second = self._prov("pinned")["kit_ref"]
+        self.assertEqual(second["previous_release"], first["release"])
+        shutil.rmtree(self.clone)  # a bare sync must not need the source
+        self._sync("pinned")
+        self.assertEqual(self._visible("pinned"), "two\n")
+        self.assertEqual(self._prov("pinned")["kit_ref"], second)
+
+    def test_a_dangling_ref_link_is_reported_by_doctor(self):
+        self._commit("pinned text\n", tag="v-pin")
+        self._create("pinned", pin="v-pin")
+        shutil.rmtree(kithome.ref_release(self.home, "pinned"))
+        out = io.StringIO()
+        with redirect_stdout(out):
+            rc = profiles.cmd_doctor(argparse.Namespace(profile="pinned"))
+        self.assertEqual(rc, 1)
+        self.assertIn("pinned/claude: its pin v-pin release is gone", out.getvalue())
+        self.assertIn("devkit profile sync pinned --pin v-pin --apply", out.getvalue())
+        with self.assertRaises(DevkitError) as caught:
+            self._sync("pinned")
+        self.assertIn("--pin v-pin", caught.exception.fix)
+
+    def test_doctor_reports_a_dangling_python_shim(self):
+        self._commit("pinned text\n", tag="v-pin")
+        self._create("pinned", pin="v-pin")
+        bin_dir = instances.paths_for("pinned", "claude", self.home)["bin_dir"]
+        bin_dir.mkdir(parents=True, exist_ok=True)
+        (bin_dir / "python3").symlink_to(self.home / "gone" / "python3.12")
+        out = io.StringIO()
+        with redirect_stdout(out):
+            rc = profiles.cmd_doctor(argparse.Namespace(profile="pinned"))
+        self.assertEqual(rc, 1)
+        self.assertIn("bin/python3 points at", out.getvalue())
+        self.assertIn("devkit profile sync pinned --apply", out.getvalue())
+
+    def test_doctor_judges_a_ref_by_its_own_commit(self):
+        self._commit("pinned text\n", tag="v-pin")
+        self._create("pinned", pin="v-pin")
+        out = io.StringIO()
+        with redirect_stdout(out):
+            profiles.cmd_doctor(argparse.Namespace(profile="pinned"))
+        self.assertNotIn("stale", out.getvalue())
+        out = io.StringIO()
+        with redirect_stdout(out):
+            profiles.cmd_list(argparse.Namespace())
+        self.assertIn("pin v-pin", out.getvalue())
+
+    def test_the_flags_are_mutually_exclusive_and_documented(self):
+        from devkit_cli import cli
+        parser = cli.build_parser()
+        for argv in (["profile", "create", "x", "--track", "a", "--pin", "b"],
+                     ["profile", "sync", "x", "--track", "a", "--unpin"],
+                     ["profile", "sync", "x", "--pin", "a", "--unpin"]):
+            with self.subTest(argv=argv), redirect_stdout(io.StringIO()), \
+                    mock.patch("sys.stderr", io.StringIO()), self.assertRaises(SystemExit) as c:
+                parser.parse_args(argv)
+            self.assertEqual(c.exception.code, 2)
+        create = run_devkit_help("profile", "create")
+        sync = run_devkit_help("profile", "sync")
+        for flag in ("--track", "--pin", "--from"):
+            self.assertIn(flag, create)
+            self.assertIn(flag, sync)
+        self.assertIn("--unpin", sync)
+        with self.assertRaises(DevkitError):
+            profiles.ref_spec(argparse.Namespace(track=None, pin=None, from_source="x"))
+
+    def test_a_newer_profile_schema_is_refused_and_nothing_is_written(self):
+        text = (self.clone / "devkit_cli/instances.py").read_text()
+        bumped = re.sub(r"PROFILE_SCHEMA_VERSION = (\d+)",
+                        lambda m: f"PROFILE_SCHEMA_VERSION = {int(m.group(1)) + 1}", text, count=1)
+        self._commit(bumped, tag="v-newer", rel="devkit_cli/instances.py")
+        before = self._releases()
+        with self.assertRaises(DevkitError) as caught:
+            self._create("pinned", pin="v-newer")
+        self.assertIn("update the kit first", caught.exception.fix)
+        self.assertEqual(self._releases(), before)
+        self.assertFalse(kithome.refs_dir(self.home).exists())
+        self.assertFalse((self.home / ".agents-profiles/pinned").exists())
+
+    def test_a_ref_with_another_release_layout_is_refused_and_nothing_is_written(self):
+        text = (self.clone / "devkit_cli/kithome.py").read_text()
+        self.assertIn('"path-contract.json")', text)
+        self._commit(text.replace('"path-contract.json")', '"path-contract.json", "extra")', 1),
+                     tag="v-layout", rel="devkit_cli/kithome.py")
+        before = self._releases()
+        with self.assertRaises(DevkitError) as caught:
+            self._create("pinned", pin="v-layout")
+        self.assertIn("release layout", str(caught.exception))
+        self.assertEqual(self._releases(), before)
+        self.assertFalse(kithome.refs_dir(self.home).exists())
+        self.assertEqual(kithome.current_release(self.home), self.first)
+
+    def test_a_dry_run_create_on_a_pin_writes_nothing(self):
+        self._commit("pinned text\n", tag="v-pin")
+        shutil.rmtree(kithome.kit_home(self.home))
+        shutil.rmtree(self.home / ".agents-profiles")
+        before = sorted(p.relative_to(self.home).as_posix() for p in self.home.rglob("*"))
+        out = self._create("pinned", pin="v-pin", apply=False)
+        self.assertIn("Dry run", out)
+        self.assertIn("ref    pinned -> pin v-pin @", out)
+        self.assertEqual(sorted(p.relative_to(self.home).as_posix()
+                                for p in self.home.rglob("*")), before)
+
+    def test_a_branch_to_pin_and_a_tag_to_track_are_refused(self):
+        self._commit("branch\n", branch="variant", tag="a-tag")
+        for flags in ({"pin": "variant"}, {"track": "a-tag"}):
+            with self.subTest(**flags), self.assertRaises(DevkitError):
+                self._create("pinned", **flags)
+        self.assertFalse((self.home / ".agents-profiles/pinned").exists())
+
+    # -- followed branches
+    def _tracked(self, text: str = "branch one\n") -> str:
+        self._commit(text, branch="variant")
+        self._create("tracked", track="variant")
+        return text
+
+    def test_a_tracked_profile_moves_with_the_branch_and_nothing_else_does(self):
+        self._commit("pinned text\n", tag="v-pin")
+        self._create("pinned", pin="v-pin")
+        self._tracked()
+        self.assertEqual(self._visible("tracked"), "branch one\n")
+        self.assertIn("tracking variant @", self._create_note())
+        tip = self._commit("branch two\n", branch="variant")
+        out = self._fetch(self.checkout)
+        self.assertEqual(len(list((self.tmp / "staged").glob("track-*"))), 1)
+        rel_before = self._prov("tracked")["kit_ref"]["release"]
+        out = self._update()
+        self.assertIn("move   tracked/claude track variant to " + tip[:8], out)
+        self.assertEqual(self._visible("tracked"), "branch two\n")
+        self.assertEqual(self._visible("pinned"), "pinned text\n")
+        self.assertEqual(self._visible("core"), self.original)
+        self.assertEqual(kithome.current_release(self.home), self.first,
+                         "a bare apply never installs a branch tip as current")
+        ref = self._prov("tracked")["kit_ref"]
+        self.assertEqual((ref["commit"], ref["previous_release"]), (tip, rel_before))
+        self.assertEqual(self._prov("tracked")["history"][-1]["to"], tip)
+        again = self._update()
+        self.assertIn("nothing to install", again)
+
+    def _create_note(self) -> str:
+        return "tracking variant @" if self._prov("tracked")["kit_ref"]["kind"] == "track" else ""
+
+    def test_prune_after_two_moves_keeps_the_current_and_the_previous_track_release(self):
+        self._tracked()
+        for text in ("branch two\n", "branch three\n"):
+            self._commit(text, branch="variant")
+            self._fetch(self.checkout)
+            self._update()
+        ref = self._prov("tracked")["kit_ref"]
+        releases = self._releases()
+        self.assertTrue({self.first.name, ref["release"], ref["previous_release"]} <= releases)
+        self.assertNotEqual(ref["release"], ref["previous_release"])
+        self.assertEqual(kithome.ref_release(self.home, "tracked").name, ref["release"])
+
+    def test_a_deleted_branch_is_a_note_and_the_profile_keeps_its_release(self):
+        self._tracked()
+        before = self._prov("tracked")["kit_ref"]
+        _git(self.clone, "branch", "-D", "variant")
+        out = self._fetch(self.checkout)
+        self.assertIn("note: tracked track variant:", out)
+        self.assertIn(f"staying on {before['commit'][:8]}", out)
+        self.assertEqual(list((self.tmp / "staged").glob("track-*")), [])
+        self._update()
+        self.assertEqual(self._prov("tracked")["kit_ref"], before)
+        self.assertEqual(self._visible("tracked"), "branch one\n")
+
+    def test_a_failure_during_a_move_flips_the_ref_back_and_restores_the_instance(self):
+        self._tracked()
+        before = self._prov("tracked")
+        link_before = kithome.ref_release(self.home, "tracked")
+        self._commit("branch two\n", branch="variant")
+        self._fetch(self.checkout)
+        with mock.patch("devkit_cli.profiles.materialize", side_effect=RuntimeError("boom")), \
+                self.assertRaises(DevkitError) as caught, redirect_stdout(io.StringIO()):
+            update.cmd_apply(argparse.Namespace(profile=None, apply=True, from_source=None,
+                                                ref=None))
+        self.assertIn("rolled back", str(caught.exception))
+        self.assertEqual(kithome.ref_release(self.home, "tracked"), link_before)
+        self.assertEqual(self._prov("tracked"), before)
+        self.assertEqual(self._visible("tracked"), "branch one\n")
+
+    def test_a_branch_of_another_fork_is_refused_at_create_and_noted_by_fetch(self):
+        fork = (self.clone / "devkit.yaml").read_text()
+        self.assertRegex(fork, r"fork_id: ")
+        forked = re.sub(r"fork_id: \S+", "fork_id: someone-else", fork, count=1)
+        _git(self.clone, "checkout", "-q", "-B", "forked")
+        _put(self.clone, "devkit.yaml", forked)
+        _git(self.clone, "commit", "-q", "-am", "another fork")
+        _git(self.clone, "checkout", "-q", self.main)
+        before = self._releases()
+        with self.assertRaises(DevkitError) as caught:
+            self._create("tracked", track="forked")
+        self.assertIn("devkit profile migrate", caught.exception.fix)
+        self.assertEqual(self._releases(), before)
+        self.assertFalse(kithome.refs_dir(self.home).exists())
+
+        self._tracked()
+        recorded = self._prov("tracked")["kit_ref"]
+        _git(self.clone, "checkout", "-q", "variant")
+        _put(self.clone, "devkit.yaml", forked)
+        _git(self.clone, "commit", "-q", "-am", "variant becomes another fork")
+        _git(self.clone, "checkout", "-q", self.main)
+        out = self._fetch(self.checkout)
+        self.assertIn("note: tracked track variant:", out)
+        self.assertEqual(list((self.tmp / "staged").glob("track-*")), [])
+        self.assertEqual(self._prov("tracked")["kit_ref"], recorded)
+
+    def test_update_check_shows_pinned_and_track_state(self):
+        self._commit("pinned text\n", tag="v-pin")
+        self._create("pinned", pin="v-pin")
+        self._tracked()
+        out = io.StringIO()
+        with redirect_stdout(out):
+            update.cmd_check(argparse.Namespace(profile=None, from_source=str(self.checkout),
+                                                ref=None))
+        text = out.getvalue()
+        self.assertIn("pinned v-pin", text)
+        self.assertIn("track variant: up to date", text)
+        self._commit("branch two\n", branch="variant")
+        out = io.StringIO()
+        with redirect_stdout(out):
+            update.cmd_check(argparse.Namespace(profile=None, from_source=str(self.checkout),
+                                                ref=None))
+        self.assertIn("track variant: update available", out.getvalue())
 
 
 class SelfHealingUpgradeTests(_HomePatched):
@@ -3862,6 +4790,119 @@ class HeadlessTests(unittest.TestCase):
             self.assertNotIn(want, doctor())
             self._materialize(home, False, name="loud")
             self.assertIn(want, doctor())
+
+
+class PythonFloorTests(unittest.TestCase):
+    def _which(self, table):
+        return lambda name: table.get(name)
+
+    def _run(self, versions):
+        """subprocess.run stand-in: versions maps interpreter path -> meets the floor."""
+        def run(cmd, **_kw):
+            return types.SimpleNamespace(returncode=0 if versions[cmd[0]] else 1)
+        return run
+
+    def test_finder_prefers_python3_when_it_meets_the_floor(self):
+        which = self._which({"python3": "/usr/bin/python3", "python3.13": "/usr/bin/python3.13"})
+        with mock.patch.object(pyfloor.shutil, "which", which), \
+                mock.patch.object(pyfloor.subprocess, "run",
+                                  self._run({"/usr/bin/python3": True, "/usr/bin/python3.13": True})):
+            self.assertEqual(pyfloor.find_python(), "/usr/bin/python3")
+
+    def test_finder_skips_an_old_python3_and_takes_313_before_312(self):
+        which = self._which({"python3": "/usr/bin/python3", "python3.13": "/usr/bin/python3.13",
+                             "python3.12": "/usr/bin/python3.12"})
+        versions = {"/usr/bin/python3": False, "/usr/bin/python3.13": True,
+                    "/usr/bin/python3.12": True}
+        with mock.patch.object(pyfloor.shutil, "which", which), \
+                mock.patch.object(pyfloor.subprocess, "run", self._run(versions)):
+            self.assertEqual(pyfloor.find_python(), "/usr/bin/python3.13")
+
+    def test_finder_returns_none_when_nothing_meets_the_floor(self):
+        which = self._which({"python3": "/usr/bin/python3"})
+        with mock.patch.object(pyfloor.shutil, "which", which), \
+                mock.patch.object(pyfloor.subprocess, "run", self._run({"/usr/bin/python3": False})):
+            self.assertIsNone(pyfloor.find_python())
+
+    def test_guard_is_a_noop_on_the_floor(self):
+        with mock.patch.object(pyfloor.os, "execv") as execv:
+            pyfloor.reexec_if_old(["devkit"])
+        execv.assert_not_called()
+
+    def test_guard_reexecs_under_the_found_interpreter(self):
+        with mock.patch.object(pyfloor.sys, "version_info", (3, 9, 18)), \
+                mock.patch.dict(os.environ, {}, clear=False), \
+                mock.patch.object(pyfloor, "find_python", return_value="/usr/bin/python3.12"), \
+                mock.patch.object(pyfloor.os, "execv") as execv:
+            os.environ.pop(pyfloor.GUARD_ENV, None)
+            pyfloor.reexec_if_old(["./devkit", "deps"])
+            self.assertEqual(os.environ[pyfloor.GUARD_ENV], "1")
+        execv.assert_called_once_with("/usr/bin/python3.12",
+                                      ["/usr/bin/python3.12", "./devkit", "deps"])
+
+    def test_guard_exits_2_with_the_fix_when_none_is_found(self):
+        err = io.StringIO()
+        with mock.patch.object(pyfloor.sys, "version_info", (3, 9, 18)), \
+                mock.patch.object(pyfloor, "find_python", return_value=None), \
+                mock.patch.object(pyfloor.sys, "stderr", err), \
+                self.assertRaises(SystemExit) as caught:
+            pyfloor.reexec_if_old(["devkit"])
+        self.assertEqual(caught.exception.code, 2)
+        self.assertIn("sudo dnf install python3.12", err.getvalue())
+        self.assertIn("./bootstrap.sh", err.getvalue())
+
+    def test_guard_does_not_loop_when_the_reexec_is_still_too_old(self):
+        with mock.patch.object(pyfloor.sys, "version_info", (3, 9, 18)), \
+                mock.patch.dict(os.environ, {pyfloor.GUARD_ENV: "1"}), \
+                mock.patch.object(pyfloor, "find_python", return_value="/usr/bin/python3.12"), \
+                mock.patch.object(pyfloor.os, "execv") as execv, \
+                mock.patch.object(pyfloor.sys, "stderr", io.StringIO()), \
+                self.assertRaises(SystemExit) as caught:
+            pyfloor.reexec_if_old(["devkit"])
+        self.assertEqual(caught.exception.code, 2)
+        execv.assert_not_called()
+
+    def test_profile_python_is_the_bare_name_when_python3_meets_the_floor(self):
+        with mock.patch.object(instances.shutil, "which", return_value="/usr/bin/python3"), \
+                mock.patch.object(pyfloor, "meets_floor", return_value=True):
+            self.assertEqual(instances.profile_python(), "python3")
+
+    def test_profile_python_is_absolute_when_python3_is_too_old(self):
+        with mock.patch.object(instances.shutil, "which", return_value="/usr/bin/python3"), \
+                mock.patch.object(pyfloor, "meets_floor", return_value=False), \
+                mock.patch.object(pyfloor, "find_python", return_value="/usr/bin/python3.12"):
+            self.assertEqual(instances.profile_python(), "/usr/bin/python3.12")
+
+    def test_auth_scripts_render_the_same_text_when_python3_meets_the_floor(self):
+        profile = manifest.load("core")
+        for name in ("launch.sh", "dispatch.sh"):
+            template = (REPO / "templates" / "auth" / name).read_text(encoding="utf-8")
+            with self.subTest(name=name):
+                with mock.patch.object(instances, "profile_python", return_value="python3"):
+                    tokens = instances.render_tokens(profile, "claude", Path("/home/x"))
+                self.assertIn("exec python3 -m devkit_cli.auth", instances.render(template, tokens))
+                with mock.patch.object(instances, "profile_python",
+                                       return_value="/usr/bin/python3.12"):
+                    tokens = instances.render_tokens(profile, "claude", Path("/home/x"))
+                self.assertIn("exec /usr/bin/python3.12 -m devkit_cli.auth",
+                              instances.render(template, tokens))
+
+    def test_shim_is_written_only_when_python3_is_too_old_and_removed_after(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            bin_dir = Path(tmp) / "bin"
+            layout = {"bin_dir": bin_dir}
+            shim = bin_dir / "python3"
+            with mock.patch.object(profiles, "relative_to_home", side_effect=str):
+                profiles._sync_python_shim(Plan(True), layout, {"PROFILE_PYTHON": "python3"})
+                self.assertFalse(shim.is_symlink())
+                profiles._sync_python_shim(Plan(False), layout,
+                                           {"PROFILE_PYTHON": "/usr/bin/python3.12"})
+                self.assertFalse(shim.is_symlink())  # a dry run writes nothing
+                profiles._sync_python_shim(Plan(True), layout,
+                                           {"PROFILE_PYTHON": "/usr/bin/python3.12"})
+                self.assertEqual(shim.readlink(), Path("/usr/bin/python3.12"))
+                profiles._sync_python_shim(Plan(True), layout, {"PROFILE_PYTHON": "python3"})
+                self.assertFalse(shim.is_symlink())
 
 
 if __name__ == "__main__":

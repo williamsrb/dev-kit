@@ -16,9 +16,11 @@ prose: caveman-lite
 
 1. **Pin `@enonic/react4xp` to an exact version, not a caret range.** `"^6.0.2"` resolves to `6.1.0` via npm, which requires `react: ^19` — silently breaking a React-18-pinned "Phase A" migration step. Use `"6.0.2"` (no caret) when the goal is React4XP 6.0.x while staying on React 18.
 2. **`lib-guillotine` bundles `lib-cache` transitively.** Removing `lib-guillotine` from `build.gradle` without adding `include 'com.enonic.lib:lib-cache:2.2.1'` explicitly leaves any code that does `require('/lib/cache')` broken at runtime with no compile-time signal (XP `include`s aren't transitive). Audit the built JAR after any `include` removal:
+
    ```bash
    unzip -qo build/libs/<app>-*.jar -d /tmp/scan && grep -rhoE "require\(['\"]/lib/[^'\"]+" /tmp/scan | sed -E "s/require\(['\"]//" | sort -u
    ```
+
    Every `/lib/xp/<name>` and `/lib/<name>` found must have a matching `include` in `build.gradle`.
 3. **Webpack→Rspack CSS swap** (React4XP 6's build pipeline): replace `mini-css-extract-plugin` with `rspack.CssExtractRspackPlugin`, add `esModule: false` to `css-loader` options, add a `woff|woff2|eot|ttf|otf` → `asset/resource` rule, and give `filename`/`chunkFilename` a `[contenthash:9]`. The admin tool controller must read filenames from `stats.components.json` (not hardcode `[name].css`) — verify this before assuming CSS breaks.
 4. **XP minor-version bump has a real runtime floor.** `app.systemVersion = "${xpVersion}"` in `build.gradle` becomes an actual OSGi version range (e.g. bumping `xpVersion` to `7.16.7` makes the app require `[7.16.0,8.0.0)`). If the dev sandbox's Docker image is still on an older 7.x (e.g. `7.15.3`), the app installs but logs `WARN ... has an invalid system version range` and **does not fully start** (silent — no admin-tool error page, just a missing `BundleEvent STARTED` for the app bundle). The `leanon/enonic-xp` Docker Hub repo does not publish every patch version — check available tags (`curl -s "https://hub.docker.com/v2/repositories/leanon/enonic-xp/tags?page_size=100"`) and use the newest available tag in the target minor line (tags in the 7.16.x line are `-nodeNN` suffixed only, no bare tag).
@@ -33,9 +35,11 @@ If a migration plan says "verified: semantic-ui-react does NOT use `findDOMNode`
 `RefFindNode`/`react-component-ref` is used internally by `Sidebar`, `Button`, `Input`, `Modal`, `Checkbox`, `Dropdown`, `Portal`, `Sticky`, `TextArea`, `Dimmer`, `Popup`, and `Visibility` (check `grep -rl "RefFindNode\|react-component-ref" node_modules/semantic-ui-react/dist/commonjs/`). If any of these are used anywhere in the app's top-level layout (e.g. a `Sidebar` wrapping the whole page), the **entire app fails to render**, not just the specific component.
 
 **Practical takeaway:** before greenlighting a React 18→19 bump for an app using `semantic-ui-react` 2.x, run this check yourself — don't trust a prior plan's `findDOMNode` verification unless it explicitly covered transitive deps:
+
 ```bash
 grep -rl 'findDOMNode' node_modules/ 2>/dev/null | grep -v '/umd/\|\.map$\|LICENSE'
 ```
+
 If `@fluentui/react-component-ref` (or any other transitive dep) shows up, React 19 is not viable via a small prop shim — treat it the same as "Option 2: replace Semantic UI React" in scope, or stay on React 18.
 
 **Debugging technique for "the app renders blank, zero console output" under React 19:** patch `console.error`, `console.warn`, and `window.reportError`, and add a `window.addEventListener('error', ...)` listener *before* triggering the render — React 19 surfaces some uncaught render/commit errors only through the `error` DOM event (via `reportError`), not through `console.error` or a rejected promise. A `read_console_messages`-style tool that only taps `console.*` will show nothing even though a real, fatal `TypeError` occurred.

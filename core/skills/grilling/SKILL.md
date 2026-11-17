@@ -1,8 +1,9 @@
 ---
 name: grilling
-description: "Stress-test a plan, decision, or idea by grilling the user. Use on any 'grill' trigger or when they want their thinking challenged. | recommendedRole: quality-gate."
+description: "Stress-test a plan, decision, or idea by grilling the user. Use on any 'grill' trigger or when they want their thinking challenged."
 metadata:
   recommendedRole: quality-gate
+  aliases: grill-me
 ---
 
 Interview the user relentlessly until you reach a shared understanding. Map this as a **design tree**: every decision branches into the decisions that hang off it.
@@ -11,7 +12,7 @@ Work the tree in **rounds**. The **frontier** is every decision whose prerequisi
 
 Each question should be formatted like so:
 
-```
+```text
 ❓ **Q1** - **<question title>**: <question body, might be multiple paragraphs, including multiple choices>
 
 ➡️ <your recommended answer>

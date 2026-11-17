@@ -30,6 +30,7 @@ def git(args: list[str], cwd: Path | None = None) -> subprocess.CompletedProcess
         cwd=str(cwd) if cwd else None,
         capture_output=True,
         text=True,
+        check=False,
     )
 
 
@@ -74,7 +75,7 @@ def has_recent_mtime(repo: Path, start: float, end: float) -> bool:
 def relative_to_projects(repo: Path) -> str:
     prefix = str(PROJECTS_ROOT) + os.sep
     text = str(repo)
-    return text[len(prefix):] if text.startswith(prefix) else text
+    return text.removeprefix(prefix)
 
 
 def main() -> int:
@@ -102,13 +103,13 @@ def main() -> int:
         prompts = sorted(str(p) for p in history_dir.glob("*_prompt.md"))
         for path in prompts:
             print(path)
-        print("")
+        print()
         print("--- prompt count ---")
         print(len(prompts))
     else:
         print(f"(folder missing: {history_dir})")
 
-    print("")
+    print()
     print(f"=== GIT REPOS WITH ACTIVITY ({date_str}) ===")
 
     for git_dir in find_git_dirs(PROJECTS_ROOT):
@@ -140,7 +141,7 @@ def main() -> int:
             remote = remote_res.stdout.strip() if remote_res.returncode == 0 else "(no origin)"
             branch_res = git(["rev-parse", "--abbrev-ref", "HEAD"], cwd=repo)
             branch = branch_res.stdout.strip() if branch_res.returncode == 0 else "?"
-            print("")
+            print()
             print(f"REPO|{rel}|branch={branch}|remote={remote}")
 
             if has_commit:
@@ -150,12 +151,12 @@ def main() -> int:
             if has_mtime and not has_commit:
                 print("NOTE|uncommitted changes or file edits today (no commits)")
 
-    print("")
+    print()
     print("=== GIT AUTHOR FILTER (for your commits) ===")
     print(f"name={git_name}")
     print(f"email={git_author}")
 
-    print("")
+    print()
     print("=== SLACK (collect via MCP — ALL workspaces) ===")
     print("Slack MCP is parked. Enable first: ~/.agents/kb/implementation/How-to-enable-playwright-mcp.md (Slack section).")
     print(f"DATE={date_str}")

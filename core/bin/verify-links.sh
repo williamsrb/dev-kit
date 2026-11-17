@@ -25,9 +25,9 @@ ROOTS=("$AGENTS" "$HOME_DIR/.cursor" "$HOME_DIR/.claude")
 # because it knows per-vendor which projections apply. Same reason `~/.codex` is absent from
 # ROOTS: `.codex/rules/default.rules` is Codex's own config.
 SHARED=(history hooks kb plans prds rules skills)
-# Claude Code auto-loads every ~/.claude/rules/*.md. The constitution is already
-# prepended in AGENTS.md and ingested via CLAUDE.md, so a whole-dir symlink of
-# ~/.agents/rules would double-load BASE. Cursor still whole-dir-links rules/.
+# Claude Code auto-loads every ~/.claude/rules/*.md, so ~/.claude/rules must link to the
+# generated ~/.agents/rules/claude (BASE once), never to ~/.agents/rules (BASE again via
+# AGENTS.md). Cursor still whole-dir-links rules/.
 CLAUDE_RULES_PATHS=(
   "$HOME_DIR/.claude/rules"
 )
@@ -103,7 +103,7 @@ for root in "${ROOTS[@]:1}"; do
 done
 printf '   %s\n' "$( ((tangible==0)) && echo 'clean' || echo "$tangible found" )"
 
-hdr "Claude does not whole-dir-link rules (BASE already in CLAUDE.md)"
+hdr "Claude rules dir is the generated rules/claude, not the shared rules dir"
 for p in "${CLAUDE_RULES_PATHS[@]}"; do
   if [[ ! -e "$p" && ! -L "$p" ]]; then
     printf '   \033[32mok\033[0m        %s absent\n' "$p"
@@ -111,7 +111,7 @@ for p in "${CLAUDE_RULES_PATHS[@]}"; do
   fi
   tgt="$(readlink -f "$p" 2>/dev/null || true)"
   if [[ "$tgt" == "$AGENTS/rules" ]]; then
-    hit CROSS "$p -> $tgt (Claude auto-loads *.md; BASE is already in CLAUDE.md)"
+    hit CROSS "$p -> $tgt (link rules/claude instead; Claude auto-loads *.md)"
     cross=$((cross+1))
     continue
   fi

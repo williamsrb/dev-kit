@@ -8,7 +8,9 @@ that id's output-dir, and optionally registers `playwright-<id>` on a vendor.
 
   python3 ~/.agents/mcp/playwright.py spawn PROJ-101 PROJ-102 --enable
     python3 ~/.agents/mcp/playwright.py spawn PROJ-101 --storage-state ~/.agents/.auth/user.json
+    python3 ~/.agents/mcp/playwright.py revive PROJ-101
     python3 ~/.agents/mcp/playwright.py revive
+    python3 ~/.agents/mcp/playwright.py revive --all
     python3 ~/.agents/mcp/playwright.py revive --default
     python3 ~/.agents/mcp/playwright.py list
     python3 ~/.agents/mcp/playwright.py stop PROJ-101
@@ -202,6 +204,32 @@ def copy_storage_state(src: Path, dest_dir: Path) -> Path:
     return dest
 
 
+def extra_storage_destinations(sources: list[str], out_dir: Path) -> list[tuple[Path, Path]]:
+    """Planned (source, copy) pairs for --extra-storage-state. Copies land in <output_dir>/auth/ next to the roots."""
+    pairs: list[tuple[Path, Path]] = []
+    seen: dict[str, Path] = {}
+    for raw in sources:
+        src = Path(os.path.expanduser(raw)).resolve()
+        if not src.is_file():
+            raise SystemExit(f"extra storage-state not found: {src}")
+        if src.name in seen:
+            raise SystemExit(f"two extra storage states share the name {src.name}: {seen[src.name]} and {src}; "
+                             "rename one, a silent overwrite would log in as the wrong realm")
+        seen[src.name] = src
+        pairs.append((src, out_dir / "auth" / src.name))
+    return pairs
+
+
+def copy_extra_storage_states(sources: list[str], out_dir: Path, dry_run: bool) -> list[str]:
+    pairs = extra_storage_destinations(sources, out_dir)
+    if not dry_run and pairs:
+        (out_dir / "auth").mkdir(parents=True, exist_ok=True)
+        for src, dest in pairs:
+            shutil.copy2(src, dest)
+            dest.chmod(0o600)
+    return [str(dest) for _, dest in pairs]
+
+
 def pick_storage_state(
     requested: str | None,
     existing: dict[str, Any] | None,
@@ -286,7 +314,12 @@ def iter_instance_ids(requested: list[str], all_flag: bool) -> list[str]:
     return [sanitize_id(item) for item in requested]
 
 
-def dead_instance_ids() -> list[str]:
+def dead_instance_ids(include_stopped: bool = False) -> list[str]:
+    """Dead instances. A clean `stop` clears the pid, a crash or reboot leaves it set.
+
+    Without include_stopped only the pid-left-behind ones count, so an instance the
+    operator stopped on purpose is not brought back.
+    """
     ids: list[str] = []
     if not INSTANCES.is_dir():
         return ids
@@ -296,7 +329,9 @@ def dead_instance_ids() -> list[str]:
         except json.JSONDecodeError:
             continue
         instance_id = str(state.get("id") or path.parent.name)
-        if not pid_alive(state.get("pid")):
+        if pid_alive(state.get("pid")):
+            continue
+        if state.get("pid") or include_stopped:
             ids.append(instance_id)
     return ids
 
@@ -314,8 +349,14 @@ def cmd_list(_args: argparse.Namespace) -> int:
 
 def start_instance(args: argparse.Namespace, instance_id: str) -> dict[str, Any]:
     existing = load_state(instance_id)
+    extra_sources = getattr(args, "extra_storage_state", None) or []
+    extras = copy_extra_storage_states(
+        extra_sources, output_dir_for(instance_id, args.output_dir if len(args.ids) == 1 else None), args.dry_run)
     if existing and pid_alive(existing.get("pid")):
         if not loopback_url_needs_fix(existing):
+            if extras and not args.dry_run:
+                existing = {**existing, "extra_storage_states": extras}
+                save_state(instance_id, existing)
             return {**existing, "alive": True, "reused": True}
         stop_pid(int(existing["pid"]))
         existing = {**existing, "pid": None, "alive": False}
@@ -373,6 +414,7 @@ def start_instance(args: argparse.Namespace, instance_id: str) -> dict[str, Any]
         "output_dir": str(out_dir),
         "config": str(config_path),
         "storage_state": str(storage) if storage else None,
+        "extra_storage_states": extras or (existing or {}).get("extra_storage_states", []),
         "headed": bool(args.headed),
         "extension": bool(args.extension),
         "command": cmd,
@@ -693,11 +735,11 @@ def cmd_stop(args: argparse.Namespace) -> int:
             stop_pid(int(pid))
         if not args.keep_mcp:
             disable_vendors(state.get("name") or server_name(instance_id), vendors, args.dry_run)
-        if state_path := instance_state_path(instance_id):
-            if state_path.is_file() and not args.dry_run:
-                state["alive"] = False
-                state["pid"] = None
-                save_state(instance_id, state)
+        state_path = instance_state_path(instance_id)
+        if state_path and state_path.is_file() and not args.dry_run:
+            state["alive"] = False
+            state["pid"] = None
+            save_state(instance_id, state)
         stopped.append(
             {
                 "id": instance_id,
@@ -739,7 +781,14 @@ def cmd_disable(args: argparse.Namespace) -> int:
 
 
 def cmd_revive(args: argparse.Namespace) -> int:
-    ids = dead_instance_ids()
+    if args.ids:
+        states = {sanitize_id(item): load_state(sanitize_id(item)) for item in args.ids}
+        unknown = [i for i, state in states.items() if not state]
+        if unknown:
+            raise SystemExit(f"no instance {', '.join(unknown)}; use spawn")
+        ids = [i for i, state in states.items() if not pid_alive(state.get("pid"))]
+    else:
+        ids = dead_instance_ids(include_stopped=args.all)
     if not ids and args.default:
         ids = ["default"]
     if not ids:
@@ -760,6 +809,8 @@ def cmd_revive(args: argparse.Namespace) -> int:
 def add_spawn_flags(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--output-dir", help="Override output-dir (single id only).")
     parser.add_argument("--storage-state", help="Playwright storageState JSON to copy into the instance.")
+    parser.add_argument("--extra-storage-state", action="append", default=[],
+                        help="Another realm's storageState JSON, copied to <output_dir>/auth/ (repeatable).")
     parser.add_argument("--viewport-size", help='Viewport, e.g. "1440x900".')
     parser.add_argument("--caps", help="Comma-separated capabilities (default: vision,pdf,devtools,network,storage,testing).")
     parser.add_argument("--headed", action="store_true", help="Visible browser instead of headless.")
@@ -788,8 +839,10 @@ def build_parser() -> argparse.ArgumentParser:
 
     revive = sub.add_parser(
         "revive",
-        help="Re-spawn every dead instance from the registry (post-reboot). Enables vendor URLs.",
+        help="Re-spawn named instances, or those that died unexpectedly (post-reboot). Enables vendor URLs.",
     )
+    revive.add_argument("ids", nargs="*", help="Only these ids. Default: instances that crashed, not ones that were stopped.")
+    revive.add_argument("--all", action="store_true", help="With no ids, also revive instances that were stopped on purpose.")
     add_spawn_flags(revive)
     revive.add_argument(
         "--default",

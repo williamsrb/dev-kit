@@ -386,7 +386,7 @@ def main(argv: list[str] | None = None) -> int:
     install_p.add_argument("--dry-run", action="store_true")
     install_p.add_argument("--rg-dir", type=Path, default=CURSOR_RG_DIR)
     install_p.add_argument("--source", type=Path, default=Path(__file__).resolve())
-    cmp_p = sub.add_parser("compare-json", help="TBD-3 content JSON fixture")
+    cmp_p = sub.add_parser("compare-json", help="content JSON fixture")
     cmp_p.add_argument("--stock", type=Path, required=True)
     cmp_p.add_argument("--tgrep", type=Path, required=True)
     cmp_p.add_argument("--cwd", type=Path, required=True)

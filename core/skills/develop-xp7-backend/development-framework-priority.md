@@ -12,6 +12,7 @@ Use this file to pick the shortest doc path for XP backend tasks.
 - TypeScript: <https://developer.enonic.com/docs/xp/stable/development/typescript>
 
 When to consult:
+
 - Environment/setup/build failures -> Sandboxes, Building, Configuration
 - Project structure/runtime code loading -> Code
 - TS compile/type/runtime mismatch -> TypeScript
@@ -38,6 +39,7 @@ When to consult:
 - Java bridge: <https://developer.enonic.com/docs/xp/stable/framework/java-bridge>
 
 Entrypoint mapping:
+
 - `site` / `admin` / `webapp` / `http` handlers -> Controllers + HTTP
 - Request interception/normalization -> Filters
 - Background or long-running jobs -> Tasks

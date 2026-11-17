@@ -1,6 +1,6 @@
 ---
 name: spawn-playwright-mcp
-description: "Spawn, revive, list, or stop on-demand Playwright MCP HTTP instances. Use after a reboot, when playwright MCP is missing/disconnected, or when you need a browser MCP outside plan-task-evidence. Not the Playwright CLI. | recommendedRole: follow | aliases: playwright-mcp, revive-playwright-mcp, enable-playwright-mcp."
+description: "Spawn, revive, list, or stop on-demand Playwright MCP HTTP instances. Use after a reboot, when playwright MCP is missing/disconnected, or when you need a browser MCP outside plan-task-evidence. Not the Playwright CLI."
 metadata:
   recommendedRole: follow
   aliases: playwright-mcp, revive-playwright-mcp, enable-playwright-mcp

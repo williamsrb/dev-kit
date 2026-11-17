@@ -1,6 +1,6 @@
 ---
 name: develop-react4xp-v5
-description: "Maintain legacy Enonic React4XP 5.x on XP 7. Use for existing 5.x apps. Prefer develop-react4xp-v6 for new XP 7 work; develop-react4xp-v7 for XP 8. | recommendedRole: build | aliases: react4xp-v5, react4xp-5.x."
+description: "Maintain legacy Enonic React4XP 5.x on XP 7. Use for existing 5.x apps. Prefer develop-react4xp-v6 for new XP 7 work; develop-react4xp-v7 for XP 8."
 metadata:
   recommendedRole: build
   aliases: react4xp-v5, react4xp-5.x
@@ -17,6 +17,7 @@ Run `agentctl docs search '<focused query>' --db ~/.agents/.cache/offline-docs.s
 ## When to use
 
 Apply this skill for **React4XP 5.x** (docs under `/learn/react4xp-tutorial/5.x`) **maintenance only** on **XP 7**:
+
 - Existing 5.x apps — bugfixes and small changes
 - React4XP app setup and starter structure (legacy)
 - XP controller rendering with `/lib/enonic/react4xp`
@@ -26,6 +27,7 @@ Apply this skill for **React4XP 5.x** (docs under `/learn/react4xp-tutorial/5.x`
 - Build/runtime behavior (`enonic dev`, production build, hydration/SSR)
 
 Routing:
+
 - **XP 8 / React4XP stable (7.x)** → `develop-react4xp-v7`
 - **XP 7 / new React4XP** → `develop-react4xp-v6` (6.x)
 - **XP 7 / legacy 5.x maintenance only** → this skill
@@ -38,7 +40,7 @@ Docs live under `~/.agents/kb/offline-reference/react4xp-5.x` (not under this sk
 
 1. Route via `~/.agents/kb/offline-reference/react4xp-5.x/llm-index.md` (leaf index; this catalog is not a folder chooser).
 2. Read files under `~/.agents/kb/offline-reference/react4xp-5.x/learn/react4xp-tutorial/5.x...`.
-3. Online: https://developer.enonic.com/learn/react4xp-tutorial/5.x
+3. Online: <https://developer.enonic.com/learn/react4xp-tutorial/5.x>
 
 Refresh (from this skill directory; default output is the KB path above):
 
@@ -59,6 +61,7 @@ python3 scripts/sync-react4xp-docs.py
 ## Standard file map
 
 Use these as defaults unless the project already defines alternatives:
+
 - `src/main/resources/react4xp/entries/App.tsx`
 - `src/main/resources/react4xp/componentRegistry.tsx`
 - `src/main/resources/react4xp/dataFetcher.ts`
@@ -132,6 +135,7 @@ React4XP Task Progress
 ## Output expectations
 
 When completing a React4XP task:
+
 - State which registry/fetcher entries were added/changed
 - State which XP/React files were touched
 - Note edit-mode vs live-mode behavior implications

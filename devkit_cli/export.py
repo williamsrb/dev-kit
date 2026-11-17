@@ -14,6 +14,7 @@ import fnmatch
 import json
 import shutil
 import subprocess
+from collections.abc import Sequence
 from pathlib import Path
 
 from . import scrub
@@ -91,11 +92,11 @@ def selected_files(source: Path, allowlist: dict, layers: set[str]) -> dict[str,
                     continue
                 chosen[rel] = path
 
-    for section, prefix in (("skills", "skills"), ("rules", "rules"), ("bin", "bin"),
+    for section, prefix in (("root", ""), ("skills", "skills"), ("rules", "rules"), ("bin", "bin"),
                             ("bin_vendor", "bin-vendor"), ("hooks", "hooks"),
                             ("benchmarks", "benchmarks"), ("mcp", "mcp"),
                             ("config", "config"), ("agents", "agents"), ("kb", "kb"),
-                            ("vendor", "vendor")):
+                            ("vendor", "vendor"), ("docs", "docs")):
         block = allowlist.get(section) or {}
         for layer in layers:
             entries = block.get(layer)
@@ -110,13 +111,35 @@ def selected_files(source: Path, allowlist: dict, layers: set[str]) -> dict[str,
     return chosen
 
 
-def _render(src: Path, rel: str, rules: scrub.Rules | None) -> bytes | None:
+def load_overlays() -> list[dict]:
+    path = repo_file("export-overlays.json")
+    return load_json(path, "export overlays").get("overlays", []) if path.is_file() else []
+
+
+def render_text(rel: str | None, text: str, overlays: Sequence[dict]) -> str:
+    """unrender_home plus the kit-only overlays registered for this core/ path."""
+    text = unrender_home(text)
+    for overlay in overlays:
+        if overlay["path"] != rel:
+            continue
+        lines = text.split("\n")
+        if overlay["after"] not in lines:
+            raise DevkitError(f"overlay anchor not found in {rel}: {overlay['after'][:60]}",
+                              "update export-overlays.json to match the harness text")
+        at = lines.index(overlay["after"]) + 1
+        lines[at:at] = ["", overlay["insert"]]
+        text = "\n".join(lines)
+    return text
+
+
+def _render(src: Path, rel: str, rules: scrub.Rules | None,
+            overlays: Sequence[dict] = ()) -> bytes | None:
     """The bytes core/ should hold for this file, or None for a symlink."""
     if src.is_symlink():
         return None
     if src.suffix in TEXT_SUFFIXES:
         try:
-            text = unrender_home(src.read_text(encoding="utf-8"))
+            text = render_text(rel, src.read_text(encoding="utf-8"), overlays)
         except UnicodeDecodeError:
             return src.read_bytes()
     else:
@@ -148,6 +171,9 @@ def _same(src: Path, dest: Path, rendered: bytes | None) -> bool:
     if rendered is None or dest.is_symlink():
         return (rendered is None and dest.is_symlink()
                 and src.readlink() == dest.readlink())
+    # A script that only gained its executable bit is still behind.
+    if dest.is_file() and (src.stat().st_mode ^ dest.stat().st_mode) & 0o111:
+        return False
     return dest.is_file() and dest.read_bytes() == rendered
 
 
@@ -199,6 +225,27 @@ def gitleaks_scan(target: Path) -> tuple[bool, str]:
     return True, "gitleaks: clean"
 
 
+def uncommitted(source: Path, stale: Sequence[str], orphans: Sequence[str]) -> list[str]:
+    """The planned changes whose source side is not in the source's HEAD commit.
+
+    A changed or new file counts when it is untracked or differs from HEAD (staged or not); a removal
+    counts when the file's deletion is not committed. The export ships to everyone who installs the
+    kit, so in-flight harness work must not ride along with it.
+    """
+    def git(*argv: str) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(["git", "-C", str(source), *argv], capture_output=True, text=True, check=False)
+
+    tracked = git("ls-files", "-z")
+    changed = git("diff", "--name-only", "--no-renames", "--relative", "-z", "HEAD")
+    if tracked.returncode != 0 or changed.returncode != 0:
+        raise DevkitError(f"export source {source} is not a git checkout with a commit, so nothing in it is committed",
+                          "commit the harness, then re-run")
+    known = set(tracked.stdout.split("\0"))
+    dirty = set(changed.stdout.split("\0"))
+    return sorted([rel for rel in stale if rel not in known or rel in dirty]
+                  + [rel for rel in orphans if rel in dirty])
+
+
 def cmd_export(args) -> int:
     require_checkout("export")
     allowlist = load_json(repo_file("export-allowlist.json"), "export allowlist")
@@ -212,7 +259,8 @@ def cmd_export(args) -> int:
         raise DevkitError(f"the allowlist selected nothing under {source}",
                           "check 'source' in export-allowlist.json")
     files = scrubbed_paths(chosen, rules)
-    rendered = {dest: _render(path, rel, rules) for dest, (rel, path) in files.items()}
+    overlays = load_overlays()
+    rendered = {dest: _render(path, rel, rules, overlays) for dest, (rel, path) in files.items()}
     leaks = scrub_leaks(rules, rendered)
     if leaks:
         print("\n".join(f"  leak: {line}" for line in leaks[:20]))
@@ -232,6 +280,17 @@ def cmd_export(args) -> int:
     extras = sorted(existing - set(files))
     orphans = [rel for rel in extras if not _excluded(rel, hard)]
     noise = [rel for rel in extras if _excluded(rel, hard)]
+
+    source_rel = {dest: rel for dest, (rel, _) in files.items()}
+    held_src = set(uncommitted(source, [source_rel[dest] for dest in stale], orphans))
+    held = sorted([dest for dest in stale if source_rel[dest] in held_src]
+                  + [rel for rel in orphans if rel in held_src])
+    stale = [rel for rel in stale if rel not in held]
+    orphans = [rel for rel in orphans if rel not in held]
+    for rel in held:
+        print(f"  not committed in {source}, left out: {rel}")
+    if held:
+        print(f"{len(held)} change(s) wait for a commit in {source}; the export only ships committed work.")
 
     if args.check:
         if not stale and not orphans:

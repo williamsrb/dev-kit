@@ -9,6 +9,11 @@
 ./devkit export --check      # exit 1 if core/ is behind its source
 ```
 
+The export only ships committed work. The source must be a git checkout, and a
+change whose source file is untracked, modified or deleted without a commit is
+listed as `not committed ..., left out` and skipped by the dry run, `--apply`
+and `--check` alike. Commit it in the source, then export.
+
 ## The allowlist
 
 `export-allowlist.json` decides what ships, per layer. Three things about it are
@@ -48,7 +53,7 @@ installs the kit.
 2. `./devkit export --apply` and read the gitleaks output.
 3. `./devkit lint-paths` — a new skill often brings `~/` in a link target.
 4. `python3 -m unittest discover -s tests` — tests assert that every entry on
-   disk in each exported section (skills, bin, bin-vendor, benchmarks, mcp,
+   disk in each exported section (skills, bin, bin-vendor, benchmarks, mcp, docs,
    vendor, rules, hooks, config, skills-vendor, kb) is classified, so an unlisted skill fails rather than
    vanishing quietly.
    It reads the export source at `~/.agents`, so it runs on a maintainer machine

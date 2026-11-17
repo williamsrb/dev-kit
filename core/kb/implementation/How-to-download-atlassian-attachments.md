@@ -14,7 +14,7 @@ Prefer `agentctl jira fetch <KEY>` when `~/.agents/.auth/jira-api-token.yaml` ex
 
 MCP fallback below is only for when the API token file is missing.
 
-Only `user-atlassian-rovo-preview` (Atlassian Rovo MCP Preview, `https://mcp.atlassian.com/v1/mcp/preview`) can fetch bytes via MCP. Catalog: https://developer.atlassian.com/cloud/rovo-mcp/preview/tools/
+Only `user-atlassian-rovo-preview` (Atlassian Rovo MCP, `https://mcp.atlassian.com/v2/mcp`) can fetch bytes via MCP. Catalog: <https://support.atlassian.com/atlassian-rovo-mcp-server/docs/supported-tools/>
 
 `plugin-atlassian-atlassian` is the GA remote MCP. It has no download operation.
 
@@ -55,8 +55,8 @@ CallDynamicTool
 
 This batches the inventory only. Call `downloadJiraIssueAttachment` once per numeric attachment id to obtain each short-lived `downloadCommand`; the MCP does not offer a batch byte-download operation. Do not run each `downloadCommand` as its own model round-trip. Collect the minted commands, then run them in one process (`download-jira-task/scripts/run_download_commands.py`). A single-attachment fetch may still mint and curl immediately.
 
-2. If the operation name is uncertain, `discover` query `download Jira attachment`. Confirmed name: `downloadJiraIssueAttachment` (`executeRead`).
-3. `executeRead`:
+1. If the operation name is uncertain, `discover` query `download Jira attachment`. Confirmed name: `downloadJiraIssueAttachment` (`executeRead`).
+2. `executeRead`:
 
 ```text
 CallDynamicTool
@@ -70,7 +70,7 @@ CallDynamicTool
       outputPath: "./<filename>"   # optional; relative; used only to build downloadCommand
 ```
 
-4. Run the returned `downloadCommand` from the working directory so a relative `outputPath` lands there. Do not invent curl flags. For one file, run it as soon as it is minted. For many files, mint every URL first, write the commands to JSON, and run `scripts/run_download_commands.py` once. `--list-attachments --json` has no URL; it cannot drive curl by itself.
+1. Run the returned `downloadCommand` from the working directory so a relative `outputPath` lands there. Do not invent curl flags. For one file, run it as soon as it is minted. For many files, mint every URL first, write the commands to JSON, and run `scripts/run_download_commands.py` once. `--list-attachments --json` has no URL; it cannot drive curl by itself.
 
 `download-jira-task` always does this for every `fields.attachment` entry. Use the absolute `outputPath` from `render_issue.py --list-attachments` (`~/.agents/prds/<KEY>/attachments/<id>-<filename>`). `mkdir -p` that directory first. Do not use `image-to-disk`.
 

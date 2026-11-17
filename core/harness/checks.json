@@ -1,0 +1,54 @@
+{
+  "schema_version": 1,
+  "builtin_skills": [
+    "advisor",
+    "claude-api",
+    "clear",
+    "code-review",
+    "compact",
+    "config",
+    "cost",
+    "doctor",
+    "effort",
+    "fewer-permission-prompts",
+    "goal",
+    "help",
+    "init",
+    "keybindings-help",
+    "login",
+    "logout",
+    "loop",
+    "mcp",
+    "memory",
+    "model",
+    "permissions",
+    "resume",
+    "review",
+    "schedule",
+    "security-review",
+    "simplify",
+    "status",
+    "statusline-setup",
+    "update-config"
+  ],
+  "checks": [
+    {
+      "name": "vendor-browser",
+      "rule": "rules/claude/07-browser-automation-preference-order.md",
+      "match": {"kind": "tool_name_regex", "pattern": "^mcp__(Claude_Browser|claude-in-chrome)__"},
+      "severity": "warn"
+    },
+    {
+      "name": "resident-playwright",
+      "rule": "rules/claude/07-browser-automation-preference-order.md",
+      "match": {"kind": "tool_name_regex", "pattern": "^mcp__playwright__"},
+      "severity": "warn"
+    },
+    {
+      "name": "retired-skill-name",
+      "rule": "",
+      "match": {"kind": "skill_not_installed", "pattern": ""},
+      "severity": "info"
+    }
+  ]
+}

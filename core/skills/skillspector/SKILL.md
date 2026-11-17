@@ -1,6 +1,6 @@
 ---
 name: skillspector
-description: "Scan an agent skill for prompt injection, exfil, and supply-chain risks with NVIDIA SkillSpector before install. Default is static --no-llm. | recommendedRole: deterministic | aliases: skill-inspector, scan-skill, nvidia-skillspector."
+description: "Scan an agent skill for prompt injection, exfil, and supply-chain risks with NVIDIA SkillSpector before install. Default is static --no-llm."
 metadata:
   recommendedRole: deterministic
   aliases: skill-inspector, scan-skill, nvidia-skillspector

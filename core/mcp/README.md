@@ -12,7 +12,7 @@ already configured on this machine. Extracted from the three agent vendors:
 Do **not** walk `~/.agents/local-vendor-folders/` — those are symlinks back to
 the homes above.
 
-`image-to-disk/` is a local server (already here). Everything else is a remote
+Everything here is a remote
 HTTP endpoint, an `npx` package, or a binary/source tree under `~/.local`.
 
 Playwright MCP is **not** a resident stdio server. Spawn isolated HTTP
@@ -80,10 +80,12 @@ This directory has **no tokens**. Register reads:
 
 | File / env | Used by |
 |------------|---------|
-| `$AGENTS_HOME/.auth/gitlab-access-token.yaml` | `gitlab` via `bin/gitlab-mcp` (`access_token`, `gitlab_url`) |
+| `$AGENTS_HOME/.auth/gitlab-access-token.yaml` | optional fallback for the same wrapper, same `tokens:` format |
 | `~/.browser-control-mcp.env` | `browser-control` (`EXTENSION_SECRET`, `EXTENSION_PORT`) |
 | `SLACK_MCP_CLIENT_ID` | Cursor Slack OAuth client id |
 | `SLACK_MCP_TOKEN` | Claude/Codex Slack bearer (`codex` uses `--bearer-token-env-var`) |
+
+Two catalog entries share `bin/gitlab-mcp` and differ only in their `env`: `gitlab` (`pipelines_token`, `GITLAB_MCP_READ_ONLY=true`, registered in the vendors) and `gitlab-factory` (`factory_token`, read-write, `vendors: []`). The factory entry is registered nowhere; a factory pipeline step lists it in `mcp_servers` and the engine hands it to that worker with `--mcp-config`. The step also needs `mcp__gitlab-factory` in `allowed_tools_extra`. After a catalog change, re-run `install.py register gitlab --force` so the vendors pick up the new `env`.
 
 If a browser-control env file is missing, register reuses whatever is already in that vendor's
 config (so a re-run does not blank a working token). GitLab tokens stay in the auth yaml;
@@ -99,19 +101,20 @@ See `catalog.json`. Intentional gaps (do not “fix” by registering everywhere
 
 - Playwright — parked. HTTP instances via `mcp/playwright.py`; one process and
   `--output-dir` per task id. See `How-to-enable-playwright-mcp.md`.
-- `image-to-disk` / `filesystem` — Claude only
 - Codex `node_repl` — Desktop-bundled; skipped
 
-Marketplace plugins that also expose MCP (`atlassian@claude-plugins-official`,
-`slack@claude-plugins-official`) are **not** installed by this script.
+Marketplace plugins that also expose MCP (`slack@claude-plugins-official`) are
+**not** installed by this script. A plain catalog server wins over a plugin that
+exposes the same MCP: the Atlassian plugins were removed for
+`atlassian-rovo-preview`.
 
 ## Fetch recipes
 
 | Recipe | What it installs |
 |--------|------------------|
-| `gitlab-mcp-server` | GitHub release `v2.6.2` linux-amd64 → `~/.local/bin/gitlab-mcp-server` |
+| `gitlab-mcp-server` | GitHub release `v3.6.0` linux-amd64 → `~/.local/bin/gitlab-mcp-server` |
 | `browser-control-mcp` | Clone + `npm install` + `npm run build` → `~/.local/src/browser-control-mcp` |
-| `playwright-mcp` / `filesystem-mcp` | Warm the `npx` cache |
+| `playwright-mcp` | Warm the `npx` cache |
 | `serena-agent` | `uv tool install -p 3.13 serena-agent` → `~/.local/bin/serena` |
 
 Firefox still needs the Browser Control add-on; this script only builds the

@@ -1,6 +1,6 @@
 ---
 name: use-enonic-cli
-description: "Enonic CLI (`enonic`): sandboxes, deploy, export/import, snapshots, cloud, admin. Use when running enonic commands or managing XP instances. | recommendedRole: follow | aliases: enonic-cli, enonic-command, xp-cli, enonic-sandbox-cli."
+description: "Enonic CLI (`enonic`): sandboxes, deploy, export/import, snapshots, cloud, admin. Use when running enonic commands or managing XP instances."
 license: MIT
 metadata:
   recommendedRole: follow

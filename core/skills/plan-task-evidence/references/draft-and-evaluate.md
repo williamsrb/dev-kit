@@ -34,20 +34,21 @@ slot a pass. Execute-time diagnose path:
   lookup, then build the page URL from the matched content path. Lookup recipes and the URL
   shape are in [reference.md](../reference.md). Example from a real task — open the XP 8
   Guillotine widget:
-  ```
+
+  ```text
   <base>/admin/com.enonic.app.contentstudio/main#/english/widget/guillotine/guillotine
   ```
 
-### Source-code evidence (GitLab)
+### Source-code evidence (git host)
 
-For user-transparent changes, plan a screenshot of the relevant file/diff in GitLab on the
+For user-transparent changes, plan a screenshot of the relevant file/diff on the git host's web UI on the
 branch **review deploys** (project default / review branch after merge), e.g.
-`https://<git-host>/<group>/<repo>/-/blob/<review-or-default-branch>/...`, where `<git-host>` is `git_host` in `~/.agents/config/client-overlay.json`.
-Take the path from the impl plan, PRD, or MR text. Do **not** `Read` / `Grep` a local
+`https://<git-host>/<group>/<repo><blob path>`, where `<git-host>` is `git_host` in `~/.agents/config/client-overlay.json` and `<blob path>` is `web_blob_path` of the active host in `.agentctl [git_host.<kind>]` (`{ref}` = the review or default branch, `{path}` = the file; GitLab: `/-/blob/{ref}/{path}`, GitHub: `/blob/{ref}/{path}`).
+Take the path from the impl plan, PRD, or review request (MR/PR) text. Do **not** `Read` / `Grep` a local
 `<TASK-ID>` worktree or implementation branch to draft that URL.
 Note: **git CLI auth is usually fine** (ssh-agent),
-but the **GitLab web UI needs a logged-in browser session** — **Auth required: yes**,
-surface GitLab; flag it in the Authentication map (Phase 4).
+but the **git host web UI needs a logged-in browser session** — **Auth required: yes**,
+surface the git host; flag it in the Authentication map (Phase 4).
 
 ---
 

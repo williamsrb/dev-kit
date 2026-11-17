@@ -1,6 +1,6 @@
 ---
 name: ponytail-review
-description: "Review a delivery diff for over-engineering only: reinvented stdlib, unneeded deps, speculative abstractions, dead flexibility. One line per finding; does not apply fixes. Use when the user says ponytail-review, review for over-engineering, what can we delete, is this over-engineered, or simplify review. Complements validate-impl deslop. | recommendedRole: impl-review | aliases: over-engineering-review, simplify-review."
+description: "Review a delivery diff for over-engineering only: reinvented stdlib, unneeded deps, speculative abstractions, dead flexibility. One line per finding; does not apply fixes. Use when the user says ponytail-review, review for over-engineering, what can we delete, is this over-engineered, or simplify review. Complements validate-impl deslop."
 metadata:
   recommendedRole: impl-review
   reviewOf: run-plan

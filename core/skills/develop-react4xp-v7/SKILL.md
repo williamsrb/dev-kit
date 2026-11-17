@@ -1,6 +1,7 @@
 ---
 name: develop-react4xp-v7
-description: "Build Enonic React4XP 7.x / stable on XP 8 (componentRegistry, pages/parts/layouts, SSR). Use for React4XP 7. Prefer v6 for new XP 7 work; v5 only for 5.x. | recommendedRole: build | aliases: react4xp-v7, react4xp-7.x."
+description: "Build Enonic React4XP 7.x / stable on XP 8 (componentRegistry, pages/parts/layouts, SSR). Use for React4XP 7. Prefer v6 for new XP 7 work; v5 only for 5.x."
+paths: "**/src/main/resources/**, **/xp/**, **/build.gradle, **/gradle.properties"
 metadata:
   recommendedRole: build
   aliases: react4xp-v7, react4xp-7.x
@@ -26,6 +27,7 @@ Only use the online documentation after the offline reference is missing, stale 
 ## When to use
 
 Apply this skill for **React4XP stable / 7.x** (docs under `/learn/react4xp-tutorial/stable`), the default for **XP 8**:
+
 - React4XP app setup and starter structure
 - Controller rendering with `/lib/enonic/react4xp`
 - `componentRegistry` and `dataFetcher` registrations
@@ -33,6 +35,7 @@ Apply this skill for **React4XP stable / 7.x** (docs under `/learn/react4xp-tuto
 - Build/runtime behavior, hydration/SSR
 
 Routing:
+
 - **XP 8 / new React4XP** → this skill (`develop-react4xp-v7`)
 - **XP 7 / new React4XP** → `develop-react4xp-v6` (6.x)
 - **XP 7 / legacy 5.x maintenance only** → `develop-react4xp-v5`
@@ -43,7 +46,7 @@ Docs live under `~/.agents/kb/offline-reference/react4xp-stable` (not under this
 
 1. Route via `~/.agents/kb/offline-reference/react4xp-stable/llm-index.md` (chooser: `docs` / `learn`).
 2. Read files under `~/.agents/kb/offline-reference/react4xp-stable/learn/react4xp-tutorial/stable...` (tutorial) and `.../docs/react4xp/stable/...` (API/reference).
-3. Online: https://developer.enonic.com/learn/react4xp-tutorial/stable and https://developer.enonic.com/docs/react4xp/stable
+3. Online: <https://developer.enonic.com/learn/react4xp-tutorial/stable> and <https://developer.enonic.com/docs/react4xp/stable>
 
 Refresh (from this skill directory; default output is the KB path above):
 

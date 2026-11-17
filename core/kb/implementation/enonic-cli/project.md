@@ -11,7 +11,7 @@ prose: caveman-lite
 
 Create a new Enonic project from a starter.
 
-```
+```bash
 enonic project create [name] [flags]
 ```
 
@@ -32,7 +32,7 @@ enonic project create [name] [flags]
 
 Set or change the project's default sandbox. Aliases: `sbox`, `sb`.
 
-```
+```bash
 enonic project sandbox [name] [-f]
 ```
 
@@ -44,7 +44,7 @@ enonic project sandbox [name] [-f]
 
 Build project via Gradle.
 
-```
+```bash
 enonic project build [-f]
 ```
 
@@ -56,7 +56,7 @@ enonic project build [-f]
 
 Clean build artifacts (alias for `gradlew clean`).
 
-```
+```bash
 enonic project clean [-f]
 ```
 
@@ -68,7 +68,7 @@ enonic project clean [-f]
 
 Run tests via Gradle.
 
-```
+```bash
 enonic project test [-f]
 ```
 
@@ -80,7 +80,7 @@ enonic project test [-f]
 
 Build and deploy project to associated sandbox.
 
-```
+```bash
 enonic project deploy [sandbox-name] [flags]
 ```
 
@@ -96,7 +96,7 @@ enonic project deploy [sandbox-name] [flags]
 
 Build and install project to a running XP instance via management API. Alias: `i`.
 
-```
+```bash
 enonic project install [flags]
 ```
 
@@ -109,7 +109,7 @@ enonic project install [flags]
 
 Open shell with project's `JAVA_HOME` and `XP_HOME` set.
 
-```
+```bash
 enonic project shell
 ```
 
@@ -119,7 +119,7 @@ No additional flags. Exit with `quit`.
 
 Run arbitrary Gradle tasks with project context.
 
-```
+```bash
 enonic project gradle [tasks / flags ...]
 ```
 
@@ -129,7 +129,7 @@ Everything after `gradle` is forwarded to `gradlew`.
 
 Export `JAVA_HOME` and `XP_HOME` for the current shell.
 
-```
+```bash
 eval $(enonic project env)
 ```
 

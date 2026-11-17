@@ -45,7 +45,7 @@ if not hasattr(args, "func"):
     return 0
 ```
 
-5. Verify every group in one loop rather than spot-checking; compare output and
+1. Verify every group in one loop rather than spot-checking; compare output and
    both exit codes.
 
 ```bash

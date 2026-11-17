@@ -164,7 +164,7 @@ def report_path_for(target: str, output: Path | None) -> Path:
     if output:
         return output.expanduser().resolve()
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
-    stamp = dt.datetime.now(dt.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    stamp = dt.datetime.now(dt.UTC).strftime("%Y%m%dT%H%M%SZ")
     slug = re.sub(r"[^A-Za-z0-9._-]+", "-", Path(target.rstrip("/")).name).strip("-") or "skill"
     return CACHE_DIR / f"{slug}-{stamp}.json"
 
@@ -207,6 +207,7 @@ def run_scan(args: argparse.Namespace) -> int:
             text=True,
             capture_output=True,
             timeout=args.timeout,
+            check=False,
         )
     except subprocess.TimeoutExpired:
         emit({

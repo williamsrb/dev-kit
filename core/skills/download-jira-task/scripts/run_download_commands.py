@@ -26,9 +26,9 @@ def load_commands(raw: str) -> list[dict[str, Any]]:
     elif isinstance(payload, dict):
         items = payload.get("commands") or payload.get("attachments") or []
     else:
-        raise ValueError("JSON must be a list or an object with commands[]")
+        raise ValueError("JSON must be a list or an object with commands[]")  # noqa: TRY004 - malformed input, not a programming error
     if not isinstance(items, list):
-        raise ValueError("commands must be a list")
+        raise ValueError("commands must be a list")  # noqa: TRY004 - malformed input, not a programming error
     commands = []
     for item in items:
         if not isinstance(item, dict) or not item.get("downloadCommand"):

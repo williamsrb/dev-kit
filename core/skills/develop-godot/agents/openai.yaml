@@ -1,0 +1,4 @@
+interface:
+  display_name: "Develop Godot"
+  short_description: "Build and verify Godot 4.7 2D and 3D games in GDScript"
+  default_prompt: "Use $develop-godot to implement this Godot 4.7 feature and verify it headless."

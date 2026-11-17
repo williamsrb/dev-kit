@@ -1,6 +1,7 @@
 ---
 name: google-translate
-description: "Translate text with Google Cloud Translation API v2 (bundled CLI). Use to translate, detect language, list languages, or localize copy. Reads GOOGLE_TRANSLATE_API_KEY from ~/.google-cloud.env. | recommendedRole: deterministic | aliases: translate, google-cloud-translate, gtranslate, localize-text."
+description: "Translate text with Google Cloud Translation API v2 (bundled CLI). Use to translate, detect language, list languages, or localize copy. Reads GOOGLE_TRANSLATE_API_KEY from ~/.google-cloud.env."
+disable-model-invocation: true
 metadata:
   recommendedRole: deterministic
   aliases: translate, google-cloud-translate, gtranslate, localize-text
@@ -12,7 +13,7 @@ metadata:
 
 Translate, detect language, or list languages using Cloud Translation API **Basic (v2)** REST.
 
-Docs: https://docs.cloud.google.com/translate/docs/reference/rest
+Docs: <https://docs.cloud.google.com/translate/docs/reference/rest>
 
 ## Auth
 

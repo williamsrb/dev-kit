@@ -24,7 +24,7 @@ import shutil
 import subprocess
 import sys
 from collections import defaultdict
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 HOME = Path.home()
@@ -107,7 +107,7 @@ def plan(
     older_than_days: int | None = None,
 ) -> tuple[list[dict], dict]:
     """Decide which sessions to archive. Returns (to_archive, per_project_summary)."""
-    now_ms = datetime.now(tz=timezone.utc).timestamp() * 1000
+    now_ms = datetime.now(tz=UTC).timestamp() * 1000
     cutoff_ms = now_ms - (min_age_minutes * 60 * 1000)
     if older_than_days is not None:
         cutoff_ms = min(cutoff_ms, now_ms - (older_than_days * 24 * 60 * 60 * 1000))
@@ -185,7 +185,7 @@ def apply_archive(to_archive: list[dict], backup_dir: Path) -> int:
 def stamp_of(ms: int) -> str:
     if not ms:
         return "----------"
-    return datetime.fromtimestamp(ms / 1000, tz=timezone.utc).strftime("%Y-%m-%d")
+    return datetime.fromtimestamp(ms / 1000, tz=UTC).strftime("%Y-%m-%d")
 
 
 def main() -> int:

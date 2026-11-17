@@ -1,4 +1,4 @@
-"""Local Ollama inference and Markdown FTS for agentctl."""
+"""Local-model inference (Ollama first, ROLES.md deterministic fallback) and Markdown FTS for agentctl."""
 
 from __future__ import annotations
 
@@ -10,32 +10,24 @@ import sys
 from pathlib import Path
 
 from agentctl_common import argsafe_limit, emit, run
+from agentctl_local import (
+    claude_fallback,
+    fallback_cell,
+    ollama_models,
+    ollama_status,
+    served_models,
+)
 
-
-def ollama_models() -> list[dict[str, str]]:
-    ollama = shutil.which("ollama")
-    if not ollama:
-        return []
-    result = run([ollama, "list"])
-    models = []
-    for line in result.stdout.splitlines()[1:]:
-        parts = line.split()
-        if parts:
-            models.append({"name": parts[0], "id": parts[1] if len(parts) > 1 else ""})
-    return models
+LOCAL_RUN_SYSTEM = "Answer the instruction for the input only. Plain text, no preamble."
 
 
 def cmd_local_models(args: argparse.Namespace) -> int:
-    models = ollama_models()
-    emit({"available": bool(shutil.which("ollama")), "models": models})
+    emit({"available": bool(shutil.which("ollama")), "reachable": served_models() is not None,
+          "models": ollama_models(), "fallback": fallback_cell()})
     return 0
 
 
 def cmd_local_run(args: argparse.Namespace) -> int:
-    ollama = shutil.which("ollama")
-    if not ollama:
-        emit({"status": "ollama-missing"})
-        return 2
     if args.file:
         content = args.file.read_text(encoding="utf-8", errors="replace")
     elif args.text is not None:
@@ -44,12 +36,24 @@ def cmd_local_run(args: argparse.Namespace) -> int:
         content = sys.stdin.read()
     content = content[: argsafe_limit(args.max_chars)]
     prompt = f"{args.instruction.strip()}\n\nINPUT:\n{content}"
-    result = run([ollama, "run", args.model], input_text=prompt)
-    clean_stderr = re.sub(r"\x1b\[[0-9;?]*[A-Za-z]", "", result.stderr)
-    emit({"status": "ok" if result.returncode == 0 else "error", "model": args.model,
-          "input_chars": len(content), "output": result.stdout[: argsafe_limit(args.max_output_chars)],
-          "stderr": clean_stderr[:1000] if result.returncode else "", "exit_code": result.returncode})
-    return result.returncode
+    max_output = argsafe_limit(args.max_output_chars)
+    available, reason = ollama_status(args.model)
+    if available:
+        result = run([shutil.which("ollama") or "ollama", "run", args.model], input_text=prompt)
+        clean_stderr = re.sub(r"\x1b\[[0-9;?]*[A-Za-z]", "", result.stderr)
+        emit({"status": "ok" if result.returncode == 0 else "error", "model": args.model, "backend": "ollama",
+              "input_chars": len(content), "output": result.stdout[:max_output],
+              "stderr": clean_stderr[:1000] if result.returncode else "", "exit_code": result.returncode})
+        return result.returncode
+    if args.local_only:
+        emit({"status": reason, "model": args.model, "backend": None, "fallback_reason": reason})
+        return 2
+    answer = claude_fallback(prompt, LOCAL_RUN_SYSTEM, timeout=args.timeout)
+    emit({"status": "ok" if answer["ok"] else "error", "model": answer["model"], "backend": "claude",
+          "fallback_reason": reason, "input_chars": len(content), "output": (answer.get("text") or "")[:max_output],
+          "stderr": "" if answer["ok"] else str(answer.get("error") or ""), "exit_code": 0 if answer["ok"] else 1,
+          "cost_usd": answer.get("cost_usd")})
+    return 0 if answer["ok"] else 1
 
 
 def cmd_docs_index(args: argparse.Namespace) -> int:
@@ -123,8 +127,9 @@ def cmd_docs_search(args: argparse.Namespace) -> int:
 def add_local_parsers(group) -> None:
     models = group.add_parser(
         "models",
-        help="List installed Ollama models.",
-        description="Return installed local model names and sizes without running inference.",
+        help="List installed Ollama models and the fallback model.",
+        description=("Return installed local model names, whether the Ollama service answers, and the ROLES.md "
+                     "`deterministic` model that runs when Ollama cannot. No inference."),
     )
     models.add_argument("--json", action="store_true", help=argparse.SUPPRESS)
     models.set_defaults(func=cmd_local_models)
@@ -132,11 +137,13 @@ def add_local_parsers(group) -> None:
         "run",
         help="Run bounded low-risk local inference.",
         description=(
-            "Send bounded text—not images or authoritative decisions—to a local Ollama model. "
+            "Send bounded text—not images or authoritative decisions—to a local Ollama model. When Ollama is "
+            "missing, not answering, or lacks the model, the ROLES.md `deterministic` Claude model runs instead "
+            "(the input then leaves the machine; --local-only refuses that). "
             "Use only for low-risk clustering, classification, or summarization."
         ),
     )
-    local_run.add_argument("--model", default="granite3-moe:3b", help="Installed Ollama model.")
+    local_run.add_argument("--model", default="granite3-moe:3b", help="Ollama model to use when installed.")
     local_run.add_argument("--instruction", required=True, help="Focused operation to perform.")
     local_run.add_argument("--file", type=Path, help="Read input text from this file.")
     local_run.add_argument("--text", help="Inline input text; mutually exclusive with --file.")
@@ -144,6 +151,9 @@ def add_local_parsers(group) -> None:
     local_run.add_argument(
         "--max-output-chars", type=int, default=8000, help="Maximum returned output characters."
     )
+    local_run.add_argument("--local-only", action="store_true",
+                           help="Fail instead of falling back when Ollama cannot serve the model.")
+    local_run.add_argument("--timeout", type=float, default=180, help="Seconds for a fallback call.")
     local_run.add_argument("--json", action="store_true", help=argparse.SUPPRESS)
     local_run.set_defaults(func=cmd_local_run)
 

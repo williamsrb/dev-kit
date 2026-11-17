@@ -11,7 +11,7 @@ prose: caveman-lite
 
 Reprocess content metadata (typically after migration).
 
-```
+```bash
 enonic cms reprocess [flags]
 ```
 

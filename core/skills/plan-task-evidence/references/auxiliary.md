@@ -1,4 +1,4 @@
-## Auxiliary skills (optional, on demand)
+# Auxiliary skills (optional, on demand)
 
 Not required for every run. When planning needs a specialized capability you cannot perform
 with already-installed skills / MCP / normal tools, and a session-only script is not worth it:

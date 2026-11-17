@@ -1,6 +1,6 @@
 ---
 name: lint-and-draft-commit-message
-description: "Lint and fix the current delivery then draft a commit message. Does not commit. Detects python, PHP, Enonic XP/React4XP, or generic stacks from agentctl repo detect plus delivery files and lazy-loads only matching rules. Use for lint, ruff, php -l, python scripts, PHP, XP JS, React4XP, staged validation, or lint-and-draft-*. | recommendedRole: follow | aliases: lint-and-draft-enonic-commit-message, lint-and-draft-generic-commit-message, enonic-staged-validation-commit-message, generic-staged-validation-commit-message, lint-and-suggest-enonic-commit-msg, lint-and-suggest-generic-commit-msg, lint-enonic-and-commit-msg-from-diff, lint-generic-and-commit-msg-from-diff."
+description: "Lint and fix the current delivery then draft a commit message. Use when the user says \"lint and commit\" (lint plus commit in one request). Asks before committing. Detects python, PHP, Enonic XP/React4XP, or generic stacks from agentctl repo detect plus delivery files and lazy-loads only matching rules. Use for lint, ruff, php -l, python scripts, PHP, XP JS, React4XP, staged validation, or lint-and-draft-*."
 metadata:
   recommendedRole: follow
   aliases: lint-and-draft-enonic-commit-message, lint-and-draft-generic-commit-message, enonic-staged-validation-commit-message, generic-staged-validation-commit-message, lint-and-suggest-enonic-commit-msg, lint-and-suggest-generic-commit-msg, lint-enonic-and-commit-msg-from-diff, lint-generic-and-commit-msg-from-diff
@@ -57,9 +57,10 @@ Skip generated/bundled assets, `node_modules`, `vendor/`, `.venv`, `__pycache__`
 6. **Re-validate** — until PASS or only unfixable blockers remain.
 7. **Stack-specific compilers** — only what the loaded files require (ruff/`py_compile`, `php -l`, `tsc`, `node --check`).
 8. **Linter** — `agentctl checks run --cwd <repo> --scope changed`, then `ReadLints` on touched sources. Extra CLIs named in the loaded stack files (`shfmt`, `lychee`, `xmlstarlet`, `ast-grep`, phpcs/phpstan) stay their own steps.
-9. **Commit message** — from **final** delivery diff; print full suggestion and stop.
+9. **Commit message** — from **final** delivery diff; print full suggestion.
+10. **Commit offer** — ask to commit (Commit offer); commit only on a yes.
 
-Do **not** commit, push, merge, create PRs, or ask whether to commit/merge.
+Do **not** push, merge, or create PRs.
 
 ## Syntax & semantic validation (mandatory)
 
@@ -93,7 +94,7 @@ Prefer the **smallest fix**. After each pass, re-read and re-validate.
 
 ## Commit message generation
 
-Use **final delivery diff** (after fixes). Print **### Commit message suggestion** (title + bullets). Do not ask to commit.
+Use **final delivery diff** (after fixes). Print **### Commit message suggestion** (title + bullets), then follow Commit offer.
 
 **Jira-task-id branch** (prepend prefix) — current branch matches:
 
@@ -108,6 +109,7 @@ When the branch is a jira-task-id branch:
 
 ```text
 [TASK-ID] Title of change
+
 * Change 1
 * Change 2
 ```
@@ -118,6 +120,7 @@ When the branch is **not** a jira-task-id branch:
 
 ```text
 Title of change
+
 * Change 1
 * Change 2
 ```
@@ -125,6 +128,20 @@ Title of change
 - Do **not** invent a prefix from `master` / `review` / etc.
 - Title reflects **why** or **outcome**.
 - Bullets summarize meaningful deltas (include validation fixes if part of this delivery).
+
+## Commit offer
+
+After the suggestion, ask whether to commit with it. Do not run `git commit` in the same turn.
+
+On "COMMIT" (or an equivalent yes such as "commit it"):
+
+1. Staged tier: commit the index as is. Unstaged tier: stage only the delivery files from `agentctl delivery scope`, then commit. Branch-diff tier: nothing to commit; say so.
+2. Run `git commit -F <file>` with the suggested message verbatim, or the operator's edited version. No `Co-authored-by:` or tool trailer, no `--no-verify`, no `--amend`.
+3. Report the new short SHA and title. Do not push, merge, or open a PR.
+
+On anything else, stop. A hook failure is reported with its deciding error; do not retry with hooks skipped.
+
+When ⛔ failures remain, add a ⚠️ line before the question naming them; still ask.
 
 ## Response template
 
@@ -163,9 +180,21 @@ Then append each loaded stack’s report section from that file, then:
 ### Commit message suggestion
 
     [TASK-ID] Title of change
+
     * Change 1
     * Change 2
 
+&nbsp;&nbsp;&nbsp;&nbsp;❓&nbsp;&nbsp;&nbsp; Commit the <staged | unstaged delivery> changes with this message?
+
+&nbsp;
+
+&nbsp;&nbsp;&nbsp;&nbsp;👉&nbsp;&nbsp;&nbsp; Reply "COMMIT" to commit, or send an edited message.
 ```
 
-Do not ask to commit or merge after the report.
+## Final reply: next step (always last)
+
+After the commit lands, when the branch names a task, put this block right after the 👉 line, as the last thing in the reply, with `<TASK-ID>` expanded (Jira key or slug). The operator pastes it into a fresh session. Skip it when `called_from` is set or `AGENTCTL_FACTORY` is set.
+
+```text
+/plan-task-evidence <TASK-ID>
+```

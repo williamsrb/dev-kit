@@ -4,7 +4,7 @@ Enonic XP application for {PROJECT_DISPLAY_NAME} (`com.example.{PROJECT_SHORT_NA
 
 ## Key Source Paths
 
-```
+```text
 xp/src/main/resources/
 ├── i18n/
 │   └── phrases.properties                      # Translation keys (all components)
@@ -60,12 +60,14 @@ xp/src/main/resources/
 ### Registering a New Component
 
 **1. Add to `dataFetcher.ts`:**
+
 ```typescript
 import { myPartProcessor } from './components/parts/my-part/processor';
 dataFetcher.addPart(`${app.name}:my-part`, { processor: myPartProcessor });
 ```
 
 **2. Add to `componentRegistry.tsx`:**
+
 ```typescript
 import { MyPart } from './components/parts/my-part/my-part';
 componentRegistry.addPart('com.example.{PROJECT_SHORT_NAME}:my-part', { View: MyPart });
@@ -109,6 +111,7 @@ export const MyPart = ({ component, meta, data, common }: ComponentProps<LayoutD
 All schema files follow the patterns in `.claude/skills/apply-react4xp-practices/`.
 
 Key rules:
+
 - All names use **kebab-case**.
 - Every `<label>` and `<display-name>` must have an `i18n` attribute. Add translations to `i18n/phrases.properties`.
 - Content types generate `{PascalName}Data` interfaces.

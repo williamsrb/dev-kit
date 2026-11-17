@@ -27,7 +27,7 @@ import sqlite3
 import subprocess
 import sys
 from collections import defaultdict
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 HOME = Path.home()
@@ -163,7 +163,7 @@ def plan(
     sessions: list[dict], keep: int, min_age_minutes: int,
     older_than_days: int | None = None,
 ) -> tuple[list[dict], dict]:
-    now_ms = datetime.now(tz=timezone.utc).timestamp() * 1000
+    now_ms = datetime.now(tz=UTC).timestamp() * 1000
     cutoff_ms = now_ms - (min_age_minutes * 60 * 1000)
     if older_than_days is not None:
         cutoff_ms = min(cutoff_ms, now_ms - (older_than_days * 24 * 60 * 60 * 1000))
@@ -246,7 +246,6 @@ def apply_archive(to_archive: list[dict], db_path: Path, backup_dir: Path) -> in
     con = sqlite3.connect(str(db_path), timeout=30)
     try:
         con.execute("PRAGMA busy_timeout=30000")
-        written = 0
         for item in to_archive:
             value = dict(item["value"])
             value["isArchived"] = True
@@ -259,7 +258,6 @@ def apply_archive(to_archive: list[dict], db_path: Path, backup_dir: Path) -> in
                 """,
                 (payload, item["session_id"]),
             )
-            written += 1
 
         # Keep ItemTable blob in sync for composers it still lists.
         row = con.execute(
@@ -297,7 +295,7 @@ def stamp_of(ms: int) -> str:
     if not ms:
         return "----------"
     ts = ms / 1000 if ms > 10_000_000_000 else ms
-    return datetime.fromtimestamp(ts, tz=timezone.utc).strftime("%Y-%m-%d")
+    return datetime.fromtimestamp(ts, tz=UTC).strftime("%Y-%m-%d")
 
 
 def main() -> int:
@@ -354,7 +352,7 @@ def main() -> int:
     to_archive, summary = plan(sessions, args.keep, args.min_age_minutes, args.older_than_days)
 
     already = sum(1 for s in sessions if s["archived"])
-    print(f"Vendor:   cursor")
+    print("Vendor:   cursor")
     print(f"Store:    {state_db}")
     print(f"Parents:  {len(sessions)} ({already} already archived)")
     if args.older_than_days is None:

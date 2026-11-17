@@ -28,17 +28,21 @@ tasks pass raw query hits while controllers pass view models.
 2. `git show <suspect>^:<path>` and diff against today. A narrowing from
    `x.foo || trySafe(() => x.x[xDataName]['foo'])` to `x.foo` is the signature.
 3. Classify callers before editing:
+
    ```bash
    grep -rn "fromBookingViewModel" xp/src/main/resources
    ```
+
    Raw-content callers are the ones passing a query hit directly. In `as` there is exactly
    one (`lib/util/tasks/sendBookingPaymentRemind.js`); the other 15 pass view models.
 4. Restore the `||` fallback rather than adapting the caller. It is additive and cannot
    change behaviour for the camelCase callers.
 5. **Verify the fallback is inert for view-model callers** before claiming low risk:
+
    ```bash
    grep -n "x: .*\.x" xp/src/main/resources/lib/modules/viewModel/index.js
    ```
+
    No hit means no view model carries `x`, so the restored branch is unreachable for them.
    A hit means the restoration changes view-model behaviour too — adapt the caller instead.
 

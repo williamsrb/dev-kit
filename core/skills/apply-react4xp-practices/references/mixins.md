@@ -2,7 +2,7 @@
 
 Create and update mixins.
 
-Reference: https://developer.enonic.com/docs/xp/stable/cms/mixins
+Reference: <https://developer.enonic.com/docs/xp/stable/cms/mixins>
 
 ## Location and Files
 
@@ -10,6 +10,7 @@ Files are placed at `/xp/src/main/resources/site/mixins/{mixin-name}/`.
 The mixin name follows kebab-case (e.g., `seo`, `author-info`).
 
 For each mixin, generate:
+
 - `{mixin-name}.xml`: Descriptor following the rules below.
 
 ## Descriptor Structure (.xml)
@@ -61,7 +62,7 @@ Mixin fields are **inlined** directly into the parent schema's data — no extra
 
 See [i18n.md](./i18n.md) for the full key pattern. Mixin keys follow:
 
-```
+```text
 mixin.{name}.display-name
 mixin.{name}.{field-name}
 ```

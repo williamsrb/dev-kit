@@ -128,7 +128,7 @@ RENDERER_CHROME_RE = re.compile(
 class Node:
     """Flat document event: either prose text or a media figure."""
 
-    __slots__ = ("kind", "text", "line", "attrs")
+    __slots__ = ("attrs", "kind", "line", "text")
 
     def __init__(
         self,
@@ -202,7 +202,7 @@ class BodyParser(HTMLParser):
             self._ec_pending_line = self.getpos()[0]
         self._ec_pending += data
 
-    def close(self) -> None:  # noqa: D102
+    def close(self) -> None:
         super().close()
         self._flush()
 

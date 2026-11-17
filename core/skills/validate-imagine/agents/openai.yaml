@@ -1,0 +1,4 @@
+interface:
+  display_name: "Validate Imagine"
+  short_description: "Validate and fix an imagine context lake against its original concept"
+  default_prompt: "Use $validate-imagine to validate this imagine lake against the original concept and fix deviations, contradictions and incomplete work. Do not generate assets or run new expansion waves."

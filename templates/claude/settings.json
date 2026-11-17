@@ -2,20 +2,19 @@
   "_comment": [
     "Claude Code settings for one profile instance.",
     "${PROFILE_*} and ${HOME} are rendered by install.py; nothing here is read raw.",
-    "This file is merged, not clobbered, onto an existing settings.json via",
-    "bin/merge-claude-config.py, so a user's own keys survive an update."
+    "This file is rendered whole into the profile's settings.json on every sync;",
+    "bin/merge-claude-config.py merges the user .claude.json, not this file."
   ],
   "includeCoAuthoredBy": false,
   "attribution": { "coAuthoredBy": false, "generatedWith": false },
+  "env": { "CLAUDE_CODE_TMPDIR": "/var/tmp" },
+  "claudeMdExcludes": [
+    "${HOME}/.claude/rules/**"
+  ],
   "permissions": {
     "additionalDirectories": [
       "${PROFILE_AGENTS_HOME}",
       "${PROFILE_CONFIG_DIR}"
-    ],
-    "allow": [
-      "mcp__playwright-*__browser_navigate",
-      "mcp__playwright-*__browser_take_screenshot",
-      "mcp__playwright-*__browser_set_storage_state"
     ]
   },
   "statusLine": {
@@ -28,7 +27,15 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 ${PROFILE_HARNESS_DIR}/hooks/claude-history-adapter.py"
+            "command": "python3 ${PROFILE_HARNESS_DIR}/hooks/claude-history-adapter.py prompt"
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 ${PROFILE_HARNESS_DIR}/hooks/kb-router.py"
           }
         ]
       }
@@ -38,7 +45,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 ${PROFILE_HARNESS_DIR}/hooks/claude-history-adapter.py"
+            "command": "python3 ${PROFILE_HARNESS_DIR}/hooks/claude-history-adapter.py stop"
           }
         ]
       },
@@ -57,7 +64,16 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${PROFILE_HARNESS_DIR}/hooks/claude-deny-git-push.sh"
+            "command": "${PROFILE_HARNESS_DIR}/hooks/claude-git-guard.py"
+          }
+        ]
+      },
+      {
+        "matcher": "mcp__.*__(addOrEditJiraIssueComment|addCommentToJiraIssue|uploadAttachmentToJiraIssue|jira_add_comment|jira_update_comment|jira_prepare_upload|executeWrite)",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${PROFILE_HARNESS_DIR}/hooks/jira-write-guard.py"
           }
         ]
       }

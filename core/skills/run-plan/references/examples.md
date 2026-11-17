@@ -1,4 +1,4 @@
-## Examples
+# Examples
 
 **Implementation plan:** user says `run PROJ-341` or `run hubspot-form-macro` or path `~/.agents/plans/<TASK-ID>.md` / folder `~/.agents/plans/<TASK-ID>/`  
 → `agentctl plan resolve <TASK-ID>`; read `entry` only; scan `~/.agents/kb/implementation`; execute coding todos. Local slugs skip the branch-equals-key assert.

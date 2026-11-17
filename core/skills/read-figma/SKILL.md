@@ -1,6 +1,7 @@
 ---
 name: read-figma
-description: "Decode local Figma .fig files: unpack, resolve a node-id from a Figma URL, extract text and component names. Use whenever a .fig or Figma node-id is mentioned — .fig is compressed binary with a GUID trap that causes false negatives. | recommendedRole: explore | aliases: figma-read, inspect-fig, decode-figma, parse-fig-file."
+description: "Decode local Figma .fig files: unpack, resolve a node-id from a Figma URL, extract text and component names. Manual only: name this skill for a .fig file or Figma node-id; .fig is compressed binary with a GUID trap that causes false negatives."
+disable-model-invocation: true
 metadata:
   recommendedRole: explore
   aliases: figma-read, inspect-fig, decode-figma, parse-fig-file
@@ -75,7 +76,7 @@ Plain `strings` is also unreliable here: it fragments UTF-8 (Norwegian `ø`/`å`
 
 `canvas.fig` is a kiwi container:
 
-```
+```text
 b'fig-kiwi' | version:uint32 | (length:uint32 | payload)*
 ```
 

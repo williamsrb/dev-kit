@@ -30,13 +30,13 @@ agentctl image stamp --check <FILE>
 
 `--check` exit 1 = do not attach. Pass the file path.
 
-2. Attach the file, if it is not on the issue already.
+1. Attach the file, if it is not on the issue already.
 
 ```bash
 agentctl jira attach <KEY> <FILE>
 ```
 
-3. Resolve the media UUIDs.
+1. Resolve the media UUIDs.
 
 ```bash
 agentctl jira media-ids <KEY>
@@ -44,7 +44,7 @@ agentctl jira media-ids <KEY>
 
 Check `unresolved` is empty. Each row gives `filename`, `attachmentId`, `mediaId`.
 
-4. Write the body as ADF, one `mediaSingle` per evidence unit, `id` set to that
+1. Write the body as ADF, one `mediaSingle` per evidence unit, `id` set to that
    `mediaId`. `collection` is an empty string. Put the explanation in the paragraph
    **before** the image.
 
@@ -61,7 +61,7 @@ pixels (`identify`). `widthType` is `"pixel"`. `layout` is `"wide"` when width �
 (desktop 1440); `"center"` for tight clips. Never `widthType: "percentage"` — Jira
 then letterboxes against a 250×200 default (PROJ-435 comment 531480).
 
-5. Post or edit. Back up first when editing — Jira cannot revert a comment overwrite.
+1. Post or edit. Back up first when editing — Jira cannot revert a comment overwrite.
 
 ```bash
 python3 ~/.agents/skills/plan-task-evidence/scripts/backup-jira-comment.py --issue <KEY> --comment-id <ID> --body-file prev.json
@@ -71,7 +71,7 @@ python3 ~/.agents/skills/plan-task-evidence/scripts/backup-jira-comment.py --iss
 agentctl jira comment <KEY> --comment-id <ID> --content-format adf --body-file body.json
 ```
 
-6. Verify the nodes resolve. Do not report success without this.
+1. Verify the nodes resolve. Do not report success without this.
 
 ```bash
 python3 ~/.agents/skills/plan-task-evidence/scripts/verify-jira-comment-images.py --issue <KEY> --comment-id <ID>

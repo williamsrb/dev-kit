@@ -67,7 +67,7 @@ requiring it live under an `examples/` directory (see pitfall 3).
 With Java 17 on PATH the build dies during **settings-plugin resolution**, long before any
 compile step, and the message names the plugin rather than the JDK:
 
-```
+```text
 Could not resolve com.enonic.gradle:xp-gradle-plugin:4.2.0.
   Required by:
       settings file 'settings.gradle' > com.enonic.xp.settings:com.enonic.xp.settings.gradle.plugin:4.2.0
@@ -181,7 +181,7 @@ values only where XP 8 changed a default or key name.
 
 The wrapper task can die even when the URL is correct and the distribution downloads fine:
 
-```
+```text
 > Task :wrapper FAILED
 > Test of distribution url https://services.gradle.org/distributions/gradle-9.6.1-bin.zip failed.
   Please check the values set with --gradle-distribution-url and --gradle-version.
@@ -210,7 +210,7 @@ Do not "fix" this by reverting to a hand-edited properties file alone. That leav
 
 `enonic project clean` opens an interactive sandbox picker and dies on EOF:
 
-```
+```text
 ? A sandbox is required for your project, select one or create new:
 Could not select sandbox:  ^D
 ```

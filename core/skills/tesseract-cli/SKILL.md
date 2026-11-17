@@ -1,6 +1,6 @@
 ---
 name: tesseract-cli
-description: "OCR local images with the Tesseract CLI. Use for screenshot text, error messages in PNG/JPEG, or any OCR request. Run locally; do not upload the image to vision APIs or MCPs. | recommendedRole: deterministic | aliases: ocr, tesseract, screenshot-ocr, read-image-text."
+description: "OCR local images with the Tesseract CLI. Use for screenshot text, error messages in PNG/JPEG, or any OCR request. Run locally; do not upload the image to vision APIs or MCPs."
 metadata:
   recommendedRole: deterministic
   aliases: ocr, tesseract, screenshot-ocr, read-image-text
@@ -19,7 +19,7 @@ Norwegian is installed user-locally; use `--lang nor` or `--lang eng+nor`. The w
 
 Read text from a local image file with the installed `tesseract` binary. Do **not** send the image to a vision model, the Read-image tool, browser MCP screenshot-to-model, or any other MCP.
 
-Official CLI: https://tesseract-ocr.github.io/tessdoc/Command-Line-Usage.html
+Official CLI: <https://tesseract-ocr.github.io/tessdoc/Command-Line-Usage.html>
 
 ## When to use
 

@@ -14,11 +14,11 @@ Rewrite the **prose**. Do not change posting gates, ADF `media` nodes, or sectio
 
 **Evidence unit — avoid:**
 
-> 9. Happy-path submit: button shows Sent after successful sendFormEmail (AC6–AC7). emailReceiver absent from HTML/POST.
+> 1. Happy-path submit: button shows Sent after successful sendFormEmail (AC6–AC7). emailReceiver absent from HTML/POST.
 
 **Prefer:**
 
-> 9. After a valid submit, the button changes to Sent. The recipient address configured in Content Studio does not appear in the page. (AC6–AC7)
+> 1. After a valid submit, the button changes to Sent. The recipient address configured in Content Studio does not appear in the page. (AC6–AC7)
 
 ## Evidence post — user-visible cards
 
@@ -32,11 +32,11 @@ Rewrite the **prose**. Do not change posting gates, ADF `media` nodes, or sectio
 
 **Evidence unit — avoid:**
 
-> 5. \[AC2\] At lg+: carousel track/Swiper with prev/next; start prev disabled when nothing to scroll back.
+> 1. \[AC2\] At lg+: carousel track/Swiper with prev/next; start prev disabled when nothing to scroll back.
 
 **Prefer:**
 
-> 5. On a wide desktop window, three or more cards use a carousel. The previous control starts disabled when there is nothing to scroll back to. (AC2)
+> 1. On a wide desktop window, three or more cards use a carousel. The previous control starts disabled when there is nothing to scroll back to. (AC2)
 
 ## Evidence post — user-transparent (source only)
 
@@ -46,7 +46,7 @@ Rewrite the **prose**. Do not change posting gates, ADF `media` nodes, or sectio
 
 **Prefer:**
 
-> Default superuser credentials are no longer stored in the shared-content services or in the committed development config. The screenshots below are the GitLab diffs on the review branch. A remaining ops step (rotating any password that was already deployed) is called out under Additional details — it cannot be shown from the review site alone.
+> Default superuser credentials are no longer stored in the shared-content services or in the committed development config. The screenshots below are the git host diffs on the review branch. A remaining ops step (rotating any password that was already deployed) is called out under Additional details — it cannot be shown from the review site alone.
 
 Never put local evidence-folder paths in the Jira body.
 
@@ -55,7 +55,9 @@ Never put local evidence-folder paths in the Jira body.
 **Avoid** (questions on the evidence comment):
 
 > **Additional relevant details**
+>
 > 1. Max Items empty still caps at 100. Which do you want?
+>
 > - **a) Reword the help.** My recommendation.
 > - b) Raise the cap.
 > - c) Leave both. Without an answer we get (c).

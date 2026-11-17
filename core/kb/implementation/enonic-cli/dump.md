@@ -11,7 +11,7 @@ prose: caveman-lite
 
 Export all repositories to a dump.
 
-```
+```bash
 enonic dump create [flags]
 ```
 
@@ -30,7 +30,7 @@ enonic dump create [flags]
 
 Upgrade dump format for newer XP version. Alias: `up`.
 
-```
+```bash
 enonic dump upgrade [flags]
 ```
 
@@ -46,7 +46,7 @@ Output name: `<dump-name>_upgraded_<version>`.
 
 List all dumps. Alias: `enonic dump ls`.
 
-```
+```bash
 enonic dump ls [flags]
 ```
 
@@ -59,7 +59,7 @@ enonic dump ls [flags]
 
 Import a dump. Deletes existing repos before loading.
 
-```
+```bash
 enonic dump load [flags]
 ```
 

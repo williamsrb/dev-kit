@@ -31,17 +31,17 @@ curl -sS -L --max-time 15 -o /tmp/body.html -w "HTTP %{http_code}\n" "<base>/adm
 grep -q "Enonic XP - Login" /tmp/body.html && echo REACHABLE || echo UNREACHABLE
 ```
 
-2. Log in at the id provider root, not at `/…/login`:
+1. Log in at the id provider root, not at `/…/login`:
 
-```
+```text
 POST <base>/admin/tool/_/idprovider/system
 Content-Type: application/json
 
 {"action":"login","user":"<login>","password":"<password>"}
 ```
 
-3. Success is `{"authenticated":true,…}` plus a `JSESSIONID` cookie. Behind an ingress there is often also an `INGRESSCOOKIE` affinity cookie. `JSESSIONID` alone resolved the session on a review host, but send both when you have them.
-4. Keep the cookies as a Playwright storage state so a browser, `playwright-cli` and the kit's HTTP calls can share one session:
+1. Success is `{"authenticated":true,…}` plus a `JSESSIONID` cookie. Behind an ingress there is often also an `INGRESSCOOKIE` affinity cookie. `JSESSIONID` alone resolved the session on a review host, but send both when you have them.
+2. Keep the cookies as a Playwright storage state so a browser, `playwright-cli` and the kit's HTTP calls can share one session:
 
 ```json
 {"cookies":[{"name":"JSESSIONID","value":"…","domain":"<host without port>","path":"/","expires":-1,"httpOnly":true,"secure":false,"sameSite":"Lax"}],"origins":[]}
@@ -49,7 +49,7 @@ Content-Type: application/json
 
 Write the file with mode 0600 from the start. The cookies are credentials.
 
-5. Prove the session is live before spending a browser call:
+1. Prove the session is live before spending a browser call:
 
 ```bash
 curl -sS -o /dev/null -w '%{http_code}\n' -H "Cookie: JSESSIONID=$JS" "<base>/admin/tool"   # 200 live, 401 dead

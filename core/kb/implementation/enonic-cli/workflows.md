@@ -8,7 +8,7 @@ prose: caveman-lite
 # Enonic CLI Workflows
 
 > Multi-step recipes for common operations. All commands use `-f` for non-interactive execution.
-
+>
 > **XP 7 note:** CLI 4.x defaults to the XP 8 API format. When the target instance runs XP 7, add `--compat 7` to the `snapshot
 > create/restore` and `dump create/load` commands below (and `--archive` only works alongside `--compat 7`).
 

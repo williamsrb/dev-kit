@@ -1,6 +1,7 @@
 ---
 name: color-palette
-description: "Extract an N-color palette from a local image and score another image against it (CIELAB distance, coverage). Use for brand/style conformance or palette deviation — not aesthetic judgment. | recommendedRole: deterministic | aliases: palette-distance, image-palette, extract-palette."
+description: "Extract an N-color palette from a local image and score another image against it (CIELAB distance, coverage). Use for brand/style conformance or palette deviation — not aesthetic judgment."
+disable-model-invocation: true
 metadata:
   recommendedRole: deterministic
   aliases: palette-distance, image-palette, extract-palette

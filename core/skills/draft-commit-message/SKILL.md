@@ -1,6 +1,6 @@
 ---
 name: draft-commit-message
-description: "Draft a commit message from the current diff. No lint, no commit. Prefer lint-and-draft-* when validation is also needed | recommendedRole: follow | aliases: staged-commit-message, suggest-commit-message, commit-msg-from-diff."
+description: "Draft a commit message from the current diff. Use when the user says \"commit\" (or \"commit this\") without asking for lint. No lint; asks before committing. When the request also says lint (\"lint and commit\"), use lint-and-draft-commit-message instead"
 metadata:
   recommendedRole: follow
   aliases: staged-commit-message, suggest-commit-message, commit-msg-from-diff
@@ -20,7 +20,7 @@ Follow `~/.agents/kb/implementation/How-to-resolve-task-context.md` when a TASK-
 
 ## Goal
 
-Produce a commit message from the **current solution delivery**. Do **not** validate, lint, fix code, or run git commit/merge.
+Produce a commit message from the **current solution delivery**, then offer to commit with it. Do **not** validate, lint, fix code, merge, or push.
 
 For validation + commit message, use `lint-and-draft-commit-message` (python / PHP / Enonic / generic; detects from the delivery).
 
@@ -34,7 +34,8 @@ For validation + commit message, use `lint-and-draft-commit-message` (python / P
 
 1. **Identify delivery scope** — per KB; state tier.
 2. **Inspect delivery diff** — enough context to name the *why*.
-3. **Commit message** — print the full suggestion; stop. Do not ask to commit or merge.
+3. **Commit message** — print the full suggestion.
+4. **Commit offer** — ask to commit (Commit offer); commit only on a yes.
 
 ## Commit message generation
 
@@ -51,6 +52,7 @@ When the branch is a jira-task-id branch:
 
 ```text
 [BRANCH] Title of change
+
 - Change 1
 - Change 2
 ```
@@ -61,6 +63,7 @@ When the branch is **not** a jira-task-id branch:
 
 ```text
 Title of change
+
 - Change 1
 - Change 2
 ```
@@ -68,6 +71,18 @@ Title of change
 - Do **not** invent a prefix from `master` / `review` / etc.
 - Title reflects **why** or **outcome**.
 - Bullets summarize meaningful delivery deltas (not every file rename).
+
+## Commit offer
+
+After the suggestion, ask whether to commit with it. Do not run `git commit` in the same turn.
+
+On "COMMIT" (or an equivalent yes such as "commit it"):
+
+1. Staged tier: commit the index as is. Unstaged tier: stage only the delivery files from `agentctl delivery scope`, then commit. Branch-diff tier: nothing to commit; say so.
+2. Run `git commit -F <file>` with the suggested message verbatim, or the operator's edited version. No `Co-authored-by:` or tool trailer, no `--no-verify`, no `--amend`.
+3. Report the new short SHA and title. Do not push, merge, or open a PR.
+
+On anything else, stop. A hook failure is reported with its deciding error; do not retry with hooks skipped.
 
 ## Response template
 
@@ -77,8 +92,15 @@ Title of change
 ### Commit message suggestion
 
     [BRANCH] Title of change
+
     - Change 1
     - Change 2
+
+&nbsp;&nbsp;&nbsp;&nbsp;❓&nbsp;&nbsp;&nbsp; Commit the <staged | unstaged delivery> changes with this message?
+
+&nbsp;
+
+&nbsp;&nbsp;&nbsp;&nbsp;👉&nbsp;&nbsp;&nbsp; Reply "COMMIT" to commit, or send an edited message.
 ```
 
 Omit `[BRANCH]` in the suggestion when the current branch is not a jira-task-id branch.

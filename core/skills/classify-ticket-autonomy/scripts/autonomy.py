@@ -9,11 +9,20 @@ import re
 import sys
 from pathlib import Path
 
+for _root in (Path(__file__).resolve().parents[3], Path.home() / ".agents"):
+    if (_root / "bin" / "agentctl_config.py").is_file():
+        sys.path.insert(0, str(_root / "bin"))
+        break
+import agentctl_config
+
 SKILL_DIR = Path(__file__).resolve().parent.parent
 SIGNALS = SKILL_DIR / "references" / "signals.json"
 VERDICTS = {"Autonomous", "Human-in-the-loop"}
 OWNERS = {"analyst", "client", "frontend", "other-team", "tech-lead", "vendor", "hosting", "operator"}
 MAX_HITS_PER_CRITERION = 8
+REHEARSABLE = ("irreversible-operation", "existing-data")
+ISOLATIONS = {"mirror-plus-delta", "scope-redirect", "none"}
+SYNC_DELETE_ISOLATIONS = {"mirror-plus-delta", "scope-redirect"}
 
 
 def main() -> int:
@@ -36,15 +45,27 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def load_signals() -> dict:
+    """signals.json with `{ci_file}` and `{git_host_kind}` replaced from the active git host in .agentctl."""
+    signals = json.loads(SIGNALS.read_text())
+    host = agentctl_config.git_host()
+    ci = re.escape(host["ci_file"]) if host and host.get("ci_file") else agentctl_config.NEVER_MATCHES.pattern
+    kind = re.escape(host["kind"]) if host else "git"
+    for criterion in signals["criteria"]:
+        criterion["patterns"] = [p.replace("{ci_file}", ci).replace("{git_host_kind}", kind)
+                                 for p in criterion["patterns"]]
+    return signals
+
+
 def scan(prd: Path) -> dict:
     text = prd.read_text(errors="ignore")
     lines = text.splitlines()
     assignee = header_field(text, "Assignee")
-    signals = json.loads(SIGNALS.read_text())
+    signals = load_signals()
     scopes = scoped_lines(lines, assignee)
     hits: dict[str, list[dict]] = {}
     for criterion in signals["criteria"]:
-        pattern = re.compile("|".join(criterion["patterns"]), re.I)
+        pattern = re.compile("|".join(criterion["patterns"]), re.IGNORECASE)
         found = []
         for lineno, scope, line in scopes:
             if pattern.search(line):
@@ -58,17 +79,17 @@ def scan(prd: Path) -> dict:
         "task_id": prd.stem,
         "type": header_field(text, "Type"),
         "status": header_field(text, "Status"),
-        "has_acceptance_criteria": bool(re.search(r"^## Acceptance Criteria", text, re.M)),
+        "has_acceptance_criteria": bool(re.search(r"^## Acceptance Criteria", text, re.MULTILINE)),
         "figma_links": len(re.findall(r"figma\.com/", text)),
-        "attachments": int(m.group(1)) if (m := re.search(r"^## Attachments \((\d+)\)", text, re.M)) else 0,
-        "comments": int(m.group(1)) if (m := re.search(r"^## Comments \((\d+)\)", text, re.M)) else 0,
+        "attachments": int(m.group(1)) if (m := re.search(r"^## Attachments \((\d+)\)", text, re.MULTILINE)) else 0,
+        "comments": int(m.group(1)) if (m := re.search(r"^## Comments \((\d+)\)", text, re.MULTILINE)) else 0,
         "hits": hits,
         "note": "Hits are leads, not verdicts. Read each cited line before judging a criterion.",
     }
 
 
 def header_field(text: str, name: str) -> str | None:
-    m = re.search(rf"^\*\*{name}:\*\* (.+)$", text, re.M)
+    m = re.search(rf"^\*\*{name}:\*\* (.+)$", text, re.MULTILINE)
     return m.group(1).strip() if m else None
 
 
@@ -134,10 +155,34 @@ def check(path: Path) -> list[str]:
     expected = "Human-in-the-loop" if failing else "Autonomous"
     if data.get("verdict") in VERDICTS and data["verdict"] != expected:
         errors.append(f"verdict must be {expected} given the criteria results")
+    rehearsal = data.get("rehearsal")
+    rehearsable = failing & set(REHEARSABLE)
+    if rehearsable and not isinstance(rehearsal, dict):
+        errors.append(f"rehearsal object required for blockers {sorted(rehearsable)}")
+    elif rehearsal is not None and not isinstance(rehearsal, dict):
+        errors.append("rehearsal must be an object")
+    if isinstance(rehearsal, dict):
+        errors.extend(check_rehearsal(rehearsal))
     for a in data.get("auto_resolved", []):
         for key in ("decision", "chosen", "source"):
             if not a.get(key):
                 errors.append(f"auto_resolved entry missing {key}")
+    return errors
+
+def check_rehearsal(rehearsal: dict) -> list[str]:
+    """The rehearsal object routes an irreversible or existing-data blocker to a factory-drafted safe path."""
+    errors = []
+    for key in ("required", "sync_delete"):
+        if not isinstance(rehearsal.get(key), bool):
+            errors.append(f"rehearsal.{key} must be true or false")
+    isolation = rehearsal.get("isolation")
+    if isolation not in ISOLATIONS:
+        errors.append(f"rehearsal.isolation must be one of {sorted(ISOLATIONS)}")
+    if rehearsal.get("sync_delete"):
+        if isolation not in SYNC_DELETE_ISOLATIONS:
+            errors.append("rehearsal: sync_delete needs isolation mirror-plus-delta or scope-redirect")
+        if not rehearsal.get("evidence"):
+            errors.append("rehearsal: sync_delete needs evidence (path:line)")
     return errors
 
 

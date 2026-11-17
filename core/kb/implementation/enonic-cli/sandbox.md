@@ -11,7 +11,7 @@ prose: caveman-lite
 
 Create a new local XP sandbox.
 
-```
+```bash
 enonic sandbox create [name] [flags]
 ```
 
@@ -30,7 +30,7 @@ enonic sandbox create [name] [flags]
 
 List all sandboxes. Alias: `enonic sandbox ls`.
 
-```
+```bash
 enonic sandbox list
 ```
 
@@ -40,7 +40,7 @@ No additional flags. Running sandbox is marked with `*`.
 
 Start a sandbox (only one can run at a time).
 
-```
+```bash
 enonic sandbox start [name] [flags]
 ```
 
@@ -56,7 +56,7 @@ enonic sandbox start [name] [flags]
 
 Stop the running sandbox.
 
-```
+```bash
 enonic sandbox stop
 ```
 
@@ -66,7 +66,7 @@ No additional flags.
 
 Upgrade sandbox XP distribution version. Downgrades are not allowed. Alias: `up`.
 
-```
+```bash
 enonic sandbox upgrade [name] [flags]
 ```
 
@@ -81,7 +81,7 @@ enonic sandbox upgrade [name] [flags]
 
 Delete sandbox and all its data. Aliases: `del`, `rm`.
 
-```
+```bash
 enonic sandbox delete [name] [-f]
 ```
 
@@ -93,7 +93,7 @@ enonic sandbox delete [name] [-f]
 
 Clone an existing sandbox to a new one. Alias: `cp`.
 
-```
+```bash
 enonic sandbox copy [source] [target] [-f]
 ```
 

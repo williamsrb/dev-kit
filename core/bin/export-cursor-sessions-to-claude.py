@@ -39,10 +39,13 @@ import sys
 import time
 import uuid
 from collections import defaultdict
+from collections.abc import Iterable, Iterator
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Dict, Iterable, Iterator, List, Optional, Set, Tuple
+from typing import Any
+
+logger = logging.getLogger(__name__)
 
 HOME = Path.home()
 DEFAULT_CURSOR_PROJECTS = HOME / ".cursor" / "projects"
@@ -128,7 +131,7 @@ class CursorSession:
     title_hint: str = ""
     is_subagent: bool = False
     is_draft: bool = False
-    turns: List[Turn] = field(default_factory=list)
+    turns: list[Turn] = field(default_factory=list)
 
 
 def sha256_file(path: Path, bufsize: int = 1024 * 1024) -> str:
@@ -142,7 +145,7 @@ def sha256_file(path: Path, bufsize: int = 1024 * 1024) -> str:
     return h.hexdigest()
 
 
-def parse_ts(value: object) -> Optional[datetime]:
+def parse_ts(value: object) -> datetime | None:
     if value is None:
         return None
     if isinstance(value, (int, float)):
@@ -151,18 +154,18 @@ def parse_ts(value: object) -> Optional[datetime]:
             raw /= 1e9
         elif raw > 1e11:
             raw /= 1e3
-        return datetime.fromtimestamp(raw, tz=timezone.utc)
+        return datetime.fromtimestamp(raw, tz=UTC)
     text = str(value).strip()
     if not text:
         return None
     try:
-        return datetime.fromisoformat(text.replace("Z", "+00:00"))
+        return datetime.fromisoformat(text)
     except ValueError:
         return None
 
 
 def iso_z(ts: datetime) -> str:
-    return ts.astimezone(timezone.utc).isoformat(timespec="milliseconds").replace(
+    return ts.astimezone(UTC).isoformat(timespec="milliseconds").replace(
         "+00:00", "Z"
     )
 
@@ -184,7 +187,7 @@ def project_slug(cwd: str) -> str:
     return cwd.replace("/", "-").replace(".", "-")
 
 
-def claude_ids(composer_id: str) -> Tuple[str, str]:
+def claude_ids(composer_id: str) -> tuple[str, str]:
     cli = str(uuid.uuid5(UUID_NS, f"cursor:{composer_id}"))
     return cli, f"local_{cli}"
 
@@ -199,7 +202,7 @@ def load_json(path: Path, default: Any) -> Any:
     try:
         return json.loads(path.read_text(encoding="utf-8"))
     except (OSError, UnicodeDecodeError, json.JSONDecodeError) as e:
-        logging.warning("unreadable json %s: %s", path, e)
+        logger.warning("unreadable json %s: %s", path, e)
         return default
 
 
@@ -224,7 +227,7 @@ def iter_org_dirs(root: Path) -> Iterator[Path]:
     try:
         accounts = list(root.iterdir())
     except OSError as e:
-        logging.warning("skip unreadable %s: %s", root, e)
+        logger.warning("skip unreadable %s: %s", root, e)
         return
     for account in accounts:
         try:
@@ -236,9 +239,9 @@ def iter_org_dirs(root: Path) -> Iterator[Path]:
                         continue
                     yield org
                 except OSError as e:
-                    logging.warning("skip %s: %s", org, e)
+                    logger.warning("skip %s: %s", org, e)
         except OSError as e:
-            logging.warning("skip unreadable %s: %s", account, e)
+            logger.warning("skip unreadable %s: %s", account, e)
 
 
 def pick_org_dir(root: Path) -> Path:
@@ -248,21 +251,21 @@ def pick_org_dir(root: Path) -> Path:
     return max(orgs, key=lambda org: sum(1 for _ in org.glob("local_*.json")))
 
 
-def load_export_ledger(path: Path) -> Dict[str, dict]:
+def load_export_ledger(path: Path) -> dict[str, dict]:
     data = load_json(path, {})
     records = data.get("records") if isinstance(data, dict) else None
     if not isinstance(records, list):
         return {}
-    out: Dict[str, dict] = {}
+    out: dict[str, dict] = {}
     for rec in records:
         if isinstance(rec, dict) and rec.get("cursor_composer_id"):
             out[str(rec["cursor_composer_id"])] = rec
     return out
 
 
-def save_export_ledger(path: Path, records: Dict[str, dict]) -> None:
+def save_export_ledger(path: Path, records: dict[str, dict]) -> None:
     payload = {
-        "updated_at": iso_z(datetime.now(timezone.utc)),
+        "updated_at": iso_z(datetime.now(UTC)),
         "records": [records[k] for k in sorted(records)],
     }
     atomic_write_text(path, json.dumps(payload, indent=2, ensure_ascii=False) + "\n")
@@ -273,7 +276,7 @@ def content_text(content: Any) -> str:
         return content
     if not isinstance(content, list):
         return ""
-    parts: List[str] = []
+    parts: list[str] = []
     for item in content:
         if not isinstance(item, dict):
             continue
@@ -332,8 +335,8 @@ def extract_user_text(raw: str) -> str:
     return stripped
 
 
-def _dedupe_turns(turns: List[Turn]) -> List[Turn]:
-    out: List[Turn] = []
+def _dedupe_turns(turns: list[Turn]) -> list[Turn]:
+    out: list[Turn] = []
     for turn in turns:
         text = turn.text.strip()
         if not text:
@@ -344,8 +347,8 @@ def _dedupe_turns(turns: List[Turn]) -> List[Turn]:
     return out
 
 
-def extract_turns(path: Path, fallback_ts: datetime) -> List[Turn]:
-    turns: List[Turn] = []
+def extract_turns(path: Path, fallback_ts: datetime) -> list[Turn]:
+    turns: list[Turn] = []
     with path.open(encoding="utf-8") as f:
         for line in f:
             line = line.strip()
@@ -381,8 +384,7 @@ def extract_turns(path: Path, fallback_ts: datetime) -> List[Turn]:
 
 def folder_from_uri(uri: str) -> str:
     text = (uri or "").strip()
-    if text.startswith("file://"):
-        text = text[7:]
+    text = text.removeprefix("file://")
     return text.rstrip("/")
 
 
@@ -391,15 +393,15 @@ def cursor_project_slug(folder: str) -> str:
     return path.replace(".", "").replace("/", "-")
 
 
-def load_workspace_folders(storage_root: Path) -> Dict[str, str]:
+def load_workspace_folders(storage_root: Path) -> dict[str, str]:
     """Map Cursor project slug -> workspace folder path."""
-    out: Dict[str, str] = {}
+    out: dict[str, str] = {}
     if not storage_root.is_dir():
         return out
     try:
         entries = list(storage_root.iterdir())
     except OSError as e:
-        logging.warning("skip unreadable %s: %s", storage_root, e)
+        logger.warning("skip unreadable %s: %s", storage_root, e)
         return out
     for entry in entries:
         data = load_json(entry / "workspace.json", {})
@@ -414,18 +416,18 @@ def load_workspace_folders(storage_root: Path) -> Dict[str, str]:
     return out
 
 
-def load_composer_headers(db_path: Path) -> Dict[str, dict]:
+def load_composer_headers(db_path: Path) -> dict[str, dict]:
     if not db_path.is_file():
-        logging.warning("composerHeaders db missing: %s", db_path)
+        logger.warning("composerHeaders db missing: %s", db_path)
         return {}
     uri = f"file:{db_path}?mode=ro"
     try:
         con = sqlite3.connect(uri, uri=True, timeout=1)
     except sqlite3.Error as e:
-        logging.warning("composerHeaders unavailable: %s", e)
+        logger.warning("composerHeaders unavailable: %s", e)
         return {}
     con.row_factory = sqlite3.Row
-    out: Dict[str, dict] = {}
+    out: dict[str, dict] = {}
     try:
         rows = con.execute(
             "SELECT composerId, workspaceId, createdAt, isSubagent, value "
@@ -448,22 +450,22 @@ def load_composer_headers(db_path: Path) -> Dict[str, dict]:
                 "value": value,
             }
     except sqlite3.Error as e:
-        logging.warning("composerHeaders query failed: %s", e)
+        logger.warning("composerHeaders query failed: %s", e)
         return {}
     finally:
         con.close()
     return out
 
 
-def load_associated_composer_ids(db_path: Path) -> Set[str]:
+def load_associated_composer_ids(db_path: Path) -> set[str]:
     if not db_path.is_file():
-        logging.warning("claude session registry db missing: %s", db_path)
+        logger.warning("claude session registry db missing: %s", db_path)
         return set()
     uri = f"file:{db_path}?mode=ro"
     try:
         con = sqlite3.connect(uri, uri=True, timeout=1)
     except sqlite3.Error as e:
-        logging.warning("claude session registry unavailable: %s", e)
+        logger.warning("claude session registry unavailable: %s", e)
         return set()
     try:
         row = con.execute(
@@ -471,7 +473,7 @@ def load_associated_composer_ids(db_path: Path) -> Set[str]:
             (CLAUDE_SESSION_REGISTRY_KEY,),
         ).fetchone()
     except sqlite3.Error as e:
-        logging.warning("claude session registry query failed: %s", e)
+        logger.warning("claude session registry query failed: %s", e)
         return set()
     finally:
         con.close()
@@ -480,12 +482,12 @@ def load_associated_composer_ids(db_path: Path) -> Set[str]:
     try:
         data = json.loads(row[0])
     except (TypeError, json.JSONDecodeError) as e:
-        logging.warning("claude session registry unreadable: %s", e)
+        logger.warning("claude session registry unreadable: %s", e)
         return set()
     associations = data.get("composerAssociations") if isinstance(data, dict) else None
     if not isinstance(associations, dict):
         return set()
-    out: Set[str] = set()
+    out: set[str] = set()
     for items in associations.values():
         if not isinstance(items, list):
             continue
@@ -498,7 +500,7 @@ def load_associated_composer_ids(db_path: Path) -> Set[str]:
     return out
 
 
-def header_cwd(header: Optional[dict], slug: str, folders_by_slug: Dict[str, str]) -> str:
+def header_cwd(header: dict | None, slug: str, folders_by_slug: dict[str, str]) -> str:
     if header:
         value = header.get("value") if isinstance(header.get("value"), dict) else {}
         repos = value.get("trackedGitRepos")
@@ -527,7 +529,7 @@ def header_cwd(header: Optional[dict], slug: str, folders_by_slug: Dict[str, str
     return str(HOME)
 
 
-def header_title(header: Optional[dict]) -> str:
+def header_title(header: dict | None) -> str:
     if not header:
         return ""
     value = header.get("value") if isinstance(header.get("value"), dict) else {}
@@ -544,12 +546,12 @@ def cursor_slug_from_transcript(path: Path) -> str:
 
 def iter_parent_jsonl(root: Path) -> Iterator[Path]:
     if not root.is_dir():
-        logging.warning("cursor projects dir missing: %s", root)
+        logger.warning("cursor projects dir missing: %s", root)
         return
     try:
         paths = root.glob("*/agent-transcripts/*/*.jsonl")
     except OSError as e:
-        logging.warning("skip unreadable %s: %s", root, e)
+        logger.warning("skip unreadable %s: %s", root, e)
         return
     for path in sorted(paths):
         if "subagents" in path.parts:
@@ -573,7 +575,7 @@ class ClaudeTitleIndex:
     """Dest titles already present on work Claude, keyed by CLI session id."""
 
     def __init__(self) -> None:
-        self.by_title: Dict[str, Set[str]] = defaultdict(set)
+        self.by_title: dict[str, set[str]] = defaultdict(set)
 
     def add(self, title: str, cli_id: str) -> None:
         title = (title or "").strip()
@@ -587,7 +589,7 @@ class ClaudeTitleIndex:
         return any(sid != own for sid in owners)
 
 
-def jsonl_ai_title(path: Path) -> Tuple[str, str]:
+def jsonl_ai_title(path: Path) -> tuple[str, str]:
     """Return (title, sessionId) from the first ai-title record, else empty."""
     if not path.is_file():
         return "", ""
@@ -606,9 +608,7 @@ def jsonl_ai_title(path: Path) -> Tuple[str, str]:
                 if not isinstance(obj, dict):
                     continue
                 title = ""
-                if obj.get("type") == "ai-title":
-                    title = str(obj.get("aiTitle") or "").strip()
-                elif obj.get("aiTitle"):
+                if obj.get("type") == "ai-title" or obj.get("aiTitle"):
                     title = str(obj.get("aiTitle") or "").strip()
                 if title:
                     return title, str(obj.get("sessionId") or "").strip()
@@ -623,7 +623,7 @@ def load_claude_title_index(projects_root: Path, org_dir: Path) -> ClaudeTitleIn
         try:
             paths = org_dir.glob("local_*.json")
         except OSError as e:
-            logging.warning("skip unreadable %s: %s", org_dir, e)
+            logger.warning("skip unreadable %s: %s", org_dir, e)
             paths = []
         for path in paths:
             data = load_json(path, {})
@@ -634,7 +634,7 @@ def load_claude_title_index(projects_root: Path, org_dir: Path) -> ClaudeTitleIn
         try:
             jsonl_paths = projects_root.glob("*/*.jsonl")
         except OSError as e:
-            logging.warning("skip unreadable %s: %s", projects_root, e)
+            logger.warning("skip unreadable %s: %s", projects_root, e)
             jsonl_paths = []
         for path in jsonl_paths:
             title, sid = jsonl_ai_title(path)
@@ -644,7 +644,7 @@ def load_claude_title_index(projects_root: Path, org_dir: Path) -> ClaudeTitleIn
     return index
 
 
-def ledger_owns(previous: Optional[dict]) -> bool:
+def ledger_owns(previous: dict | None) -> bool:
     if not previous:
         return False
     return (
@@ -652,8 +652,8 @@ def ledger_owns(previous: Optional[dict]) -> bool:
     )
 
 
-def prefer_transcript(paths: List[Path], folders_by_slug: Dict[str, str]) -> Path:
-    def score(path: Path) -> Tuple[int, int]:
+def prefer_transcript(paths: list[Path], folders_by_slug: dict[str, str]) -> Path:
+    def score(path: Path) -> tuple[int, int]:
         slug = cursor_slug_from_transcript(path)
         cwd = folders_by_slug.get(slug, "")
         real = 0
@@ -670,10 +670,10 @@ def prefer_transcript(paths: List[Path], folders_by_slug: Dict[str, str]) -> Pat
 
 def classify(
     session: CursorSession,
-    associated_ids: Optional[Set[str]] = None,
+    associated_ids: set[str] | None = None,
     *,
     in_ledger: bool = False,
-    title_index: Optional[ClaudeTitleIndex] = None,
+    title_index: ClaudeTitleIndex | None = None,
     force: bool = False,
 ) -> str:
     if session.is_subagent:
@@ -718,11 +718,11 @@ def title_from_session(session: CursorSession) -> str:
 
 def iter_cursor_sessions(
     root: Path,
-    headers: Dict[str, dict],
-    folders_by_slug: Dict[str, str],
-    composer_id: Optional[str] = None,
+    headers: dict[str, dict],
+    folders_by_slug: dict[str, str],
+    composer_id: str | None = None,
 ) -> Iterator[CursorSession]:
-    grouped: Dict[str, List[Path]] = defaultdict(list)
+    grouped: dict[str, list[Path]] = defaultdict(list)
     for path in iter_parent_jsonl(root):
         cid = path.stem
         if composer_id and cid != composer_id:
@@ -735,9 +735,9 @@ def iter_cursor_sessions(
         try:
             st = path.stat()
         except OSError as e:
-            logging.warning("skip %s: %s", path, e)
+            logger.warning("skip %s: %s", path, e)
             continue
-        created = datetime.fromtimestamp(st.st_mtime, tz=timezone.utc)
+        created = datetime.fromtimestamp(st.st_mtime, tz=UTC)
         is_subagent = False
         is_draft = False
         title_hint = ""
@@ -766,7 +766,7 @@ def iter_cursor_sessions(
             turns = extract_turns(path, created)
             digest = sha256_file(path)
         except OSError as e:
-            logging.warning("skip %s: %s", path, e)
+            logger.warning("skip %s: %s", path, e)
             continue
         yield CursorSession(
             path=path,
@@ -784,10 +784,10 @@ def iter_cursor_sessions(
 
 def build_jsonl(session: CursorSession, cli_id: str, title: str) -> str:
     cwd = session.cwd
-    records: List[dict] = [
+    records: list[dict] = [
         {"type": "ai-title", "aiTitle": title, "sessionId": cli_id},
     ]
-    parent: Optional[str] = None
+    parent: str | None = None
     last_uuid = ""
     for i, turn in enumerate(session.turns):
         msg_id = message_uuid(session.composer_id, i)
@@ -845,7 +845,7 @@ def build_index(
     }
 
 
-def transcript_entrypoint(path: Path) -> Optional[str]:
+def transcript_entrypoint(path: Path) -> str | None:
     if not path.is_file():
         return None
     try:
@@ -867,7 +867,7 @@ def transcript_entrypoint(path: Path) -> Optional[str]:
     return None
 
 
-def jsonl_recorded_cwd(path: Path) -> Optional[str]:
+def jsonl_recorded_cwd(path: Path) -> str | None:
     if not path.is_file():
         return None
     try:
@@ -899,7 +899,7 @@ def dest_has_isolated_cwd(dest: Path) -> bool:
     return cwd.endswith(ISOLATED_CWD_SUFFIX)
 
 
-def dest_was_edited(dest: Path, previous: Optional[dict]) -> bool:
+def dest_was_edited(dest: Path, previous: dict | None) -> bool:
     if previous is None or not dest.is_file():
         return False
     prev_dest = previous.get("dest_path")
@@ -924,7 +924,7 @@ def existing_jsonl_stems(projects_root: Path) -> set[str]:
         for path in projects_root.glob("*/*.jsonl"):
             stems.add(path.stem)
     except OSError as e:
-        logging.warning("skip unreadable %s: %s", projects_root, e)
+        logger.warning("skip unreadable %s: %s", projects_root, e)
     return stems
 
 
@@ -934,7 +934,7 @@ def write_export(
     org_dir: Path,
     dry_run: bool,
     existing_stems: set[str],
-) -> Tuple[str, Path, Path, str]:
+) -> tuple[str, Path, Path, str]:
     cli_id, index_id = claude_ids(session.composer_id)
     title = title_from_session(session)
     jsonl_path = projects_root / project_slug(session.cwd) / f"{cli_id}.jsonl"
@@ -955,7 +955,7 @@ def write_export(
     jsonl = build_jsonl(session, cli_id, title)
     index = build_index(session, cli_id, index_id, title)
     if dry_run:
-        logging.info(
+        logger.info(
             "DRY native %s -> %s (%d turns) title=%s",
             session.composer_id,
             jsonl_path,
@@ -968,7 +968,7 @@ def write_export(
         index_path, json.dumps(index, ensure_ascii=False, separators=(",", ":"))
     )
     dest_sha = sha256_file(jsonl_path)
-    logging.info(
+    logger.info(
         "EXPORT native %s -> %s turns=%d title=%s",
         session.composer_id,
         jsonl_path,
@@ -980,7 +980,7 @@ def write_export(
 
 def acquire_lock(lock_path: Path):
     lock_path.parent.mkdir(parents=True, exist_ok=True)
-    fh = open(lock_path, "w", encoding="utf-8")
+    fh = open(lock_path, "w", encoding="utf-8")  # noqa: SIM115 - held open to keep the lock
     try:
         fcntl.flock(fh.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
     except OSError as e:
@@ -1041,7 +1041,7 @@ def main(argv: Iterable[str] | None = None) -> int:
         folders_by_slug = load_workspace_folders(args.workspace_storage.expanduser())
         existing_stems = existing_jsonl_stems(projects_root)
         title_index = load_claude_title_index(projects_root, org_dir)
-        logging.info(
+        logger.info(
             "export start dry_run=%s force=%s org=%s projects=%s "
             "headers=%d associated=%d claude-titles=%d",
             args.dry_run,
@@ -1071,21 +1071,21 @@ def main(argv: Iterable[str] | None = None) -> int:
             )
             if kind == "skip-subagent":
                 skip_subagent += 1
-                logging.debug("SKIP %s %s", kind, session.composer_id)
+                logger.debug("SKIP %s %s", kind, session.composer_id)
                 continue
             if kind == "skip-draft":
                 skip_draft += 1
-                logging.debug("SKIP %s %s", kind, session.composer_id)
+                logger.debug("SKIP %s %s", kind, session.composer_id)
                 continue
             if kind == "skip-empty":
                 skip_empty += 1
-                logging.debug("SKIP %s %s", kind, session.composer_id)
+                logger.debug("SKIP %s %s", kind, session.composer_id)
                 continue
             if kind == "skip-echo":
                 skip_echo += 1
                 hint = session.title_hint.strip()
                 if args.force or hint.startswith(FORCE_TITLE_PREFIX):
-                    logging.info(
+                    logger.info(
                         "SKIP skip-echo %s title=%r dest_title=%r "
                         "(Claude already has this title on another session)",
                         session.composer_id,
@@ -1093,7 +1093,7 @@ def main(argv: Iterable[str] | None = None) -> int:
                         title_from_session(session),
                     )
                 else:
-                    logging.debug("SKIP %s %s", kind, session.composer_id)
+                    logger.debug("SKIP %s %s", kind, session.composer_id)
                 continue
 
             cli_id, index_id = claude_ids(session.composer_id)
@@ -1101,7 +1101,7 @@ def main(argv: Iterable[str] | None = None) -> int:
             restore_cwd = dest_has_isolated_cwd(dest)
             if dest_was_edited(dest, previous) and not restore_cwd:
                 skip_diverged += 1
-                logging.warning(
+                logger.warning(
                     "SKIP claude-diverged %s dest=%s (will not overwrite)",
                     session.composer_id,
                     dest,
@@ -1126,7 +1126,7 @@ def main(argv: Iterable[str] | None = None) -> int:
                 )
             except Exception:
                 failed += 1
-                logging.exception("export failed %s", session.composer_id)
+                logger.exception("export failed %s", session.composer_id)
                 continue
             wrote += 1
             title_index.add(title, cli_id)
@@ -1146,15 +1146,15 @@ def main(argv: Iterable[str] | None = None) -> int:
                 "dest_sha256": dest_sha,
                 "entrypoint": ENTRYPOINT,
                 "title": title,
-                "exported_at": iso_z(datetime.now(timezone.utc)),
+                "exported_at": iso_z(datetime.now(UTC)),
             }
 
         if args.composer_id and not seen:
-            logging.warning("no parent transcript for composer-id %s", args.composer_id)
+            logger.warning("no parent transcript for composer-id %s", args.composer_id)
 
         if not args.dry_run:
             save_export_ledger(args.export_ledger.expanduser(), export_by_id)
-        logging.info(
+        logger.info(
             "export done wrote=%d skip-subagent=%d skip-draft=%d skip-empty=%d "
             "skip-echo=%d unchanged=%d claude-diverged=%d failed=%d elapsed=%.2fs",
             wrote,
@@ -1169,7 +1169,7 @@ def main(argv: Iterable[str] | None = None) -> int:
         )
         return 1 if failed else 0
     except Exception:
-        logging.exception("export failed")
+        logger.exception("export failed")
         return 1
     finally:
         try:

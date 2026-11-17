@@ -14,14 +14,14 @@ Wrap only `@vscode/ripgrep/bin/rg`. Keep `rg.stock`. Copy the Python apply scrip
 
 ## Scope
 
-US-002 / US-003 / FR-8–FR-11. Do not wrap `/usr/bin/rg` or PATH `rg`.
+Do not wrap `/usr/bin/rg` or PATH `rg`.
 
 ## Prerequisites
 
 - Phase 0 tests passed (`cargo test -p tgrep-cli --test cursor_hidden_argv`)
 - Content JSON fixture passed (`cursor-tgrep-rg-apply.py compare-json`) on a hidden `.github` UTF-8 file vs `rg.stock`
 - Do not enable the apt hook if that fixture fails
-- Operator GO 2026-09-12: O1 (TBD-1 **(a)** cache indexes, TBD-3 **(a)** content JSON, `--files` → `rg.stock`).
+- Operator GO 2026-09-12: O1 (cache indexes, content JSON, `--files` → `rg.stock`).
 
 ## Procedure
 

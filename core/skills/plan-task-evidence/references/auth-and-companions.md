@@ -2,7 +2,7 @@
 
 ## Phase 4 — Map authentication → wait/ask
 
-For each auth-gated step, list the **realm** (app login, `/admin` / Content Studio, GitLab web,
+For each auth-gated step, list the **realm** (app login, `/admin` / Content Studio, git host web,
 external system like Tourplan). Mode is **User fills** via Playwright storage state + headless
 capture.
 
@@ -63,6 +63,10 @@ npx playwright codegen --save-storage="$HOME/.agents/.auth/<env>.json" "<login-o
 Wait until they confirm the file exists (re-run `find-auth-storage.py` to verify). Then
 the planning session spawns `playwright-<TASK-ID>` with `--storage-state` from that file
 and hard-stops. Capture is `run-plan` in a new chat.
+
+### More than one realm
+
+When the Authentication map lists more than one realm (for example the app login and the git host web), spawn with the primary state as `--storage-state` and each other realm as `--extra-storage-state <path>` (repeatable). The spawn copies each file to `<output_dir>/auth/<basename>` and records the copies in `instance.json` under `extra_storage_states`. Two files with the same basename are refused, because a silent overwrite would log in as the wrong realm. In the plan, reference the copied path (not the original) in `browser_set_storage_state`, so the path is inside the instance's roots.
 
 ### Capture phase (after a storage-state path is known)
 

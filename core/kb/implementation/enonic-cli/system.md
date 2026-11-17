@@ -11,7 +11,7 @@ prose: caveman-lite
 
 Show XP instance info (version, mode, build hash, branch, timestamp). Alias: `i`.
 
-```
+```bash
 enonic system info [flags]
 ```
 

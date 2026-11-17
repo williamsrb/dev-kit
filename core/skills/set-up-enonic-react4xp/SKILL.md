@@ -1,6 +1,7 @@
 ---
 name: set-up-enonic-react4xp
-description: "Bootstrap a new Enonic React4XP project with the standard architecture, CLAUDE.md, and scripts. Use only when the operator or an orchestrator names this skill. | recommendedRole: task-owner | aliases: enonic-react4xp-setup, react4xp-enonic-setup."
+description: "Bootstrap a new Enonic React4XP project with the standard architecture, CLAUDE.md, and scripts. Use only when the operator or an orchestrator names this skill."
+paths: "**/src/main/resources/**, **/xp/**, **/build.gradle, **/gradle.properties"
 metadata:
   recommendedRole: task-owner
   aliases: enonic-react4xp-setup, react4xp-enonic-setup
@@ -59,6 +60,7 @@ Ask the user:
 Ask the user:
 
 > Do you want to use a **specific starter SHA commit**?
+>
 > - Type the SHA commit hash to use a specific version.
 > - Press Enter or type "no" to use the **latest** version from the main branch.
 
@@ -71,6 +73,7 @@ Ask the user:
 Present a summary of all collected values and ask for confirmation:
 
 > Here is your project configuration:
+>
 > - **Display Name**: `<project-display-name>`
 > - **Short Name**: `<project-short-name>`
 > - **Starter SHA**: `<starter-sha-commit>` _(or "latest")_
@@ -90,6 +93,7 @@ python3 <skill-path>/scripts/bootstrap.py "<project-display-name>" "<project-sho
 ```
 
 The script will:
+
 - Install Enonic CLI if not already installed.
 - Create an Enonic React4XP app (if /xp directory is empty or doesn't exist) using the variables collected during the workflow.
 - Copy the template files with some default files used in every project, such as:
@@ -109,10 +113,12 @@ After the bootstrap script completes successfully, use versions for npm deps fro
 ### Step 7 — Report Results
 
 Tell the user:
+
 1. Run `make up`, `make copyComponents` and `make deploy` to start the development environment with Docker.
 2. The CLAUDE.md is ready — Cursor will follow the project patterns when assisting in that repo.
 
 ### General Rules
+
 - **One question per message.** Never combine multiple questions in a single response.
 - If the bootstrap script detects an existing /xp directory with files in it, stop and report an error. The setup can only be executed in a clean repository.
 - When `<starter-sha-commit>` is empty, do not include this parameter in the command.

@@ -7,7 +7,9 @@ alwaysApply: true
 
 Jira cannot revert a comment overwrite.
 
-Before any `addOrEditJiraIssueComment` (or equivalent) **with** `commentId`:
+`agentctl jira comment --comment-id` runs this backup itself and refuses when it fails; the MCP comment and attachment tools listed in `.agentctl [tracker.jira] write_tools` are denied by `hooks/jira-write-guard.py` in Claude Code and Codex (Cursor has no MCP guard). Steps below apply to any other edit path.
+
+Before any comment edit **with** `commentId`:
 
 1. Fetch that comment as HTML (`responseContentFormat: html`).
 2. Run `python3 ~/.agents/skills/plan-task-evidence/scripts/backup-jira-comment.py --issue <KEY> --comment-id <ID> --body-file <html>`.

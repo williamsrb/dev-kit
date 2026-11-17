@@ -15,7 +15,7 @@ sign into will fix it.
 `@playwright/mcp` 1.64.0-alpha (2026-09) enforces a Host allowlist and answers any
 request whose `Host` header is not `localhost:<port>`:
 
-```
+```text
 HTTP/1.1 403 Forbidden
 Access is only allowed at localhost:8931
 ```

@@ -39,3 +39,13 @@ Proves what react4xp SSR puts in the HTML (card counts, whether a control render
 docker run --rm -v <worktree>/prototype:/proto:ro -v client-cold-proto-node-modules:/proto/node_modules:ro \
   -v <scratch>:/scratch -w /scratch --entrypoint node leanon/enonic-ci:7.14-node20 /scratch/build.cjs
 ```
+
+## Variant: the extractkit oracle loader (plain Node, no esbuild, 2026-10)
+
+`steps/enonic/oracle/loader.js` runs one case against legacy XP JavaScript with Node built-ins only: `node loader.js <resource-root> <case.json>` prints one JSON line. It hooks `Module._resolveFilename` and `Module._load` for absolute requests (`/lib/...`): a file under the root is loaded, anything else becomes a recording Proxy stub. The case expression is evaluated inside the target module's scope (a `module.__oracleEval` appended to its source), so internal functions and prototype methods are reachable. Procedure to write a case:
+
+1. Read the module for the exact call (constructor arguments, `prototype` method). Work the expected value out from the spec text, by hand.
+2. Run the case through the loader or `extractkit step report.oracle`. A `platform` result names the first unstubbed call: `/lib/xp/content.getSite`, `/lib/xp/context.get`, `Java.type(com.example.RequestContext).get`. Add it to the case `stubs` with the smallest value the code reads, run again, repeat. One case may need three or four stubs.
+3. Outbound calls: list `/lib/http-client.request` and `/lib/xp/mail.send` in `record`; give the HTTP call a response through `stubs`. A header under a credential-looking key is captured as `<masked>`; write `<masked>` in `expected` and limit the comparison with `fields` (`url`, `method`, `headers`) when the serialization of the body is not in the spec.
+
+Pitfalls: Nashorn globals must exist (`__LINE__`, `__FILE__`, `Java`, `__`, `resolve`, `app`, `log`); a legacy module that wraps `Java.type` in another call makes the stub name `Java.type(<class>).<method>`; avoid expected values with floating-point noise (`250.75 * (33.3 / 100)` is `83.49974999999999` in JS, not `83.49975`); an expression that throws is a `fail`, a load error or a timeout is `not-evaluable`. `/lib/http-client` is not on disk in the legacy repo, so it is always a stub.

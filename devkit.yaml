@@ -6,7 +6,7 @@
 # fork of this kit from a foreign kit that happens to share a command name.
 # A team forking the kit changes fork_id and sets upstream; lineage_id is
 # inherited unchanged.
-lineage_id: 689e75e6801860fdd3c546a5dc9315eaec164be3
+lineage_id: aac7ae6b9f08cbcd44defc41b6c9530fb51b0808
 fork_id: devkit
 name: devkit
 upstream: null          # null on the origin fork

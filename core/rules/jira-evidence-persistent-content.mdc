@@ -14,4 +14,4 @@ When creating or updating CMS content for Jira evidence on **acme-group review**
 
 Do **not** create throwaway evidence pages. Forbidden names and paths: `DELETE-ME`, `delete-me-*`, ticket keys in display name or path (`proj-413-…`), a KB folder named `disposable-content`.
 
-KB write-back: `How-to-*.md` under `~/.agents/kb/testing/acme-group/`. Mechanics: `How-to-create-persistent-part-evidence-content-on-review.md`.
+KB write-back: `How-to-*.md` under `~/.agents/kb/testing/acme-group/`. Mechanics: `How-to-create-persistent-part-evidence-content-on-review.md` in that folder.

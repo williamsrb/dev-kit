@@ -37,7 +37,7 @@ echo "$BODY" | grep -ciE 'httpequiv|http-equiv'  # deleted token, expect 0
    token present means the conflict was resolved the wrong way — that is a defect report,
    not a retry.
 
-3. **Add the build fingerprint.** Enonic XP stamps an app version into every asset URL
+1. **Add the build fingerprint.** Enonic XP stamps an app version into every asset URL
    (`/_/asset/<app.name>:<fingerprint>/...`). Extract it and record it; it changes on every
    jar install, so it dates the deploy independently of anything in your diff.
 
@@ -45,7 +45,7 @@ echo "$BODY" | grep -ciE 'httpequiv|http-equiv'  # deleted token, expect 0
 grep -oE '<app\.name>:[0-9a-f]+' body.html | sort -u
 ```
 
-4. **Rule out cache before calling a fail.** Three layers commonly sit between deploy and
+1. **Rule out cache before calling a fail.** Three layers commonly sit between deploy and
    browser: an app-level cache (Booster), an HTTP tier returning `age` / `x-cache`, and the
    application's own per-host page cache in `live` mode. Re-request with
    `-H "Cache-Control: no-cache"` and read `age` / `cache-status` from the response headers
@@ -86,7 +86,7 @@ kubectl -n enonic-review logs acme-group-0 -c xp-app --since=24h --timestamps \
 client review, PROJ-293 (deletion) with PROJ-284 (addition) as the co-located marker; the two
 tickets conflicted on adjacent lines of the same `<head>`:
 
-```
+```text
 preload count                   -> 3
 httpequiv|http-equiv count      -> 0
 asset fingerprint               -> com.example.client:000001a090959fc0

@@ -1,0 +1,367 @@
+#!/usr/bin/env python3
+"""Log in to a client k8s review environment and print session cookies.
+
+Credentials come from <user>.passwd in $AGENTS_HOME/.auth, then
+~/.agents/.auth (first hit wins). The optional first
+argument selects that file; it defaults to su (su.passwd). A second
+argument (or the only argument, when it is not a passwd stem) is the
+review host, project slug, or idprovider URL.
+
+Python 3.12, standard library only.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import re
+import sys
+import urllib.error
+import urllib.request
+from http.cookiejar import CookieJar
+from pathlib import Path
+from typing import Any
+from urllib.parse import urlparse, urlunparse
+
+AUTH_DIRS = list(dict.fromkeys(
+    d.resolve()
+    for d in (Path(os.environ.get("AGENTS_HOME", Path.home() / ".agents")).expanduser() / ".auth",
+              Path.home() / ".agents" / ".auth")
+    if d.is_dir()
+))
+DEFAULT_USER = "su"
+TIMEOUT_S = 20
+
+XP8_PATH = "/admin/_/idprovider/system"
+XP7_PATH = "/admin/tool/_/idprovider/system"
+
+URL_RE = re.compile(r"^https://\S+", re.MULTILINE)
+
+
+class AuthError(RuntimeError):
+    """User-facing failure; message goes to stderr."""
+
+
+def log(msg: str) -> None:
+    print(f"review-auth: {msg}", file=sys.stderr, flush=True)
+
+
+def passwd_stems() -> list[str]:
+    return sorted({p.stem for d in AUTH_DIRS for p in d.glob("*.passwd") if p.is_file()})
+
+
+def passwd_path(user: str) -> Path:
+    return next(d / f"{user}.passwd" for d in AUTH_DIRS if (d / f"{user}.passwd").is_file())
+
+
+def match_user(raw: str | None, stems: list[str]) -> str:
+    if not raw:
+        return DEFAULT_USER
+    name = Path(raw).name.removesuffix(".passwd")
+    if name in stems:
+        return name
+    lowered = {s.lower(): s for s in stems}
+    if name.lower() in lowered:
+        return lowered[name.lower()]
+    prefixes = [s for s in stems if s.lower().startswith(name.lower())]
+    if len(prefixes) == 1:
+        return prefixes[0]
+    available = ", ".join(stems) if stems else "(none)"
+    raise AuthError(
+        f"no passwd file matching {raw!r} in {auth_dir_display()}\n"
+        f"available: {available}"
+    )
+
+
+def auth_dir_display() -> str:
+    return ", ".join(str(d).replace(str(Path.home()), "~", 1) for d in AUTH_DIRS) or "(no .auth folder)"
+
+
+def load_passwd(path: Path) -> tuple[list[str], list[dict[str, Any]]]:
+    if not path.is_file():
+        raise AuthError(f"missing credential file {path}")
+    if path.stat().st_mode & 0o077:
+        log(f"{path} is group/world readable; chmod 600 it")
+    text = path.read_text(encoding="utf-8")
+    urls = URL_RE.findall(text)
+    bodies = [
+        obj
+        for obj in extract_json_objects(text)
+        if isinstance(obj.get("user"), str) and "password" in obj
+    ]
+    if not bodies:
+        raise AuthError(f"no login JSON in {path}")
+    return urls, bodies
+
+
+def extract_json_objects(text: str) -> list[dict[str, Any]]:
+    decoder = json.JSONDecoder()
+    objs: list[dict[str, Any]] = []
+    i = 0
+    while i < len(text):
+        if text[i] != "{":
+            i += 1
+            continue
+        try:
+            obj, end = decoder.raw_decode(text, i)
+        except json.JSONDecodeError:
+            i += 1
+            continue
+        if isinstance(obj, dict):
+            objs.append(obj)
+        i = end
+    return objs
+
+
+def looks_like_user(token: str, stems: list[str]) -> bool:
+    try:
+        match_user(token, stems)
+    except AuthError:
+        return False
+    return True
+
+
+def split_tokens(tokens: list[str], stems: list[str]) -> tuple[str, str | None]:
+    if not tokens:
+        return DEFAULT_USER, None
+    if len(tokens) == 1:
+        token = tokens[0]
+        if "://" not in token and looks_like_user(token, stems):
+            return match_user(token, stems), None
+        return DEFAULT_USER, token
+    if len(tokens) == 2:
+        return match_user(tokens[0], stems), tokens[1]
+    raise AuthError("too many arguments; expected [user] [target]")
+
+
+def origin_of(target: str) -> str:
+    raw = target.strip().rstrip("/")
+    if "://" not in raw:
+        if "." not in raw:
+            raw = f"https://review.{raw}.k8s.example.com"
+        else:
+            raw = f"https://{raw}"
+    parsed = urlparse(raw)
+    if not parsed.netloc:
+        raise AuthError(f"cannot parse target {target!r}")
+    return f"{parsed.scheme}://{parsed.netloc}"
+
+
+def is_idprovider_url(target: str) -> bool:
+    return "/idprovider/" in target
+
+
+def login_urls(templates: list[str], target: str | None) -> list[str]:
+    if target and is_idprovider_url(target):
+        parsed = urlparse(target.strip())
+        if not parsed.scheme:
+            parsed = urlparse(f"https://{target.strip()}")
+        return [urlunparse((parsed.scheme, parsed.netloc, parsed.path, "", "", ""))]
+
+    origin = origin_of(target) if target else None
+    if origin is None:
+        concrete = [u for u in templates if "*" not in u]
+        if len(concrete) == 1:
+            return [concrete[0]]
+        if not concrete:
+            raise AuthError(
+                "passwd URLs contain wildcards; pass a review host or project slug"
+            )
+        raise AuthError(
+            "passwd file has multiple URLs; pass a review host or project slug"
+        )
+
+    urls: list[str] = []
+    if templates:
+        for template in templates:
+            parsed = urlparse(template)
+            path = parsed.path or XP8_PATH
+            urls.append(origin + path)
+    else:
+        urls.extend([origin + XP8_PATH, origin + XP7_PATH])
+
+    # Keep file order, then fill any missing XP path so XP7/XP8 both get a try.
+    seen: set[str] = set()
+    ordered: list[str] = []
+    for url in urls:
+        if url not in seen:
+            seen.add(url)
+            ordered.append(url)
+    origin_p = urlparse(origin)
+    for path in (XP8_PATH, XP7_PATH):
+        candidate = urlunparse((origin_p.scheme, origin_p.netloc, path, "", "", ""))
+        if candidate not in seen:
+            ordered.append(candidate)
+    return ordered
+
+
+def login_bodies(raw_bodies: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    bodies: list[dict[str, Any]] = []
+    seen: set[tuple[str, str, str]] = set()
+    for body in raw_bodies:
+        payload = {
+            "action": body.get("action") or "login",
+            "user": body["user"],
+            "password": body["password"],
+        }
+        key = (payload["action"], payload["user"], payload["password"])
+        if key in seen:
+            continue
+        seen.add(key)
+        bodies.append(payload)
+    return bodies
+
+
+def cookie_header(jar: CookieJar) -> str:
+    return "; ".join(f"{c.name}={c.value}" for c in jar)
+
+
+def cookies_map(jar: CookieJar) -> dict[str, str]:
+    return {c.name: c.value for c in jar}
+
+
+def post_login(
+    opener: urllib.request.OpenerDirector,
+    url: str,
+    body: dict[str, Any],
+) -> tuple[int, dict[str, Any] | None, str]:
+    request = urllib.request.Request(
+        url,
+        data=json.dumps(body).encode("utf-8"),
+        method="POST",
+        headers={
+            "Accept": "application/json",
+            "Content-Type": "application/json",
+        },
+    )
+    try:
+        with opener.open(request, timeout=TIMEOUT_S) as response:
+            raw = response.read()
+            status = getattr(response, "status", 200)
+    except urllib.error.HTTPError as exc:
+        raw = exc.read()
+        status = exc.code
+    except urllib.error.URLError as exc:
+        return 0, None, str(exc.reason)
+    text = raw.decode("utf-8", errors="replace")
+    try:
+        payload = json.loads(text) if text else None
+    except json.JSONDecodeError:
+        payload = None
+    if not isinstance(payload, dict):
+        payload = None
+    return status, payload, text[:200]
+
+
+def authenticate(urls: list[str], bodies: list[dict[str, Any]]) -> tuple[str, CookieJar]:
+    jar = CookieJar()
+    opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(jar))
+    last_error = "no login attempts"
+    for url in urls:
+        for body in bodies:
+            status, payload, detail = post_login(opener, url, body)
+            if payload and payload.get("authenticated") is True:
+                if not cookie_header(jar):
+                    raise AuthError(
+                        f"login succeeded at {url} but no Set-Cookie was returned"
+                    )
+                log(f"POST {url} -> authenticated as {body['user']}")
+                return url, jar
+            if payload and payload.get("authenticated") is False:
+                message = payload.get("message") or "authenticated=false"
+                last_error = f"POST {url} -> {status} {message}"
+                log(last_error)
+                continue
+            last_error = f"POST {url} -> {status} {detail}"
+            log(last_error)
+            if status == 404:
+                break
+    raise AuthError(last_error)
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="review-auth",
+        description=(
+            "Authenticate to a k8s review environment and print session cookies. "
+            "Credentials are read from <user>.passwd in $AGENTS_HOME/.auth, then ~/.agents/.auth."
+        ),
+        epilog=(
+            "Examples:\n"
+            "  review-auth https://review.client.k8s.example.com\n"
+            "  review-auth su acme-group\n"
+            "  review-auth automated\n"
+            "  review-auth automated https://review.acme-group.k8s.example.com\n"
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    parser.add_argument(
+        "tokens",
+        nargs="*",
+        metavar="ARG",
+        help="optional user (passwd stem, default: su) and review target",
+    )
+    parser.add_argument(
+        "--json",
+        action="store_true",
+        help="print cookies as JSON instead of a Cookie header",
+    )
+    return parser
+
+
+def parse_args(argv: list[str]) -> argparse.Namespace:
+    parser = build_parser()
+    if not argv:
+        parser.print_help()
+        parser.exit(0)
+    return parser.parse_args(argv)
+
+
+def main(argv: list[str]) -> int:
+    args = parse_args(argv)
+    stems = passwd_stems()
+    user, target = split_tokens(args.tokens, stems)
+    if user not in stems:
+        # Default user with no matching file (e.g. target-only invocation).
+        raise AuthError(
+            f"missing {user}.passwd in {auth_dir_display()}\n"
+            f"available: {', '.join(stems) if stems else '(none)'}"
+        )
+
+    path = passwd_path(user)
+    templates, raw_bodies = load_passwd(path)
+    urls = login_urls(templates, target)
+    bodies = login_bodies(raw_bodies)
+    log(f"user={user} file={path}")
+    used_url, jar = authenticate(urls, bodies)
+    header = cookie_header(jar)
+    if args.json:
+        print(
+            json.dumps(
+                {
+                    "authenticated": True,
+                    "cookies": cookies_map(jar),
+                    "cookie_header": header,
+                    "url": used_url,
+                    "user": user,
+                },
+                indent=2,
+                ensure_ascii=False,
+                sort_keys=True,
+            )
+        )
+    else:
+        print(header)
+    return 0
+
+
+if __name__ == "__main__":
+    try:
+        raise SystemExit(main(sys.argv[1:]))
+    except AuthError as exc:
+        log(str(exc))
+        raise SystemExit(2) from None
+    except KeyboardInterrupt:
+        log("interrupted")
+        raise SystemExit(130) from None

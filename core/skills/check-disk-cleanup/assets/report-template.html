@@ -1,0 +1,307 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Disk Clean-up Report</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@500;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one reading column; summary sentence, two charts, then a filterable table of every finding. */
+:root {
+  --bg: #f6f7f9; --surface: #ffffff; --fg: #1b2230; --muted: #5d6779; --line: #dde1e8;
+  --accent: #2f5bd3;
+  --safe: #1f8a5b; --safe-bg: #e3f4ec;
+  --decide: #b7740f; --decide-bg: #fbf0dc;
+  --leave: #7a8394; --leave-bg: #eceef2;
+  --used: #c9ced8; --reserve: #9aa3b4; --free: transparent;
+  --display: "Familjen Grotesk", "Helvetica Neue", Arial, sans-serif;
+  --body: "IBM Plex Sans", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #12161d; --surface: #1a1f28; --fg: #e6e9ef; --muted: #9aa3b4; --line: #2c3340;
+  --accent: #7d9cf0;
+  --safe: #4cc38a; --safe-bg: #173528; --decide: #e3a94a; --decide-bg: #3a2c12;
+  --leave: #8e97a8; --leave-bg: #262c37; --used: #3a4252; --reserve: #5b6577; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #12161d; --surface: #1a1f28; --fg: #e6e9ef; --muted: #9aa3b4; --line: #2c3340;
+  --accent: #7d9cf0;
+  --safe: #4cc38a; --safe-bg: #173528; --decide: #e3a94a; --decide-bg: #3a2c12;
+  --leave: #8e97a8; --leave-bg: #262c37; --used: #3a4252; --reserve: #5b6577; color-scheme: dark }
+
+body { background: var(--bg); color: var(--fg); font: 15px/1.55 var(--body); }
+.wrap { max-width: 1100px; margin: 0 auto; padding-block: 32px 64px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: grid; gap: 40px; }
+h1, h2 { font-family: var(--display); text-wrap: balance; margin: 0; }
+h1 { font-size: 2rem; line-height: 1.15; }
+h2 { font-size: 1.3rem; }
+p { margin: 0; max-width: 68ch; }
+.muted { color: var(--muted); }
+.small { font-size: .85rem; }
+.num { font-variant-numeric: tabular-nums; }
+code, .mono { font-family: var(--mono); font-size: .82rem; }
+section { display: grid; gap: 16px; min-width: 0; }
+
+.lead { display: grid; gap: 12px; }
+.lead p { font-size: 1.08rem; }
+
+.legend { display: flex; flex-wrap: wrap; gap: 8px 20px; font-size: .85rem; color: var(--muted); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.sw { width: 12px; height: 12px; border-radius: 3px; display: inline-block; border: 1px solid transparent; }
+.sw.used { background: var(--used); } .sw.safe { background: var(--safe); } .sw.decide { background: var(--decide); }
+.sw.reserve { background: var(--reserve); } .sw.free { border: 1px dashed var(--muted); }
+
+.disk { display: grid; gap: 8px; }
+.disk-head { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 16px; align-items: baseline; }
+.disk-head strong { font-family: var(--display); font-size: 1.1rem; }
+.bar { display: flex; height: 34px; border-radius: 6px; overflow: hidden; border: 1px solid var(--line); background: var(--surface); }
+.bar div { height: 100%; min-width: 0; }
+.seg-used { background: var(--used); } .seg-safe { background: var(--safe); } .seg-decide { background: var(--decide); }
+.seg-reserve { background: var(--reserve); }
+.seg-free { background: repeating-linear-gradient(135deg, transparent 0 6px, var(--line) 6px 7px); }
+.disk-nums { display: flex; flex-wrap: wrap; gap: 4px 18px; font-size: .88rem; }
+.disk-nums b { font-weight: 600; }
+
+.hbars { display: grid; gap: 10px; }
+.hrow { display: grid; grid-template-columns: minmax(120px, 230px) 1fr 72px; gap: 12px; align-items: center; }
+.hrow .lbl { font-size: .9rem; min-width: 0; overflow-wrap: anywhere; }
+.hrow .lbl small { color: var(--muted); display: block; font-size: .75rem; }
+.track { display: flex; height: 18px; border-radius: 4px; overflow: hidden; background: var(--line); }
+.track div { height: 100%; }
+.hrow .val { text-align: right; font-variant-numeric: tabular-nums; font-size: .9rem; }
+.axis { display: grid; grid-template-columns: minmax(120px, 230px) 1fr 72px; gap: 12px; font-size: .72rem; color: var(--muted); }
+.axis .ticks { position: relative; height: 14px; }
+.axis .ticks span { position: absolute; transform: translateX(-50%); white-space: nowrap; }
+.axis .ticks span:first-child { transform: none; }
+@media (max-width: 560px) { .hrow, .axis { grid-template-columns: 1fr 64px; } .hrow .lbl { grid-column: 1 / -1; } .axis > :first-child { display: none; } }
+
+.controls { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; }
+.controls label { font-size: .85rem; color: var(--muted); display: inline-flex; gap: 6px; align-items: center; }
+select, input[type="search"] { font: inherit; font-size: .9rem; padding: 6px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); color: var(--fg); }
+input[type="search"] { min-width: 0; width: 220px; max-width: 100%; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.table-box { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; min-width: 820px; }
+th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-size: .72rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); font-weight: 600; position: sticky; top: 0; background: var(--surface); }
+th button { all: unset; cursor: pointer; } th button:focus-visible { outline: 2px solid var(--accent); }
+tr:last-child td { border-bottom: 0; }
+td.size { font-variant-numeric: tabular-nums; white-space: nowrap; font-weight: 600; }
+td.what .p { font-family: var(--mono); font-size: .8rem; overflow-wrap: anywhere; }
+td.what .meta { font-size: .78rem; color: var(--muted); margin-top: 2px; }
+td.when { white-space: nowrap; font-size: .85rem; }
+.pill { display: inline-block; font-size: .75rem; font-weight: 600; padding: 2px 9px; border-radius: 99px; white-space: nowrap; }
+.pill.safe { color: var(--safe); background: var(--safe-bg); }
+.pill.decide { color: var(--decide); background: var(--decide-bg); }
+.pill.leave { color: var(--leave); background: var(--leave-bg); }
+.tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+.tag { font-size: .68rem; text-transform: uppercase; letter-spacing: .05em; border: 1px solid var(--line); border-radius: 4px; padding: 0 5px; color: var(--muted); }
+.tag.warn { color: var(--decide); border-color: var(--decide); }
+.cmd { display: flex; gap: 6px; align-items: flex-start; }
+.cmd code { flex: 1; min-width: 0; overflow-wrap: anywhere; background: var(--bg); padding: 4px 6px; border-radius: 4px; }
+.cmd button { font: inherit; font-size: .75rem; padding: 3px 8px; border: 1px solid var(--line); border-radius: 4px; background: var(--surface); color: var(--fg); cursor: pointer; white-space: nowrap; }
+.cmd button:hover { border-color: var(--accent); }
+.foot { display: grid; gap: 6px; font-size: .85rem; color: var(--muted); }
+.count { font-size: .85rem; color: var(--muted); }
+</style>
+
+<div class="wrap">
+  <header class="lead">
+    <h1>Disk clean-up report</h1>
+    <p id="headline"></p>
+    <p class="muted small" id="scaninfo"></p>
+  </header>
+
+  <section>
+    <h2>How full each disk is</h2>
+    <div class="legend">
+      <span><i class="sw used"></i>Used, nothing to free</span>
+      <span><i class="sw safe"></i>Safe to clear</span>
+      <span><i class="sw decide"></i>Your call</span>
+      <span><i class="sw reserve"></i>Reserved for root (setting)</span>
+      <span><i class="sw free"></i>Free now</span>
+    </div>
+    <div id="disks" style="display:grid;gap:22px"></div>
+  </section>
+
+  <section>
+    <h2>Where the space you can free sits</h2>
+    <p class="muted small">Each bar is one kind of item. Green clears with no loss. Amber needs you to decide. Items marked "Leave alone" are not drawn.</p>
+    <div class="hbars" id="groups"></div>
+  </section>
+
+  <section>
+    <h2>Every item</h2>
+    <p class="muted small"><b>Safe to clear</b>: the app rebuilds it on its own (caches, node_modules, build output). <b>Your call</b>: your files, dumps, old projects or a setting; check before you remove them. <b>Leave alone</b>: installed apps, tools, git history or models; listed only so you know what is big.</p>
+    <div class="controls">
+      <label for="f-disk">Disk <select id="f-disk"><option value="all">All disks</option></select></label>
+      <label for="f-bucket">Verdict <select id="f-bucket">
+        <option value="act">Safe + Your call</option><option value="safe">Safe to clear</option>
+        <option value="decide">Your call</option><option value="leave">Leave alone</option><option value="all">All</option></select></label>
+      <label for="f-min">At least <select id="f-min"><option value="0">any size</option><option value="100e6">100 MB</option><option value="500e6">500 MB</option><option value="1e9" selected>1 GB</option><option value="5e9">5 GB</option></select></label>
+      <label for="f-q">Search <input type="search" id="f-q" placeholder="path or command"></label>
+      <label for="f-nested"><input type="checkbox" id="f-nested"> Show items inside other items</label>
+    </div>
+    <div class="count" id="count"></div>
+    <div class="table-box">
+      <table>
+        <thead><tr>
+          <th><button type="button" data-sort="bytes">Size ↓</button></th>
+          <th>What</th>
+          <th><button type="button" data-sort="last">Last changed</button></th>
+          <th>Verdict</th>
+          <th>Command to run (copy, then run it yourself)</th>
+        </tr></thead>
+        <tbody id="rows"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2>Refresh this report</h2>
+    <p class="muted small">Run these in order. The scan takes under a minute; wait until <code>agentctl disk status</code> shows every target as finished, then rebuild.</p>
+    <div class="hbars" id="refresh"></div>
+  </section>
+
+  <footer class="foot" id="foot"></footer>
+</div>
+
+<script>
+const DATA = /*DATA*/;
+const CAT = { caches: "App cache", "big-files": "Large file", system: "System", trash: "Trash", downloads: "Downloads",
+  "home-regenerable": "Build output", "home-stale": "Idle project", docker: "Docker", apps: "Packages" };
+const VERDICT = { safe: "Safe to clear", decide: "Your call", leave: "Leave alone" };
+const HOME = DATA.home;
+const gb = b => b >= 1e9 ? (b / 1e9).toFixed(1) + " GB" : Math.round(b / 1e6) + " MB";
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const tilde = p => p.startsWith(HOME) ? "~" + p.slice(HOME.length) : p;
+const isReserve = i => i.cat === "system" && i.title.startsWith("Reserved blocks");
+const topItems = DATA.items.filter(i => !i.inside);
+const mountOf = id => DATA.disks.find(d => d.id === id).mount;
+
+function totals(disk) {
+  const t = { safe: 0, decide: 0 };
+  for (const i of topItems) {
+    if (i.disk !== disk || isReserve(i)) continue;
+    if (i.bucket === "safe") t.safe += i.bytes;
+    else if (i.bucket === "decide") t.decide += i.bytes;
+  }
+  return t;
+}
+
+const scanDate = new Date(DATA.disks[0].scanned);
+const pctFull = d => Math.round((d.size - d.avail) / d.size * 100);
+const disks = [...DATA.disks].sort((a, b) => pctFull(b) - pctFull(a));
+const lead = disks[0], leadT = totals(lead.id);
+document.getElementById("headline").innerHTML =
+  `Your <b>${esc(lead.mount)}</b> disk is <b>${pctFull(lead)}% full</b> with ${gb(lead.avail)} free. ` +
+  `About <b>${gb(leadT.safe)}</b> is caches and build output that rebuild themselves, so you can clear it without losing anything. ` +
+  `Another ${gb(leadT.decide)} (old dumps, Trash, Downloads, idle projects or a setting) needs you to decide.` +
+  disks.slice(1).map(d => ` ${esc(d.mount)} is ${pctFull(d)}% full with ${gb(d.avail)} free.`).join("");
+document.getElementById("scaninfo").textContent =
+  `Scanned ${scanDate.toLocaleString()} by agentctl disk; page built ${new Date(DATA.generated).toLocaleString()}. Nothing on this page deletes anything: it only lists items and the command for each.`;
+document.getElementById("f-disk").insertAdjacentHTML("beforeend",
+  DATA.disks.map(d => `<option value="${esc(d.id)}">${esc(d.mount)}</option>`).join(""));
+
+document.getElementById("disks").innerHTML = DATA.disks.map(d => {
+  const t = totals(d.id);
+  const reserve = Math.max(0, d.size - d.used - d.avail);
+  const stays = Math.max(0, d.used - t.safe - t.decide);
+  // agentctl suggests tune2fs -m 1, which keeps 1% of the disk reserved.
+  const back = Math.max(0, reserve - d.size * 0.01);
+  const segs = [["used", stays, "Used, nothing to free"], ["safe", t.safe, "Safe to clear"], ["decide", t.decide, "Your call"],
+    ["reserve", reserve, "Reserved for root"], ["free", d.avail, "Free now"]];
+  return `<div class="disk">
+    <div class="disk-head"><strong>${esc(d.label)}</strong><span class="muted small num">${gb(d.size)} total &middot; ${pctFull(d)}% full &middot; ${esc(d.device)}</span></div>
+    <div class="bar" role="img" aria-label="${segs.map(s => s[2] + " " + gb(s[1])).join(", ")}">
+      ${segs.map(([k, v, n]) => `<div class="seg-${k}" style="width:${(v / d.size * 100).toFixed(3)}%" title="${n}: ${gb(v)}"></div>`).join("")}
+    </div>
+    <div class="disk-nums num">
+      <span>Free now <b>${gb(d.avail)}</b></span>
+      <span style="color:var(--safe)">Safe to clear <b>${gb(t.safe)}</b></span>
+      <span style="color:var(--decide)">Your call <b>${gb(t.decide)}</b></span>
+      <span class="muted">Reserved for root <b>${gb(reserve)}</b>${back >= 1e9 ? `, about ${gb(back)} back with one sudo setting` : ""}</span>
+    </div></div>`;
+}).join("");
+
+const groups = {};
+for (const i of topItems) {
+  if (i.bucket === "leave" || isReserve(i)) continue;
+  const key = i.disk + "|" + i.cat;
+  groups[key] ??= { disk: i.disk, cat: i.cat, safe: 0, decide: 0, n: 0 };
+  groups[key][i.bucket] += i.bytes; groups[key].n++;
+}
+const g = Object.values(groups).sort((a, b) => (b.safe + b.decide) - (a.safe + a.decide));
+const peak = Math.max(1e9, ...g.map(x => x.safe + x.decide));
+const step = 10 ** Math.floor(Math.log10(peak));
+const max = Math.ceil(peak / step) * step;
+const ticks = [0, .25, .5, .75, 1].map(f => f * max);
+document.getElementById("groups").innerHTML = g.map(x => `<div class="hrow">
+    <div class="lbl">${CAT[x.cat] || x.cat}<small>${esc(mountOf(x.disk))} &middot; ${x.n} item${x.n > 1 ? "s" : ""}</small></div>
+    <div class="track" role="img" aria-label="Safe ${gb(x.safe)}, your call ${gb(x.decide)}">
+      <div class="seg-safe" style="width:${x.safe / max * 100}%"></div><div class="seg-decide" style="width:${x.decide / max * 100}%"></div>
+    </div>
+    <div class="val">${gb(x.safe + x.decide)}</div></div>`).join("") +
+  `<div class="axis"><div></div><div class="ticks">${ticks.map(t => `<span style="left:${t / max * 100}%">${t / 1e9} GB</span>`).join("")}</div><div></div></div>`;
+
+let sortKey = "bytes";
+const F = id => document.getElementById(id);
+function ago(iso) {
+  if (!iso) return "—";
+  const days = Math.round((scanDate - new Date(iso)) / 864e5);
+  if (days < 1) return "today";
+  if (days < 45) return days + " days ago";
+  if (days < 540) return Math.round(days / 30) + " months ago";
+  return (days / 365).toFixed(1) + " years ago";
+}
+function render() {
+  const disk = F("f-disk").value, b = F("f-bucket").value, min = +F("f-min").value, q = F("f-q").value.trim().toLowerCase(), nested = F("f-nested").checked;
+  const rows = DATA.items.filter(i =>
+    (disk === "all" || i.disk === disk) &&
+    (b === "all" || (b === "act" ? i.bucket !== "leave" : i.bucket === b)) &&
+    i.bytes >= min && (nested || !i.inside) &&
+    (!q || (i.path + " " + (i.cmd || "") + " " + i.title).toLowerCase().includes(q)));
+  rows.sort(sortKey === "bytes" ? (a, c) => c.bytes - a.bytes : (a, c) => (a.last || "9").localeCompare(c.last || "9"));
+  F("count").textContent = `${rows.length} item${rows.length === 1 ? "" : "s"}, ${gb(rows.filter(r => !r.inside).reduce((s, r) => s + r.bytes, 0))} in total`;
+  F("rows").innerHTML = rows.map(i => {
+    const tags = [];
+    if (i.sudo) tags.push(`<span class="tag">needs sudo</span>`);
+    if (i.cmd && !i.reversible) tags.push(`<span class="tag warn">permanent</span>`);
+    if (i.inside) tags.push(`<span class="tag">inside ${esc(tilde(i.inside))}</span>`);
+    const cmd = i.bucket === "leave" ? `<span class="muted small">Don't remove by hand${/ollama/.test(i.path) ? "; use <code>ollama rm &lt;model&gt;</code>" : ""}.</span>`
+      : i.cmd ? `<div class="cmd"><code>${esc(i.cmd)}</code><button type="button" data-copy="${esc(i.cmd)}">Copy</button></div>` : `<span class="muted small">No command</span>`;
+    const verify = i.verify ? `<div class="meta">Check first: <code>${esc(i.verify)}</code></div>` : "";
+    return `<tr>
+      <td class="size">${gb(i.bytes)}</td>
+      <td class="what"><div>${CAT[i.cat] || i.cat} <span class="muted small">&middot; ${esc(mountOf(i.disk))}</span></div>
+        <div class="p">${esc(tilde(i.path))}</div><div class="meta">${esc(i.evidence)}</div>${verify}
+        ${tags.length ? `<div class="tags">${tags.join("")}</div>` : ""}</td>
+      <td class="when">${ago(i.last)}</td>
+      <td><span class="pill ${i.bucket}">${VERDICT[i.bucket]}</span></td>
+      <td>${cmd}</td></tr>`;
+  }).join("") || `<tr><td colspan="5" class="muted">Nothing matches these filters.</td></tr>`;
+}
+["f-disk", "f-bucket", "f-min", "f-nested"].forEach(id => F(id).addEventListener("change", render));
+F("f-q").addEventListener("input", render);
+document.querySelectorAll("th button").forEach(btn => btn.addEventListener("click", () => {
+  sortKey = btn.dataset.sort;
+  document.querySelectorAll("th button").forEach(x => x.textContent = x.textContent.replace(" ↓", ""));
+  btn.textContent += " ↓"; render();
+}));
+async function copyCommand(e) {
+  const btn = e.target.closest("button[data-copy]"); if (!btn) return;
+  try { await navigator.clipboard.writeText(btn.dataset.copy); btn.textContent = "Copied"; }
+  catch { const r = document.createRange(); r.selectNodeContents(btn.previousElementSibling); const s = getSelection(); s.removeAllRanges(); s.addRange(r); btn.textContent = "Selected"; }
+  setTimeout(() => btn.textContent = "Copy", 1500);
+}
+F("rows").addEventListener("click", copyCommand);
+render();
+
+F("refresh").innerHTML = DATA.refresh.map(r => `<div><div class="small muted">${esc(r.why)}</div>
+  <div class="cmd"><code>${esc(r.cmd)}</code><button type="button" data-copy="${esc(r.cmd)}">Copy</button></div></div>`).join("");
+F("refresh").addEventListener("click", copyCommand);
+
+F("foot").innerHTML = `<div>Totals count each item once: a big file inside a cache folder is counted with that folder. Turn on "Show items inside other items" to see them.</div>
+  <div>Also not listed: ${DATA.disks.map(d => `${gb(d.danger)} on ${esc(d.mount)}`).join(", ")} that agentctl rates as risky to touch, such as protected docker volumes. It offers no command for these.</div>
+  <div>Trash, deleted files and removed docker volumes cannot be recovered.</div>`;
+</script>

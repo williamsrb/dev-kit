@@ -1,6 +1,6 @@
 ---
 name: develop-xp7-backend
-description: "Enonic XP 7 backend: controllers, services, schemas, CMS, IAM, queries, deploy. Use for XP7, lib-content, lib-node, content types, NoQL/DSL, or Enonic app development. | recommendedRole: build | aliases: enonic-xp7-backend-development, xp7-backend, enonic-backend, xp-backend-dev."
+description: "Enonic XP 7 backend: controllers, services, schemas, CMS, IAM, queries, deploy. Use for XP7, lib-content, lib-node, content types, NoQL/DSL, or Enonic app development."
 metadata:
   recommendedRole: build
   aliases: enonic-xp7-backend-development, xp7-backend, enonic-backend, xp-backend-dev
@@ -121,6 +121,7 @@ python3 scripts/sync-xp-docs.py
 ```
 
 Docs and tooling:
+
 - Offline docs guide: `~/.agents/kb/offline-reference/xp7/README.md`
 - Sync script: `scripts/sync-xp-docs.py`
 - Catalog root: `~/.agents/kb/offline-reference/README.md`

@@ -12,7 +12,9 @@ until --apply, and --apply refuses while the target's app is running.
 
 from __future__ import annotations
 
+import os
 import sqlite3
+import time
 from collections.abc import Callable
 from pathlib import Path
 
@@ -138,3 +140,62 @@ def cmd_session_sync(args) -> int:
     sync_sessions(Path(user.pw_dir), args.source, args.target, plan,
                   agents=args.agent, only=args.only, indexeddb=args.indexeddb)
     return plan.report(f"session-sync {args.source} -> {args.target}")
+
+
+def pull_session(home: Path, session_id: str, source: str, target: str | None, plan: Plan, *,
+                 org: str | None = None, env=os.environ,
+                 find_running: Callable[..., Found] = running,
+                 now: Callable[[], float] = time.time) -> None:
+    """One session from `source` into `target` (default: DEVKIT_PROFILE, else stock)."""
+    target = target or env.get("DEVKIT_PROFILE") or STOCK
+    if source == target:
+        raise DevkitError("source and target are the same instance",
+                          "pass --source with another name; 'stock' is the unprefixed install")
+    src, dst = resolve_side(source, home), resolve_side(target, home)
+    for side in (src, dst):
+        if side.code is None:
+            raise DevkitError(f"{side.name} has no claude instance",
+                              "'devkit profile list' shows what each profile has")
+    org_dir = Path(org).expanduser() if org else None
+    copy = claude.plan_one(src, dst, session_id, org_dir)
+    print(f"target: {dst.name}")
+    if any(dest.suffix == ".json" for _, dest in copy.todo) or org_dir:
+        print(f"desktop org folder: {claude.target_org(dst, org_dir)}")
+    sources = claude.transcripts(src.code, session_id)
+    if any(now() - p.stat().st_mtime < 60 for p in sources):
+        print("warning: the source transcript changed in the last 60 seconds; "
+              "this copy is a snapshot of a session still in use.")
+    if not copy.todo:
+        newer = any(d.is_file() and d.stat().st_mtime > s.stat().st_mtime
+                    for s in sources
+                    for d in [dst.code / "projects" / s.relative_to(src.code / "projects")])
+        print("target is newer, nothing copied." if newer else "already up to date, nothing copied.")
+    else:
+        blockers = find_running(dst, True, True)
+        if blockers and copy.newer:
+            message = "an app on the target is running and a file would be replaced: " + _summary(blockers)
+            if plan.apply:
+                raise DevkitError(message, "quit it, or re-run once the target lacks the file")
+            print("note: " + message)
+        plan.record(copy.describe())
+        for srcfile, dstfile in copy.todo:
+            plan.record(f"{srcfile} -> {dstfile}")
+        if plan.apply:
+            copy.step().run()
+    cwd = _session_cwd(src, session_id, sources)
+    command = "claude" if dst.name == STOCK else f"claude-{dst.name}"
+    print(f"open it: cd {cwd or '<working folder>'} && {command} --resume {session_id}")
+
+
+def _session_cwd(src: Side, session_id: str, sources: list[Path]) -> str | None:
+    for _, data in claude.desktop_entries(src.desktop):
+        if data.get("cliSessionId") == session_id and data.get("cwd"):
+            return data["cwd"]
+    return claude.transcript_cwd(sources[0]) if sources else None
+
+
+def cmd_session_pull(args) -> int:
+    user = privilege.refuse_root(None)
+    plan = Plan(args.apply)
+    pull_session(Path(user.pw_dir), args.session, args.source, args.target, plan, org=args.org)
+    return plan.report(f"session-pull {args.session}")

@@ -98,9 +98,32 @@ What each agent copies:
   backup copies the whole target database, so the target needs that much free
   disk again.
 
+## Resuming one session from another profile
+
+When a profile's subscription runs out of quota, continue one session from
+another profile instead of syncing everything. `devkit profile session-find
+--title "..."` searches Claude Code and Claude Desktop sessions by title across
+every profile and `stock` (read-only; `--since YYYY-MM-DD`, `--profile NAME`,
+`--json`). `devkit profile session-pull --session ID --source NAME` copies that
+one session (transcripts, sidecar folders, the Desktop index file) into the
+target: `--target`, else `DEVKIT_PROFILE`, else `stock`. The id is kept, the
+source is never written, a newer target file is kept, and it is a dry run until
+`--apply`. While the target's app runs, only files the target lacks are added.
+`--org DIR` picks the target Desktop organisation folder.
+
+| From | To | Run |
+|------|----|-----|
+| profile A | profile B | in a B session: `session-pull --session ID --source A --apply` |
+| stock | profile B | in a B session: `session-pull --session ID --source stock --apply` |
+| profile A | stock | in stock `claude`: `session-pull --session ID --source A --apply` |
+| any | any | name both: `--source X --target Y` |
+
+Open it with `cd <cwd> && claude-<profile> --resume ID` (`claude` for stock).
+Claude Desktop reads its session list at start, so restart the target Desktop.
+
 ## What gets created
 
-```
+```text
 ~/.agents-profiles/<profile>/            # the profile root
 ~/.agents-profiles/<profile>/hooks       # per-file links into kit hooks/ + statusline
 ~/.agents-profiles/<profile>/agents      # AGENTS_HOME: ~/.agents-shaped tree
@@ -114,9 +137,13 @@ What each agent copies:
     prds/ plans/ .playwright-mcp/        # profile-local state
     .auth/                               # profile-local; token YAML may be shared
 ~/.agents-profiles/<profile>/<vendor>/   # the vendor's config dir
-    skills/  rules/  kb/                 # per-entry symlinks into the kit home's core/;
+    skills/  kb/                         # per-entry symlinks into the kit home's core/;
                                          # an entry narrowed by a deeper entry or a
                                          # <layer>_excludes path is a real dir of finer links
+    skills/orchestrate                   # link into core/skills-vendor/<vendor>/
+    rules/                               # Claude only: one .md per rule section, rendered
+                                         # at sync (core, plus client for client);
+                                         # Codex and Cursor keep per-entry symlinks
     hooks -> <profile root>/hooks        # absolute link
     .devkit-profile.json                 # provenance
     settings.json hooks.json config.toml mcp.json   # per vendor, as that vendor uses them
@@ -132,6 +159,14 @@ What each agent copies:
 ~/.local/share/icons/hicolor/<size>/apps/<vendor>-<profile>.png   # badged, 16 to 512
 /usr/lib/devkit/<vendor>-<profile>/      # identity fork (root, apt-rebuilt)
 ```
+
+Claude reads a rules folder of `.md` files, so its `rules/` is generated at
+`profile sync` by the kit's `generate-agents-md.py`, not linked. Each file
+carries a `devkit` marker; a sync overwrites them, removes marked files the
+render no longer has, and leaves a hand-written rule alone. The settings
+template wires the history adapter (`prompt` and `stop`), `kb-router.py`, the
+git guard and the Jira write guard, and excludes `~/.claude/rules` so the main
+config's copy is not loaded twice.
 
 Layers are projected as **symlinks**, not copies, and they point into the kit
 home (`~/.local/share/devkit/current/core/`), not into the checkout. `create`,
@@ -150,6 +185,9 @@ gates skip that copy when the fork's version and `desktopName` already match.
 ./devkit profile create dummy --type enonic --apply
 ./devkit profile create enonic --apply
 ./devkit profile sync dummy --apply    # after a manifest change
+./devkit profile create beta --type core --pin v1.2 --apply        # fixed to a kit tag or commit
+./devkit profile create edge --type core --track develop --apply   # follows a kit branch
+./devkit profile sync beta --unpin --apply                         # back to the installed kit
 ./devkit profile adopt mine --vendor claude --type core --config-dir ~/.agents-profiles/mine/claude --apply
 ./devkit profile auth restore            # put stock URL handlers back
 ./devkit profile session-sync --source stock --target dummy --agent all --apply   # copy sessions
@@ -160,6 +198,51 @@ gates skip that copy when the fork's version and `desktopName` already match.
 Every command that writes is a dry run without `--apply`; `list` and `show` only read.
 `list` prints one row per vendor instance (PROFILE, TYPE, VENDOR, STATE, CONFIG
 DIR), or `no installed profiles.`
+
+## Following a branch or pinning a tag
+
+By default every profile projects its skills, rules and kb through one link,
+`<kit home>/current`, so all profiles run the same kit version. A profile can
+instead sit on a git ref of the kit:
+
+| Flag | Meaning | Moves |
+|------|---------|-------|
+| `--pin TAG_OR_SHA` | a tag or a commit | only on `devkit profile sync NAME --pin REF --apply` |
+| `--track BRANCH` | the tip of a branch | on `devkit update fetch` + `devkit update apply --apply` |
+| `--from SRC` | where the ref is read: a git URL or a local git checkout | |
+
+`--track` and `--pin` (and `--unpin` on `sync`) are mutually exclusive, and
+`--from` needs one of them. A name that is a branch is refused by `--pin`, and a
+tag by `--track`. The default source is the one the installed kit recorded, then
+`upstream`; a profile on a ref keeps its own source, and `sync` reuses it.
+
+Only the content follows the ref: `core/` (skills, rules, kb, hooks, `bin`),
+`profiles/` and `flavors/`. Templates, wrappers, vendor config, auth handlers and
+the `devkit` command itself stay on the running kit and `current`, so a ref never
+runs different tooling. The ref's tree is installed as an ordinary release, and
+`<kit home>/refs/<profile>` links to it; the profile's links name
+`refs/<profile>/core/...`. The provenance file gains a `kit_ref` with the kind,
+source, ref, commit, release and the previous release. `profile list` shows
+`pin <ref>` or `track <branch>` for these instances.
+
+A ref is refused before anything is written when its tree is of another lineage
+or another fork (`devkit profile migrate` moves across forks), has no `core/`,
+names a newer profile schema than this installer knows, or has a different
+release layout (`PAYLOAD`) from this devkit. `master_v1` predates the layout this
+devkit installs and is refused for that reason.
+
+`devkit update apply` does not touch a pinned profile's content; it prints
+`skip   NAME/VENDOR (pinned to REF @ COMMIT)` and the fix, `devkit profile sync
+NAME --apply`, because the skipped profile keeps the wrappers rendered by the
+previous tooling. A followed branch is fetched by `update fetch` (one payload per
+branch, never installed as `current`) and moved by `update apply`. A branch that
+is gone, rewritten onto a foreign lineage, of another fork or of another layout
+is reported as a `note:` and the profile stays on its release. `update check`
+shows `pinned REF` or `track BRANCH: up to date | update available`, and
+`doctor` reports a missing ref link with the `profile sync` fix.
+
+`kithome.prune` keeps every release a ref link names and the previous release
+each instance records, on top of `current` and the previous release.
 
 ## Composition
 

@@ -14,6 +14,11 @@ Layout, the same one extract-kit uses:
     CLAUDE.md           -> AGENTS.md
     .devkit-project.json  stamp: what the build wrote
 
+A scaffolded project (`mode: copy`) is the other shape: `devkit project
+scaffold` copies the skills into `harness/skills/` once, and the repo owns them
+from then on. A build links them with relative links, reads no kit, and never
+writes inside `harness/`.
+
 Generated paths go into a managed block of `.git/info/exclude`, so a client repo
 keeps a clean `git status` and no tracked file is touched. Repo-owned links are
 not excluded: the repo owns them and may commit them.
@@ -21,23 +26,27 @@ not excluded: the repo owns them and may commit them.
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from . import flavors, kithome, privilege
-from .common import FILE_MODE, Plan, ensure_dir, load_json, write_json
+from . import flavors, kithome, kitsource, manifest, privilege
+from .common import FILE_MODE, Plan, ensure_dir, load_json, timestamp, write_json
 from .errors import DevkitError
 
 SCHEMA = 1
 CONFIG_REL = "harness/project.json"
 OWN_SKILLS_REL = "harness/skills"
 OWN_INSTRUCTIONS_REL = "harness/AGENTS.md"
+ORIGIN_REL = "harness/.origin.json"
+BACKUP_PREFIX = ".devkit-backup-"
 STAMP_REL = ".devkit-project.json"
 AGENTS_SKILLS = ".agents/skills"
 CLAUDE_SKILLS = ".claude/skills"
@@ -55,9 +64,15 @@ _PRUNE_DIRS = (AGENTS_SKILLS, ".agents", CLAUDE_SKILLS, ".claude")
 
 # ----------------------------------------------------------------- config
 
+ORIGIN_KINDS = ("track", "pin", "installed")
+
+
 @dataclass(frozen=True)
 class Config:
     layers: tuple[str, ...]
+    mode: str = "link"
+    rules: bool | None = None
+    origin: dict | None = None
 
 
 def load_config(repo: Path, config_path: str | os.PathLike[str] | None = None) -> Config:
@@ -75,7 +90,20 @@ def load_config(repo: Path, config_path: str | os.PathLike[str] | None = None) -
             and all(isinstance(x, str) and _NAME.match(x) for x in layers)):
         raise DevkitError(f"{path}: \"layers\" must be a non-empty list of flavor or profile type names",
                           'e.g. "layers": ["core", "enonic"]')
-    return Config(tuple(dict.fromkeys(layers)))
+    layers = tuple(dict.fromkeys(layers))
+    mode = data.get("mode", "link")
+    if mode not in ("link", "copy"):
+        raise DevkitError(f"{path}: \"mode\" must be \"link\" or \"copy\", not {mode!r}",
+                          "remove the key for a linked project, or scaffold a copy")
+    if mode == "link":
+        return Config(layers)
+    origin = data.get("origin")
+    if not (isinstance(origin, dict) and origin.get("kind") in ORIGIN_KINDS
+            and isinstance(origin.get("commit"), str)):
+        raise DevkitError(f"{path}: a copy-mode project needs an \"origin\" with a kind "
+                          f"({', '.join(ORIGIN_KINDS)}) and a commit",
+                          f"re-run devkit project scaffold {repo} --overwrite --layer ... --apply")
+    return Config(layers, "copy", bool(data.get("rules")), origin)
 
 
 @dataclass(frozen=True)
@@ -253,11 +281,11 @@ def _ours_target(rel: str, target: str, link_prefix: str) -> bool:
     """Does a link at `rel` point where a build puts it?"""
     name = rel.rsplit("/", 1)[-1]
     if rel.startswith(AGENTS_SKILLS + "/"):
-        return (target.startswith(link_prefix + "/")
+        return (bool(link_prefix) and target.startswith(link_prefix + "/")
                 or target == f"../../{OWN_SKILLS_REL}/{name}")
     if rel.startswith(CLAUDE_SKILLS + "/"):
         return target == f"../../{AGENTS_SKILLS}/{name}"
-    return rel == INSTRUCTIONS_LINK and target == INSTRUCTIONS
+    return rel == INSTRUCTIONS_LINK and target in (INSTRUCTIONS, OWN_INSTRUCTIONS_REL)
 
 
 class _Ctx:
@@ -300,7 +328,7 @@ class _Ctx:
 
 def _render_rules(kit: Kit, resolved: Resolved) -> str:
     script = kit.root / "core" / "bin" / "generate-agents-md.py"
-    layers = ["core"] + (["client"] if "client" in resolved.lineage else [])
+    layers = manifest.rules_layers(resolved.lineage)
     argv = [sys.executable, str(script), "--stdout"]
     for layer in layers:
         argv += ["--layer", layer]
@@ -325,14 +353,23 @@ def _instructions(repo: Path, kit: Kit, resolved: Resolved, with_rules: bool) ->
     return GENERATED_HEADER + "\n" + "\n---\n\n".join(parts)
 
 
-def plan_build(repo: Path, config: Config, kit: Kit, with_rules: bool,
-               prior: dict | None = None) -> BuildPlan:
-    """What a build would do. Reads the repo and the kit; writes nothing."""
-    resolved = resolve_layers(config.layers, kit.root, repo)
-    own = _own_skills(repo)
+def plan_build(repo: Path, config: Config, kit: Kit | None, with_rules: bool,
+               prior: dict | None = None, own: set[str] | None = None) -> BuildPlan:
+    """What a build would do. Reads the repo and the kit; writes nothing.
+
+    A copy-mode project reads no kit (`kit` is None) and links only what is in
+    `harness/skills`. `own` names those skills when they are not on disk yet,
+    which is how scaffold plans the links of a dry run.
+    """
+    copy = config.mode == "copy"
+    if copy:
+        resolved, link_prefix = Resolved((), frozenset()), ""
+    else:
+        resolved = resolve_layers(config.layers, kit.root, repo)
+        link_prefix = str(kit.link / "core" / "skills")
+    own = _own_skills(repo) if own is None else own
     base = [s for s in resolved.skills if s not in own]
     names = sorted(set(base) | own)
-    link_prefix = str(kit.link / "core" / "skills")
 
     candidates = [STAMP_REL, INSTRUCTIONS, INSTRUCTIONS_LINK]
     candidates += [f"{d}/{n}" for n in names for d in (AGENTS_SKILLS, CLAUDE_SKILLS)]
@@ -347,6 +384,7 @@ def plan_build(repo: Path, config: Config, kit: Kit, with_rules: bool,
 
     plan = BuildPlan(shadowed=sorted(set(resolved.skills) & own))
     entries: set[str] = set()
+    placed: set[str] = set()
     wanted: set[str] = set()
 
     def place(rel: str, target: str, excluded: bool) -> bool:
@@ -357,8 +395,8 @@ def plan_build(repo: Path, config: Config, kit: Kit, with_rules: bool,
             return False
         if outcome != "ok":
             plan.actions.append(Action(outcome, rel, target=target))
-        if excluded and not ctx.is_tracked(rel):
-            entries.add(rel)
+        if not ctx.is_tracked(rel):
+            (entries if excluded else placed).add(rel)
         return True
 
     for note in resolved.notes:
@@ -386,14 +424,19 @@ def plan_build(repo: Path, config: Config, kit: Kit, with_rules: bool,
             if rel in ctx.prior_entries or _ours_target(rel, os.readlink(child), link_prefix):
                 plan.actions.append(Action("prune", rel))
 
-    agents_md = _plan_instructions(repo, kit, resolved, with_rules, prior, ctx, plan, entries)
-
-    plan.entries = sorted(entries)
-    plan.stamp = {
-        "schema": SCHEMA, "release": kit.release, "layers": list(config.layers),
-        "rules": with_rules, "entries": plan.entries,
-        "agents_md": agents_md is not None, "agents_md_sha256": agents_md,
-    }
+    if copy:
+        plan.stamp = {"schema": SCHEMA, "mode": "copy",
+                      "origin_commit": (config.origin or {}).get("commit"),
+                      "entries": sorted(placed), "agents_md": False}
+    else:
+        agents_md = _plan_instructions(repo, kit, resolved, with_rules, prior, ctx, plan,
+                                       entries)
+        plan.entries = sorted(entries)
+        plan.stamp = {
+            "schema": SCHEMA, "release": kit.release, "layers": list(config.layers),
+            "rules": with_rules, "entries": plan.entries,
+            "agents_md": agents_md is not None, "agents_md_sha256": agents_md,
+        }
     if ctx.is_tracked(STAMP_REL):
         raise DevkitError(f"{STAMP_REL} is tracked in git",
                           f"untrack it (git rm --cached {STAMP_REL}) or do not build here")
@@ -418,7 +461,7 @@ def _plan_instructions(repo: Path, kit: Kit, resolved: Resolved, with_rules: boo
     if ours:
         if content is None:
             plan.actions.append(Action("prune", INSTRUCTIONS))
-            if claude.is_symlink() and os.readlink(claude) == INSTRUCTIONS:
+            if claude.is_symlink() and _ours_target(INSTRUCTIONS_LINK, os.readlink(claude), ""):
                 plan.actions.append(Action("prune", INSTRUCTIONS_LINK))
             return None
     else:
@@ -436,12 +479,24 @@ def _plan_instructions(repo: Path, kit: Kit, resolved: Resolved, with_rules: boo
     if not agents.is_file() or agents.read_text(encoding="utf-8") != content:
         plan.actions.append(Action("write", INSTRUCTIONS, content=content))
     entries.add(INSTRUCTIONS)
-    outcome, reason = ctx.decide(INSTRUCTIONS_LINK, INSTRUCTIONS)
+    # Claude profiles load the rules from their own rules/ folder, so with rules
+    # embedded CLAUDE.md skips them and carries only the repo's own notes.
+    link_target = INSTRUCTIONS
+    if with_rules:
+        own = repo / OWN_INSTRUCTIONS_REL
+        has_own = own.is_file() and bool(own.read_text(encoding="utf-8").strip())
+        link_target = OWN_INSTRUCTIONS_REL if has_own else None
+    if link_target is None:
+        if (claude.is_symlink() and not ctx.is_tracked(INSTRUCTIONS_LINK)
+                and _ours_target(INSTRUCTIONS_LINK, os.readlink(claude), "")):
+            plan.actions.append(Action("prune", INSTRUCTIONS_LINK))
+        return _sha(content)
+    outcome, reason = ctx.decide(INSTRUCTIONS_LINK, link_target)
     if outcome == "warn":
         plan.actions.append(Action("warn", INSTRUCTIONS_LINK, note=reason))
     else:
         if outcome != "ok":
-            plan.actions.append(Action(outcome, INSTRUCTIONS_LINK, target=INSTRUCTIONS))
+            plan.actions.append(Action(outcome, INSTRUCTIONS_LINK, target=link_target))
         entries.add(INSTRUCTIONS_LINK)
     return _sha(content)
 
@@ -482,8 +537,8 @@ def _home(args) -> Path:
 def cmd_build(args) -> int:
     home = _home(args)
     repo = require_repo(args.path)
-    kit = read_kit(home)
     config = load_config(repo, getattr(args, "config", None))
+    kit = None if config.mode == "copy" else read_kit(home)
     prior = read_stamp(repo)
     rules = getattr(args, "rules", None)
     if rules is None:
@@ -512,7 +567,8 @@ def _clean_is_ours(rel: str, path: Path, stamp: dict, link_prefix: str) -> bool:
     target = os.readlink(path)
     name = rel.rsplit("/", 1)[-1]
     if rel.startswith(AGENTS_SKILLS + "/"):
-        return target == f"{link_prefix}/{name}"
+        return target == (f"../../{OWN_SKILLS_REL}/{name}" if stamp.get("mode") == "copy"
+                          else f"{link_prefix}/{name}")
     return _ours_target(rel, target, link_prefix)
 
 
@@ -575,8 +631,8 @@ def cmd_status(args) -> int:
     if stamp is None:
         print(f"project {repo.name}: not built. Run: devkit project build {repo} --apply")
         return 1
-    kit = read_kit(home)
     config = load_config(repo, getattr(args, "config", None))
+    kit = None if config.mode == "copy" else read_kit(home)
     built = plan_build(repo, config, kit, bool(stamp.get("rules")), stamp)
 
     problems = [a.line() for a in built.changes
@@ -586,9 +642,14 @@ def cmd_status(args) -> int:
         if path.is_symlink() and not path.exists():
             problems.append(f"broken {rel} -> {os.readlink(path)}")
 
-    built_from, installed = stamp.get("release"), kit.release
-    note = "" if built_from == installed else f" (kit is now {installed}; informational)"
-    print(f"project {repo.name}: built from kit release {built_from}{note}")
+    if kit is None:
+        origin = config.origin or {}
+        label = " ".join(str(x) for x in (origin.get("kind"), origin.get("ref")) if x)
+        print(f"project {repo.name}: copy mode ({label} @ {origin.get('commit', '')[:8]})")
+    else:
+        built_from, installed = stamp.get("release"), kit.release
+        note = "" if built_from == installed else f" (kit is now {installed}; informational)"
+        print(f"project {repo.name}: built from kit release {built_from}{note}")
     _print_warnings(built.actions)
     profile, profile_skills = _profile_skills()
     project_skills = {rel.rsplit("/", 1)[-1] for rel in built.entries
@@ -629,6 +690,247 @@ def cmd_init(args) -> int:
     if plan.apply:
         write_json(target, {"schema": SCHEMA, "layers": layers})
     return plan.report(f"project {repo.name} (init)")
+
+
+# --------------------------------------------------------------- scaffold
+
+def _skill_digest(skill: Path) -> str:
+    """Over relative path, executable bit and content of every file in a skill.
+
+    `__pycache__` and `.git` stay out, so running a skill's scripts never reads
+    as an edit.
+    """
+    files = []
+    for base, dirs, names in os.walk(skill):
+        dirs[:] = [d for d in dirs if d not in kithome.SKIP_PARTS]
+        base_path = Path(base)
+        files += [(base_path / n).relative_to(skill).as_posix()
+                  for n in (*names, *(d for d in dirs if (base_path / d).is_symlink()))]
+    return kithome.payload_digest(skill, sorted(files))
+
+
+def _copy_skill(src: Path, dest: Path) -> None:
+    shutil.copytree(src, dest, symlinks=True,
+                    ignore=shutil.ignore_patterns(*kithome.SKIP_PARTS))
+
+
+def _read_origin_doc(repo: Path) -> dict:
+    try:
+        data = json.loads((repo / ORIGIN_REL).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def _recorded_copy_config(repo: Path) -> Config | None:
+    path = repo / CONFIG_REL
+    if not path.is_file():
+        return None
+    try:
+        mode = json.loads(path.read_text(encoding="utf-8")).get("mode")
+    except (ValueError, AttributeError):
+        return None
+    return load_config(repo) if mode == "copy" else None
+
+
+def _scaffold_spec(args, recorded: Config | None) -> dict:
+    """Where the copy is read from: the flags, else the recorded origin, else
+    the installed kit. A pin is read again at its recorded commit."""
+    track, pin, source = args.track, args.pin, args.from_source
+    if track and pin:
+        raise DevkitError("--track and --pin are exclusive",
+                          "follow a branch with --track, or fix a tag or commit with --pin")
+    rec = recorded.origin if recorded else None
+    if track or pin:
+        return {"kind": "track" if track else "pin",
+                "source": source or (rec or {}).get("source"), "ref": track or pin}
+    if rec and rec["kind"] in ("track", "pin"):
+        return {"kind": rec["kind"], "source": source or rec.get("source"),
+                "ref": rec["ref"] if rec["kind"] == "track" else rec["commit"],
+                "record_ref": rec["ref"]}
+    if source:
+        raise DevkitError("--from names a kit to read a ref from, and no ref was given",
+                          "add --track <branch> or --pin <tag|commit>")
+    return {"kind": "installed"}
+
+
+def _open_scaffold_source(stack: contextlib.ExitStack, home: Path,
+                          spec: dict) -> tuple[Kit, dict]:
+    """The kit tree to copy from and the origin to record for it."""
+    if spec["kind"] == "installed":
+        kit = read_kit(home)
+        commit = (kithome.read_stamp(kit.root) or {}).get("commit") or "unknown"
+        return kit, {"kind": "installed", "source": None, "ref": None,
+                     "commit": commit, "release": kit.release}
+    from .profiles import _kit_metadata
+
+    source = kitsource.resolve_source(spec.get("source"), home)
+    if not kitsource.is_git_url(source):
+        path = Path(source).expanduser()
+        if not path.exists():
+            raise DevkitError(f"the kit source {source} does not exist on this machine",
+                              "pass --from <git URL or checkout of the kit>")
+        source = str(path.resolve())
+    tree, facts = stack.enter_context(
+        kitsource.checkout(source, spec["ref"], spec["kind"], _kit_metadata()))
+    return Kit(tree, tree, facts["commit"][:12]), {
+        "kind": spec["kind"], "source": source, "ref": spec.get("record_ref") or spec["ref"],
+        "commit": facts["commit"], "release": None}
+
+
+def _scaffold_instructions(repo: Path, kit: Kit, resolved: Resolved, rules: bool) -> str | None:
+    parts: list[str] = []
+    own = repo / OWN_INSTRUCTIONS_REL
+    if own.is_file() and (text := own.read_text(encoding="utf-8")).strip():
+        parts.append(text.rstrip("\n") + "\n")
+    if rules:
+        parts.append(_render_rules(kit, resolved))
+    return "\n---\n\n".join(parts) if parts else None
+
+
+def cmd_scaffold(args) -> int:
+    """Copy the harness into the repo once; `--overwrite` rebuilds it from source."""
+    home = _home(args)
+    repo = require_repo(args.path)
+    overwrite = bool(args.overwrite)
+    for rel in ("harness", OWN_SKILLS_REL):
+        if os.path.lexists(repo / rel) and (
+                (repo / rel).is_symlink() or not (repo / rel).is_dir()):
+            raise DevkitError(f"{rel} is a link or a file, not a directory",
+                              "replace it with a real directory, then re-run")
+    recorded = _recorded_copy_config(repo)
+    if overwrite and recorded is None and not (args.layer or args.track or args.pin):
+        raise DevkitError(f"{CONFIG_REL} holds no copy-mode scaffold to rebuild",
+                          f"run a first scaffold: devkit project scaffold {repo} "
+                          "--layer core --overwrite --apply")
+    layers = list(dict.fromkeys(args.layer or [])) or (
+        list(recorded.layers) if recorded and overwrite else [])
+    if not layers:
+        raise DevkitError("no layers given",
+                          "pass --layer <flavor or profile type>, e.g. --layer core")
+    for layer in layers:
+        if not _NAME.match(layer):
+            raise DevkitError(f"{layer!r} is not a flavor or profile type name")
+    rules = args.rules if args.rules is not None else (
+        bool(recorded.rules) if recorded and overwrite else True)
+    spec = _scaffold_spec(args, recorded if overwrite else None)
+
+    with contextlib.ExitStack() as stack:
+        kit, origin = _open_scaffold_source(stack, home, spec)
+        resolved = resolve_layers(layers, kit.root, repo)
+        for name in resolved.skills:
+            if not (kit.root / "core" / "skills" / name).is_dir():
+                raise DevkitError(f"skill {name} is not in the kit tree it is copied from",
+                                  "pick a ref that has it, or drop the layer")
+        content = _scaffold_instructions(repo, kit, resolved, rules)
+        return _scaffold(repo, kit, resolved, layers, rules, origin, content, overwrite,
+                         args.apply)
+
+
+def _scaffold(repo: Path, kit: Kit, resolved: Resolved, layers: list[str], rules: bool,
+              origin: dict, content: str | None, overwrite: bool, apply: bool) -> int:
+    skills_dir = repo / OWN_SKILLS_REL
+    agents, claude = repo / INSTRUCTIONS, repo / INSTRUCTIONS_LINK
+    existing = _own_skills(repo)
+    recorded_skills = _read_origin_doc(repo).get("skills", {}) if overwrite else {}
+    if not isinstance(recorded_skills, dict):
+        recorded_skills = {}
+    new = list(resolved.skills)
+
+    collisions = [f"{OWN_SKILLS_REL}/{n}" for n in new
+                  if os.path.lexists(skills_dir / n)]
+    if content is not None:
+        collisions += [rel for rel, path in ((INSTRUCTIONS, agents), (INSTRUCTIONS_LINK, claude))
+                       if os.path.lexists(path)]
+    if os.path.lexists(repo / CONFIG_REL):
+        collisions.append(CONFIG_REL)
+    if collisions and not overwrite:
+        raise DevkitError(f"already in {repo.name}: {', '.join(collisions)}",
+                          "re-run with --overwrite to rebuild them from source; "
+                          "every replaced path is backed up first")
+
+    rows: list[tuple[str, str, bool]] = []
+    for name in new:
+        if name in existing:
+            rows.append(("replace", name,
+                         _skill_digest(skills_dir / name) != recorded_skills.get(name)))
+        else:
+            rows.append(("add" if overwrite else "copy", name, False))
+    for name, digest in recorded_skills.items():
+        if name not in new and name in existing:
+            rows.append(("remove", name, _skill_digest(skills_dir / name) != digest))
+    keep = sorted(existing - set(new) - set(recorded_skills))
+
+    write_agents = content is not None and not (
+        agents.is_file() and not agents.is_symlink()
+        and agents.read_text(encoding="utf-8") == content)
+    write_claude = content is not None and not (
+        claude.is_symlink() and os.readlink(claude) == INSTRUCTIONS)
+    backups = [f"{OWN_SKILLS_REL}/{n}" for verb, n, _ in rows if verb in ("replace", "remove")]
+    backups += [rel for rel, path, needed in
+                ((INSTRUCTIONS, agents, write_agents), (INSTRUCTIONS_LINK, claude, write_claude),
+                 (CONFIG_REL, repo / CONFIG_REL, True), (ORIGIN_REL, repo / ORIGIN_REL, True))
+                if needed and os.path.lexists(path)]
+    backup_rel = f"harness/{BACKUP_PREFIX}{timestamp()}"
+
+    plan = Plan(apply)
+    if backups:
+        plan.record(f"backup {backup_rel}/ ({len(backups)} path(s))")
+    for verb, name, edited in rows:
+        plan.record(f"{'edited ' if edited else ''}{verb:<7s} {OWN_SKILLS_REL}/{name}")
+    for name in keep:
+        print(f"keep    {OWN_SKILLS_REL}/{name}: not scaffolded by devkit, left alone")
+    if write_agents:
+        plan.record(f"write   {INSTRUCTIONS}")
+    if write_claude:
+        plan.record(f"link    {INSTRUCTIONS_LINK} -> {INSTRUCTIONS}")
+    plan.record(f"write   {CONFIG_REL} (layers: {', '.join(layers)}; "
+                f"origin: {origin['kind']} @ {origin['commit'][:8]})")
+    plan.record(f"write   {ORIGIN_REL}")
+
+    if apply:
+        for rel in backups:
+            dest = repo / backup_rel / rel
+            ensure_dir(dest.parent)
+            if (repo / rel).is_dir() and not (repo / rel).is_symlink():
+                shutil.copytree(repo / rel, dest, symlinks=True)
+            else:
+                shutil.copy2(repo / rel, dest, follow_symlinks=False)
+        for verb, name, _ in rows:
+            target = skills_dir / name
+            if verb in ("replace", "remove"):
+                shutil.rmtree(target)
+            if verb != "remove":
+                ensure_dir(skills_dir)
+                _copy_skill(kit.root / "core" / "skills" / name, target)
+        if write_agents:
+            if os.path.lexists(agents):
+                agents.unlink()
+            agents.write_text(content, encoding="utf-8")
+            agents.chmod(FILE_MODE)
+        if write_claude:
+            if os.path.lexists(claude):
+                claude.unlink()
+            claude.symlink_to(INSTRUCTIONS)
+    config = Config(tuple(layers), "copy", rules, origin)
+    if apply:
+        write_json(repo / CONFIG_REL, {"schema": SCHEMA, "mode": "copy", "layers": layers,
+                                       "rules": rules, "origin": origin})
+        write_json(repo / ORIGIN_REL, {
+            "schema": SCHEMA, "commit": origin["commit"],
+            "skills": {n: _skill_digest(kit.root / "core" / "skills" / n) for n in new},
+            "agents_md_sha256": _sha(content) if content is not None else None})
+
+    removed = {n for verb, n, _ in rows if verb == "remove"}
+    built = plan_build(repo, config, None, rules, read_stamp(repo),
+                       own=None if apply else (existing - removed) | set(new))
+    write_exclude_block(exclude_path(repo), worktree_id(repo), [STAMP_REL], plan)
+    _print_warnings(built.actions)
+    _apply_actions(repo, built.changes, plan)
+    rc = plan.report(f"project {repo.name} (scaffold)")
+    if apply and backups:
+        print(f"backup: {backup_rel}/ holds what was replaced; delete it or keep it")
+    return rc
 
 
 def cmd_flavors(args) -> int:

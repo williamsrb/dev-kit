@@ -1,6 +1,6 @@
 ---
 name: run-plan
-description: "Execute an existing plan file (implementation, evidence, or validation). For several plans at once, use multitask-same-repo. Use only when the operator or an orchestrator names this skill. | recommendedRole: build | aliases: execute-plan, follow-plan, run-test-plan, run-implementation-plan, run-validation-plan."
+description: "Execute an existing plan file (implementation, evidence, or validation). For several plans at once, use multitask-same-repo. Use only when the operator or an orchestrator names this skill."
 metadata:
   recommendedRole: build
   aliases: execute-plan, follow-plan, run-test-plan, run-implementation-plan, run-validation-plan
@@ -60,7 +60,7 @@ Subfolders under a root (e.g. `testing/_shared/`, `testing/<project>/`) are part
 ### Resolve the single plan file
 
 1. If the user gave an explicit path that exists, use it (legacy names only when explicitly pointed).
-2. Else resolve `<TASK-ID>` via `How-to-resolve-task-context.md`, then `agentctl plan resolve <TASK-ID>` (add `--kind evidence` when wording contains `evidence` / `test`). Kind is `payload.kind`, not the filename. Unmigrated `{TASK-ID}.md` / `{TASK-ID}-evidence-plan.md` still resolve.
+2. Else resolve `<TASK-ID>` via `How-to-resolve-task-context.md`, run `agentctl plan context <TASK-ID>` and print its paths (PRD, plan, evidence plan, worktree, mode) before work, then `agentctl plan resolve <TASK-ID>` (add `--kind evidence` when wording contains `evidence` / `test`). Kind is `payload.kind`, not the filename. Unmigrated `{TASK-ID}.md` / `{TASK-ID}-evidence-plan.md` still resolve.
 3. If that file is missing, ask once for the key or path — do **not** solicit PRD path or both plan types “just in case”.
 
 Before code edits: when `mode` is `jira`, assert `git branch --show-current` equals `<TASK-ID>` (or worktree folder matches) or STOP. When `mode` is `local`, do not require the branch name.
@@ -79,7 +79,7 @@ Multi-plan orchestration is **not** optional auxiliary work — it is the gate a
 
 ## Workflow
 
-```
+```text
 - [ ] 0. Multi-plan gate → else continue
 - [ ] 1. Load plan
 - [ ] 2. Classify plan kind → primary guideline root
@@ -96,6 +96,8 @@ If multiple plans/keys are in scope (see **Multiple plans → multitask-same-rep
 ### 1. Load plan
 
 Read the **one** allowlisted plan `entry` from `agentctl plan resolve`. For a folder, load `plan.md` (implementation) or `evidence.md` (evidence), plus companions named in `sections` only as needed (`agentctl markdown slice`). Note goals, acceptance criteria, todos/steps, blockers, and any explicit KB references already listed. Do **not** load PRD / the other plan kind / sibling tasks unless the plan body explicitly requires a cited path. Do **not** load `validation.md` during an implementation run.
+
+**Implementation run only: related issues.** Parallel work by other developers is the one cross-issue input. When `~/.agents/prds/<TASK-ID>.related.json` exists, read its `counts`, `warnings` and `parallel` candidates, and the `## Assessment` of the briefs under `~/.agents/prds/<TASK-ID>/related/`. In a factory run the step before this one already produced them: do not rerun. In a manual run, rerun `find-related-issues` (phase `implement`) when the file is missing, its `head.sha` differs from `HEAD`, or it is over a day old. Before editing a file that a `parallel` candidate lists in `overlap_files`, read that brief's hunks. An unacknowledged `contradiction` means stop and report it (candidate key, their file, the plan line it conflicts with). Do not pick which issue wins and do not widen or narrow the plan to avoid it; the plan owner records the decision in the plan. Before the final report rerun `scan` once and report any new `parallel` candidate.
 
 ### 2. Classify plan kind
 
@@ -172,13 +174,15 @@ never commit it as plan content.
 
 - Follow the plan’s ordered steps/todos. Do not ask to switch modes.
 - Honor plan warnings (auth, reachability, cross-scope frontend↔backend).
-- Honor `implicit.md` / `## Implicit requirements`: implement ticked items (Jira checkbox, local `[x]`, or the user said "include X") and DOs from `How-to-handle-implicit-requirements.md`. Unticked extras are out of scope. Do not implement them to "complete" the ticket. **local:** `[x]` was the planner acting as techlead — implement those. Honor **Local PO decisions** and **High-confidence decisions** in `tbd.md` as decided requirements, not as open questions; neither is a TBD hard-stop.
+- Honor `implicit.md` / `## Implicit requirements`: implement ticked items (Jira checkbox, local `[x]`, or the user said "include X") and DOs from `How-to-handle-implicit-requirements.md`. Unticked extras are out of scope. Do not implement them to "complete" the ticket. **local:** `[x]` was the planner acting as techlead — implement those. Honor **Local PO decisions**, **High-confidence decisions** and **Technical decisions** in `tbd.md` as decided requirements, not as open questions; none is a TBD hard-stop.
 - If a specialized skill already covers a step (e.g. `validate-impl` for delivery QA), **follow that skill** for those steps instead of reinventing them — still apply this skill’s KB scan + write-back around the whole run.
+- **Browser identity:** before the first navigation of an evidence run, check that the Playwright tools bound to this session are `mcp__playwright-<TASK-ID>__*`. If another `playwright-*` namespace is the one bound, stop, report the bound instance, and navigate nowhere. The factory's `run-evidence` parks `browser_instance_mismatch` before the worker starts when `instance.json` does not match the task.
+- **Scheduled evidence:** before E1, read the evidence plan's `**Scheduled run:**` header. `none`: no schedule. `wait for <cron>`: wait for that server-time slot before capture. `substitute: …`: perform the single substitute run before its revert deadline, record it as the scheduled run, and use the field's `wording` in the Jira body. A missing field is a warning from `agentctl plan validate`, not a stop: report it and carry on.
 - **Testing / evidence plans:** progress is keyed by the planned screenshot filename, and a
   shot already on disk under `~/.agents/prds/<TASK-ID>/evidence/` counts as captured — do
   not re-take it unless the plan changed, the shot failed its consistency gate, or the
   operator asks. Re-taking a good shot burns a browser session and can replace a valid
-  image with a worse one. Follow the plan file’s own **Execution** section (E1–E3). Do **not** re-run `plan-task-evidence` for capture — that skill only writes the plan and **spawns** `playwright-<TASK-ID>`. This `run-plan` session must already see `user-playwright-<TASK-ID>` / `mcp__playwright-<TASK-ID>__*`. If those tools are missing: follow `spawn-playwright-mcp` (`python3 ~/.agents/mcp/playwright.py list`). Process dead → spawn `--enable` (or `revive` after a reboot), then **stop and ask for a new chat** (this session cannot attach). Process alive but no tools → this chat started before enable; new chat. Do not fall back to a vendor-native browser. Before any live/integration step is marked pass, apply the **product concept** gate (`How-to-gate-evidence-on-the-product-concept.md` + plan-task-evidence override 13): expected paint must be in the page; if not, diagnose console/CSP/network/fixture IDs, report to the operator, do not post. If the plan’s **Auth required** is yes, Execution step 1 confirms storage state still authenticates (`npx playwright codegen --save-storage=…` only when no host-matched file exists). A step landing on the login page = expired state = **failed step**, not evidence. After the run (pass or fail), `python3 ~/.agents/mcp/playwright.py stop <TASK-ID>`. Screenshots destined for Jira must pass consistency validation (correct element, zoom, example page) before upload — see `plan-task-evidence` reference / always-apply rule `jira-screenshot-consistency`; storage-only shots skip that gate. **Jira comment post:** skip when `mode` is `local`. When `mode` is `jira`, only if every AC/step passed. Any failure / blocked / inconclusive: **do not post** and **do not ask** whether to post a partial/fail comment — report results in chat (pass/fail list, why, local artifact paths). This overrides always-apply `evidence-post-on-failure-ask` for evidence-plan runs. All-pass may post without asking. Local capture, flatten, and attachment upload may still happen. **Problem-found comment (E2b):** when the run hit a problem the analyst would not otherwise see (a cleared blocker, a different root cause, an environment or publishing gap, rebuilt fixtures), post one short follow-up comment after the verified evidence post, per `plan-task-evidence` override 16. Skip it when nothing unexpected happened. When the evidence post is blocked, put the draft in chat instead.
+  image with a worse one. Follow the plan file’s own **Execution** section (E1–E3). Do **not** re-run `plan-task-evidence` for capture — that skill only writes the plan and **spawns** `playwright-<TASK-ID>`. This `run-plan` session must already see `user-playwright-<TASK-ID>` / `mcp__playwright-<TASK-ID>__*`. If those tools are missing: follow `spawn-playwright-mcp` (`python3 ~/.agents/mcp/playwright.py list`). Process dead → spawn `--enable` (or `revive` after a reboot), then **stop and ask for a new chat** (this session cannot attach). Process alive but no tools → this chat started before enable; new chat. Do not fall back to a vendor-native browser. Before any live/integration step is marked pass, apply the **product concept** gate (`How-to-gate-evidence-on-the-product-concept.md` + plan-task-evidence override 13): expected paint must be in the page; if not, diagnose console/CSP/network/fixture IDs, report to the operator, do not post. If the plan’s **Auth required** is yes, Execution step 1 confirms storage state still authenticates (`npx playwright codegen --save-storage=…` only when no host-matched file exists). A step landing on the login page = expired state = **failed step**, not evidence. After the run (pass or fail), `python3 ~/.agents/mcp/playwright.py stop <TASK-ID>`. Screenshots destined for Jira must pass consistency validation (correct element, zoom, example page) before upload — see `plan-task-evidence` reference / always-apply rule `jira-screenshot-consistency`; storage-only shots skip that gate. **Jira comment post:** skip when `mode` is `local`. When `mode` is `jira`, only if every AC/step passed. Any failure / blocked / inconclusive: **do not post** and **do not ask** whether to post a partial/fail comment — report results in chat (pass/fail list, why, local artifact paths). This overrides always-apply `evidence-post-on-failure-ask` for evidence-plan runs. All-pass may post without asking, through `agentctl jira comment … --confirm-issue <KEY> --evidence-progress <evidence.progress.md>`. Local capture, flatten, and attachment upload may still happen. **Problem-found comment (E2b):** when the run hit a problem the analyst would not otherwise see (a cleared blocker, a different root cause, an environment or publishing gap, rebuilt fixtures), post one short follow-up comment after the verified evidence post, per `plan-task-evidence` override 16. Skip it when nothing unexpected happened. When the evidence post is blocked, put the draft in chat instead.
 - **Validation plans**: prefer `validate-impl` for delivery QA/review; use `lint-and-draft-commit-message` for syntax+commit gates.
 - On blockers: if the blocker is a missing specialized capability, try **Auxiliary skills** (`find-skills`) once before stopping. Otherwise stop, report, do not loop. Capture any partial learnings in step 5 if useful.
 
@@ -186,7 +190,9 @@ never commit it as plan content.
 
 Run after execution (or after a useful partial run) whenever you gained reusable **how-to** knowledge.
 
-**Store**
+**Factory run** (`called_from: factory` or `AGENTCTL_FACTORY` set): propose, do not write. Put the same How-to content in `kb-proposals.md` in the folder of the report path the prompt names, one `## <target path under ~/.agents/kb/>` heading per proposed file, then `- kind: new` or `- kind: edit`, `- evidence: <what in this run showed the need>`, optional `- keys:` and one fenced body (full new file, or the edit as a unified diff with `--- a/` and `+++ b/` lines). Check the file with `agentctl kb proposals check <file>`. List that file in the report's `artifacts`. Change nothing under `~/.agents/kb/`; the operator reviews the proposals.
+
+#### Store
 
 | Store in KB | Do **not** store |
 |-------------|------------------|
@@ -195,13 +201,13 @@ Run after execution (or after a useful partial run) whenever you gained reusable
 | Minimal sample data (one example) | Task-only prose already in the plan |
 | Pitfalls, auth tips, “needs referer” notes | Secrets / credentials |
 
-**Where to write**
+#### Where to write
 
 - Prefer the **primary** root for learnings about that plan kind.
 - Also write to **other** roots when the learning clearly belongs there (implementation tip found during testing → `implementation/`; validation check found during implement → `validation/`).
 - Use `_shared/` for cross-project Enonic/CMS patterns; `<project>/` for app-specific flows when that layout exists. If the root is flat/empty, write `How-to-*.md` at the root or create `_shared/` / `<project>/` as needed.
 
-**File rules**
+#### File rules
 
 - Name: `How-to-<verb>-<object>.md`
 - Merge into an existing guide when the topic fits; split when mixing unrelated concerns.
@@ -220,3 +226,11 @@ Return:
 - Manual follow-ups
 
 Worked examples: [references/examples.md](references/examples.md). Load only when the plan-kind dispatch is unclear.
+
+## Final reply: next step (always last)
+
+When every step is done (none blocked), put this block right after the 👉 line, as the last thing in the reply, with `<TASK-ID>` expanded (Jira key or slug). The operator pastes it into a fresh session. Skip it when `called_from` is set or `AGENTCTL_FACTORY` is set. Evidence run: `/validate-evidence <TASK-ID>` instead.
+
+```text
+/validate-impl <TASK-ID>
+```

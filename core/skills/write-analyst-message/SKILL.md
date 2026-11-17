@@ -1,6 +1,6 @@
 ---
 name: write-analyst-message
-description: "Draft analyst-facing comments, TBD questions, and Slack messages. Product language, not engineer logistics. Jira is one sink, not a requirement. | recommendedRole: build | aliases: professional-communication, analyst-facing-message, draft-analyst-comment."
+description: "Draft analyst-facing comments, TBD questions, and Slack messages. Product language, not engineer logistics. Jira is one sink, not a requirement."
 metadata:
   recommendedRole: build
   aliases: professional-communication, analyst-facing-message, draft-analyst-comment
@@ -95,6 +95,7 @@ Chat report-back to the user **does** include logistics. The analyst body does n
 - [ ] Opens by name; no thanks, praise, or assessment of the analyst's work
 - [ ] No backticks inside bold runs (Jira ADF breaks the bold — skip this check when the sink is not Jira)
 - [ ] Tone professional, not cold, not engineer-telegram
+- [ ] Jira sink: post with `agentctl jira comment <KEY> … --confirm-issue <KEY>` (evidence adds `--evidence-progress <file>`); the MCP comment tools are denied by `hooks/jira-write-guard.py`
 
 ## Evidence comment shape
 

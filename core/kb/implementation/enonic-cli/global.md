@@ -11,7 +11,7 @@ prose: caveman-lite
 
 Simplified project creation with defaults.
 
-```
+```bash
 enonic create [project-name] [flags]
 ```
 
@@ -27,7 +27,7 @@ enonic create [project-name] [flags]
 
 Start hot-reload development mode. Alias for `enonic project dev`.
 
-```
+```bash
 enonic dev [-f]
 ```
 
@@ -37,7 +37,7 @@ Starts sandbox in detached mode, deploys app, watches for changes. Exit with Ctr
 
 Show the latest available CLI version.
 
-```
+```bash
 enonic latest [flags]
 ```
 
@@ -47,7 +47,7 @@ Accepts `--force` and the standard auth flags, though it only checks the CLI ver
 
 Upgrade CLI to the latest version.
 
-```
+```bash
 enonic upgrade
 ```
 
@@ -55,6 +55,6 @@ enonic upgrade
 
 Remove CLI from the system.
 
-```
+```bash
 enonic uninstall
 ```

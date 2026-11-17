@@ -1,0 +1,4 @@
+interface:
+  display_name: "Validate Evidence"
+  short_description: "Validate captured task evidence, local and posted"
+  default_prompt: "Use $validate-evidence to validate the evidence for this task against its evidence plan and acceptance criteria. Report only: do not capture, post or edit the tracker."

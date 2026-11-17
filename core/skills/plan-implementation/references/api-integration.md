@@ -53,7 +53,7 @@ Add a dedicated `<field-set>` to `xp/src/main/resources/site/site.xml` for each 
 
 All integration code lives under:
 
-```
+```text
 xp/src/main/resources/lib/app/modules/api/{integration-name}/
 ├── types.ts        — TypeScript interfaces for request/response shapes
 ├── client.ts       — Reads site config, builds auth headers, exposes performRequest wrapper
@@ -96,6 +96,7 @@ export function getAccessToken(): string | null {
 ### 5. Credentials must never reach React
 
 The processor maps API data to display-safe props. It must never include:
+
 - API keys, tokens, or credentials in any prop
 - Raw API response objects that may contain sensitive fields
 - Internal IDs or implementation details not needed for rendering

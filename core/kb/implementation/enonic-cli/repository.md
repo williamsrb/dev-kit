@@ -11,7 +11,7 @@ prose: caveman-lite
 
 Rebuild search indices for a repository.
 
-```
+```bash
 enonic repo reindex [flags]
 ```
 
@@ -27,7 +27,7 @@ enonic repo reindex [flags]
 
 Toggle read-only mode.
 
-```
+```bash
 enonic repo readonly <true|false> [flags]
 ```
 
@@ -41,7 +41,7 @@ enonic repo readonly <true|false> [flags]
 
 Set number of replicas for the cluster.
 
-```
+```bash
 enonic repo replicas <1-99> [flags]
 ```
 
@@ -54,7 +54,7 @@ enonic repo replicas <1-99> [flags]
 
 List all repositories. Alias: `enonic repo ls`.
 
-```
+```bash
 enonic repo list [flags]
 ```
 

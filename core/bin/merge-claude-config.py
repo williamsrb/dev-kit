@@ -19,7 +19,7 @@ from __future__ import annotations
 import argparse
 import json
 import shutil
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 INCOMING = Path.home() / ".claude.json"          # base (Desktop, richer)
@@ -127,7 +127,7 @@ def main() -> int:
         print("\ndry run — nothing written. Re-run with --apply.")
         return 0
 
-    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
     for path in (DEST, INCOMING):
         backup = path.with_suffix(path.suffix + f".bak-{stamp}")
         shutil.copy2(path, backup)

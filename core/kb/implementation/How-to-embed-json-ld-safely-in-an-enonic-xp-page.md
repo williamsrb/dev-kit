@@ -61,7 +61,7 @@ return input.dateModified
 
 - Compare instants, not strings: the two values can carry different fractional precision
   (`...T10:00:00Z` vs `...T10:00:00.000Z`), so a lexical `>` can disagree with the real order.
-- `!(modified > published)` also drops `NaN` from an unparseable date; a plain `<=` does not.
+- `!(modified > published)` also drops `NaN` from an unparsable date; a plain `<=` does not.
 
 ## Pitfalls
 
@@ -77,7 +77,7 @@ return input.dateModified
 
 ## Sample data
 
-```
+```text
 input  { datePublished: '2026-09-16T10:00:00Z', dateModified: '2026-09-14T08:12:00Z' } -> undefined
 input  { datePublished: '2026-09-14T08:00:00Z', dateModified: '2026-09-16T10:00:00Z' } -> '2026-09-16T10:00:00Z'
 value  { headline: '</script><!-- x' } -> {"headline":"</script><!-- x"}

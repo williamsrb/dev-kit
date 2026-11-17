@@ -1,10 +1,10 @@
 ---
 name: upgrade-xp-app
-description: "Migrate an Enonic XP 7 app to XP 8 (YAML descriptors, Gradle plugin 4.x, xp8migrator). Not for new XP 8 apps or XP 7 minor bumps. Use only when the operator or an orchestrator names this skill. | recommendedRole: task-owner | aliases: xp-app-upgrader, xp8-upgrade, xp-upgrader, migrate-xp7-to-xp8."
+description: "Migrate an Enonic XP 7 app to XP 8 (YAML descriptors, Gradle plugin 4.x, xp8migrator). Not for new XP 8 apps or XP 7 minor bumps. Use only when the operator or an orchestrator names this skill."
 license: MIT
 metadata:
   recommendedRole: task-owner
-  aliases: xp-app-upgrader, xp8-upgrade, xp-upgrader, migrate-xp7-to-xp8
+  aliases: xp8-upgrade, xp-upgrader, migrate-xp7-to-xp8
   author: enonic
   source: enonic/ai-enonic-marketplace@v0.3.1
   xp-version: "7.x → 8.x"

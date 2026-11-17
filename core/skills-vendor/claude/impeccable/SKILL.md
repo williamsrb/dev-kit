@@ -1,6 +1,6 @@
 ---
 name: impeccable
-description: "Design, critique, or polish frontend UI — layout, typography, color, motion, accessibility, design systems. Use when the user wants to redesign, audit, or improve a website, dashboard, or component. Not for backend-only work. | recommendedRole: build."
+description: "Design, critique, or polish frontend UI — layout, typography, color, motion, accessibility, design systems. Use when the user wants to redesign, audit, or improve a website, dashboard, or component. Not for backend-only work."
 version: 4.1.1
 user-invocable: true
 argument-hint: "[shape · audit|critique · animate|bolder|colorize|delight|layout|overdrive|quieter|typeset · adapt|clarify|distill · harden|onboard|optimize|polish · init|document|extract|live] [target]"

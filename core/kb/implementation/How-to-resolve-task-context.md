@@ -26,9 +26,11 @@ prose: caveman-lite
 
 Do not invent alternate plan names (for example `*.plan.md`) for new work. Open a legacy filename only when the user points at it. New plans are folders created by `agentctl plan init --output ~/.agents/plans/<TASK-ID>`.
 
-Local PRDs come from `handoff` (PRD format). Jira PRDs come from `download-jira-task`. Same path contract.
+Local PRDs come from `write-prd`: a feature, bug, or report request, or this conversation when `handoff` (PRD format) calls it. Jira PRDs come from `download-jira-task`. Same path contract.
 
 ## Procedure
+
+`agentctl plan context <TASK-ID>` returns the PRD, implementation plan, evidence plan, worktree and mode in one JSON call (resolved against the plans dir, so a multitask root cannot shadow the plan). `run-plan`, `validate-impl` and `validate-plan` call it when given only a key or slug.
 
 1. If the user supplies an implementation-plan path, use that plan as task context; `<TASK-ID>` is optional.
 2. Else resolve `<TASK-ID>` with `agentctl task resolve --cwd <repo> --text <request> --json` (or the same order by hand): Jira key or Jira URL in the message → kebab slug in the message → `git branch --show-current` if it is a key or slug → CWD / workspace folder name if it is a key or slug → ask once. `payload.mode` is `jira` or `local`. Text beats branch, cwd, and filename scans.
@@ -51,16 +53,17 @@ Pipeline skills follow this list. Do not copy it into SKILL.md. Keep only the sk
 
 | Step | Skill(s) | Must read | Must not read by default |
 |------|----------|-----------|--------------------------|
-| Persist local PRD | `handoff` (PRD) | This conversation → write `prds/<TASK-ID>.md` | Other tasks' PRDs/plans |
+| Persist local PRD | `handoff` (PRD) → `write-prd` | This conversation → write `prds/<TASK-ID>.md` | Other tasks' PRDs/plans |
+| Author PRD from a request | `write-prd` | The request source (+ named project area, matching extract-kit spec) → write `prds/<slug>.md` | Other tasks' PRDs/plans; Jira |
 | Download (jira mode) | `download-jira-task` | Jira MCP / `agentctl jira fetch` → write PRD + `prds/<TASK-ID>/attachments/` | Other tasks' PRDs/plans; attachment binaries unless asked; skip this row when `mode` is `local` |
-| Draft impl plan | `plan-implementation` | PRD: `## Description` + AC-bearing sections first; `## Comments` only if AC incomplete; classify extras with `How-to-handle-implicit-requirements.md` | Full comments when Description already has AC; evidence plan; sibling PRDs; whole offline-reference catalogs (use llm-index) |
-| Validate/fix plan | `validate-plan` (impl) / `multitask-same-repo` Phase 1 | Draft from `agentctl plan resolve <TASK-ID>` + sectioned PRD + user/chat exclusions; apply `How-to-respect-user-scope-exclusions.md` and `How-to-handle-implicit-requirements.md` | Evidence plan; delivery diff; other keys' full plans |
+| Draft impl plan | `plan-implementation` | PRD: `## Description` + `## Requirement Changes` + AC-bearing sections first; `## Comments` only if AC incomplete; classify extras with `How-to-handle-implicit-requirements.md` | Full comments when Description already has AC; evidence plan; sibling PRDs; whole offline-reference catalogs (use llm-index) |
+| Validate/fix plan | `validate-plan` (impl) / `multitask-same-repo` Phase 1 | Draft from `agentctl plan resolve <TASK-ID>` + sectioned PRD + user/chat exclusions; apply `How-to-respect-user-scope-exclusions.md`, `How-to-handle-implicit-requirements.md` and `How-to-check-spec-alignment.md` | Evidence plan; delivery diff; other keys' full plans |
 | Run impl | `run-plan` | Resolve then load `entry` (`plan.md`) plus Constraints/Non-Goals/Implicit companions; `DECISIONS.md` if multitask; worktree `CLAUDE.md` if present. Do not load `validation.md` unless validating | Full PRD unless the plan says see PRD §…; evidence plan; other worktrees |
-| QA gate | `validate-impl` | Delivery **diff** + resolved implementation plan (AC / GO / **Constraints** / Non-Goals / Implicit) + chat exclusions; apply `How-to-respect-user-scope-exclusions.md` and `How-to-handle-implicit-requirements.md` | Full PRD comments; evidence plan |
+| QA gate | `validate-impl` | Delivery **diff** + resolved implementation plan (AC / GO / **Constraints** / Non-Goals / Implicit / `tbd.md` decisions) + sliced PRD requirement sections for spec alignment (`How-to-check-spec-alignment.md`) + chat exclusions; apply `How-to-respect-user-scope-exclusions.md` and `How-to-handle-implicit-requirements.md` | Whole PRD; full PRD comments (only the comment an RC cites); evidence plan |
 | Lint + commit msg | `lint-and-draft-commit-message` / `draft-commit-message` | Delivery diff only; TASK-ID from branch when Jira | `~/.agents/prds/`; `~/.agents/plans/` |
 | Draft evidence plan | `plan-task-evidence` | AC from resolved impl plan first; PRD sectioned only for tips/URLs/comment ids when the plan lacks them | Full impl narrative; full PRD comments; siblings; Jira MCP / `download-jira-task` / `getJiraIssue` for `<TASK-ID>` when the PRD exists; implementation worktrees / `<TASK-ID>` branches / local source trees |
 | Validate evidence plan | `validate-plan` (evidence) | `agentctl plan resolve <TASK-ID> --kind evidence` + AC source used in the draft | Full impl plan; full PRD; implementation worktrees / local source |
-| Run evidence | `run-plan` / `run-test-plan` | Resolved evidence entry only | PRD; impl plan unless a step cites a path |
+| Run evidence | `run-plan` | Resolved evidence entry only | PRD; impl plan unless a step cites a path |
 | Jira comment | Evidence Execution (E2) | Evidence outcomes + `plan-task-evidence/templates.md` | Re-read PRD/impl plan to summarize the whole task. Skip the whole row when `mode` is `local` (chat-report the evidence folder instead) |
 
 ## `run-plan` path resolution
@@ -79,7 +82,7 @@ Stop asking for an absolute plan path when resolve returns `status: ok`.
 - Do not attach the full PRD + impl plan + evidence plan on every step.
 - Evidence planning/execution: do not Grep a task worktree or implementation branch. The review host is the shipped tree.
 - Evidence planning: an existing `prds/<TASK-ID>.md` **is** the task copy. Do not `download-jira-task` / `agentctl jira fetch` / `getJiraIssue` that key “to be sure”, and do not JQL-search siblings by default (siblings are must-not-read). Refresh only when the user asks. Worked failure: PROJ-434, 2026-09-15.
-- Local mode: do not call `download-jira-task`. Missing PRD → `handoff` (PRD format) or ask once.
+- Local mode: do not call `download-jira-task`. Missing PRD → `write-prd` or ask once.
 - Jira comment / Tempo / analyst-comment sinks run only when `mode` is `jira`. `plan-implementation` posts the implicit-requirements techlead comment in that mode; TBD is copied for the analyst, not auto-posted. **local:** no analyst and no techlead — auto-select recommended TBD and auto-tick implicit extras; do not ask; do not hard-stop.
 - **`agentctl plan resolve <TASK-ID>` resolves against the CWD first, so in the multitask root it returns the *worktree*, not the plan.** From `~/Workspace/Projects/acme-group-multitask` (which holds a `<TASK-ID>/` worktree per ticket) `plan resolve PROJ-345` returned `status: ok` with `entry: <root>/PROJ-345/plan.md` and `sections` listing `AGENTS`/`CLAUDE`/`README` — the repo's own files. `plan.md` did not even exist there. Tell: `sections` names repo files instead of `plan`/`requirements`/`implementation`/`validation`/`evidence`/`tbd`/`implicit`. Re-run resolve from a neutral CWD (`cd ${HOME}`) to get `~/.agents/plans/<TASK-ID>/plan.md`. Confirmed 2026-09-03 on PROJ-345.
 - `agentctl plan validate <plans>/<TASK-ID>/plan.md` reports `layout: file` and `missing_sections` for every companion (`functional-requirements`, `implementation-plan`, `tbd`, `implicit-requirements`, `validation`) on a **folder-layout** plan. That is the validator scoping to the one file, not a broken plan — validate the folder root, or read the companions and move on.

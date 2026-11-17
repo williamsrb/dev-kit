@@ -15,7 +15,7 @@ import json
 import math
 import re
 import urllib.request
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -26,6 +26,13 @@ SCHEMA_VERSION = 2
 USER_AGENT = "agentctl-bench/1"
 EFFORTS = ("max", "xhigh", "high", "medium", "low")
 AA_KEY_PATH = Path(".auth") / "artificial-analysis-api-key.yaml"
+AA_MAX_PAGES = 10
+# MAX is a deviation, not a real use scenario: too costly, and list price hides its billing.
+# Placement and ranking drop it from candidates, the frontier and the quality fits. Its measured
+# cost still anchors the cost estimate of cheaper efforts of the same model, because several
+# models are only costed at MAX; without that anchor those efforts get no usable price.
+IGNORED_EFFORTS = frozenset({"MAX"})
+MIN_RANK_SCORE = 10.0
 ROLES_PATH = Path("skills-vendor") / "ROLES.md"
 ROW_KEYS = ("vendor", "model", "effort", "score", "cost_usd")
 
@@ -95,12 +102,28 @@ def add_bench_parsers(group) -> None:
     place.add_argument("--json", action="store_true", help=argparse.SUPPRESS)
     place.set_defaults(func=cmd_place)
 
+    rank = group.add_parser(
+        "rank",
+        help="Rank configs by cost against quality (Pareto frontier). MAX is ignored.",
+        description=(
+            "Consolidate every source onto Terminal-Bench points, then keep the configs no "
+            "other config beats on both cost and score. Shows the extra dollars per extra "
+            "point between frontier steps. MAX effort is dropped before fitting."
+        ),
+    )
+    rank.add_argument("--vendor", choices=VENDOR_COLUMNS, help="Only this vendor.")
+    rank.add_argument("--min-score", type=float, default=MIN_RANK_SCORE, help="Skip configs below this Terminal-Bench score (default 10).")
+    rank.add_argument("--markdown", action="store_true", help="Print the frontier as a table.")
+    rank.add_argument("--root", type=Path, help="Harness root (default $AGENTS_HOME).")
+    rank.add_argument("--json", action="store_true", help=argparse.SUPPRESS)
+    rank.set_defaults(func=cmd_rank)
+
 
 def cmd_collect(args: argparse.Namespace) -> int:
     root = (args.root or agents_home()).expanduser()
     wanted = list(SOURCES) if not args.source or "all" in args.source else args.source
     aliases = load_aliases(root)
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     results: dict[str, Any] = {}
     failed = False
     for name in wanted:
@@ -127,7 +150,7 @@ def cmd_gaps(args: argparse.Namespace) -> int:
 
 def cmd_status(args: argparse.Namespace) -> int:
     root = (args.root or agents_home()).expanduser()
-    emit(benchmark_status(root / "benchmarks" / "latest.yaml", datetime.now(timezone.utc)))
+    emit(benchmark_status(root / "benchmarks" / "latest.yaml", datetime.now(UTC)))
     return 0
 
 
@@ -143,7 +166,7 @@ def benchmark_status(latest: Path, now: datetime) -> dict[str, Any]:
         return {"status": "ok", "stale": True, "collected_at": None,
                 "warning": f"No readable benchmark data at {latest}. Run: {REFRESH_HINT}"}
     if when.tzinfo is None:
-        when = when.replace(tzinfo=timezone.utc)
+        when = when.replace(tzinfo=UTC)
     stale = now > _add_month(when)
     age = (now - when).days
     result = {"status": "ok", "stale": stale, "collected_at": collected, "age_days": age}
@@ -169,22 +192,115 @@ def _header_value(path: Path, key: str) -> Any:
     return None
 
 
+def usable_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [r for r in rows if r["effort"] not in IGNORED_EFFORTS]
+
+
+def cmd_rank(args: argparse.Namespace) -> int:
+    root = (args.root or agents_home()).expanduser()
+    latest = root / "benchmarks" / "latest.yaml"
+    if not latest.is_file():
+        raise BenchError(f"{latest} missing")
+    all_rows = load_rows_yaml(latest)
+    rows = usable_rows(all_rows)
+    scored = consolidate(rows, fit_families(rows), all_rows)
+    ranking = rank_cost_quality(scored, args.vendor, args.min_score)
+    if args.markdown:
+        emit(render_rank_table(ranking), as_json=False)
+        return 0
+    emit(ranking)
+    return 0
+
+
+def rank_cost_quality(
+    scored: dict[tuple, dict[str, Any]], vendor: str | None = None, min_score: float = MIN_RANK_SCORE
+) -> dict[str, Any]:
+    """Pareto frontier of score against cost; every other config names what beats it.
+
+    A config is dominated when another costs no more and scores at least as high
+    (and is strictly better on one). Frontier steps carry the extra dollars per
+    extra point over the previous step. Configs without a cost estimate are listed
+    apart because they cannot be ranked.
+    """
+    items = [
+        {"vendor": v, "model": m, "effort": e, **found}
+        for (v, m, e), found in scored.items()
+        if vendor in (None, v) and found["score"] >= min_score
+    ]
+    priced = [i for i in items if i["cost_usd"]]
+    frontier, dominated = [], []
+    for item in priced:
+        beater = next(
+            (
+                o for o in priced
+                if o is not item
+                and o["cost_usd"] <= item["cost_usd"]
+                and o["score"] >= item["score"]
+                and (o["cost_usd"] < item["cost_usd"] or o["score"] > item["score"])
+            ),
+            None,
+        )
+        if beater is None:
+            frontier.append(item)
+        else:
+            dominated.append({**item, "dominated_by": f"{beater['model']} {beater['effort']}"})
+    frontier.sort(key=lambda i: (i["cost_usd"], -i["score"]))
+    previous = None
+    for item in frontier:
+        gain = None if previous is None else item["score"] - previous["score"]
+        extra = None if previous is None else item["cost_usd"] - previous["cost_usd"]
+        item["usd_per_extra_point"] = round(extra / gain, 3) if gain and gain > 0 else None
+        previous = item
+    return {
+        "scale": "Terminal-Bench 4.0 points; cost per Terminal-Bench task in USD; MAX ignored",
+        "frontier": [_rank_row(i) for i in frontier],
+        "dominated": [_rank_row(i) | {"dominated_by": i["dominated_by"]} for i in sorted(dominated, key=lambda i: -i["score"])],
+        "unpriced": [_rank_row(i) for i in items if not i["cost_usd"]],
+    }
+
+
+def _rank_row(item: dict[str, Any]) -> dict[str, Any]:
+    keys = ("vendor", "model", "effort", "score", "se", "cost_usd", "cost_basis", "sources")
+    row = {k: item[k] for k in keys}
+    row["sources"] = " ".join(row["sources"])
+    if "usd_per_extra_point" in item:
+        row["usd_per_extra_point"] = item["usd_per_extra_point"]
+    return row
+
+
+def render_rank_table(ranking: dict[str, Any]) -> str:
+    lines = [
+        "| Model | Effort | Vendor | Score | SE | $/task | $ per extra point | Cost basis |",
+        "|---|---|---|---|---|---|---|---|",
+    ]
+    for r in ranking["frontier"]:
+        step = "" if r.get("usd_per_extra_point") is None else f"{r['usd_per_extra_point']:.2f}"
+        lines.append(
+            f"| `{r['model']}` | {r['effort'].lower()} | {r['vendor']} | {r['score']} | {r['se']} | "
+            f"{r['cost_usd']} | {step} | {r['cost_basis']} |"
+        )
+    lines.append("")
+    lines.append(f"Pareto frontier, cheapest first. {len(ranking['dominated'])} configs are dominated, {len(ranking['unpriced'])} have no cost.")
+    return "\n".join(lines)
+
+
 def cmd_place(args: argparse.Namespace) -> int:
     root = (args.root or agents_home()).expanduser()
     bench = root / "benchmarks"
     for name in ("latest.yaml", "harness.yaml", "bands.yaml"):
         if not (bench / name).is_file():
             raise BenchError(f"{bench / name} missing")
-    rows = load_rows_yaml(bench / "latest.yaml")
+    all_rows = load_rows_yaml(bench / "latest.yaml")
+    rows = usable_rows(all_rows)
     fits = fit_families(rows)
-    scored = consolidate(rows, fits)
+    scored = consolidate(rows, fits, all_rows)
     harness = expand_harness(load_rows_yaml(bench / "harness.yaml", ("vendor", "model", "efforts", "slug")))
     bands = load_yaml_map(bench / "bands.yaml")
     placement = place_roles(scored, harness, bands)
     out = bench / "placement.yaml"
     header = {
         "schema_version": SCHEMA_VERSION,
-        "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "generated_at": datetime.now(UTC).isoformat(timespec="seconds"),
         "scale": "Terminal-Bench 4.0 points",
         "frontier": placement["frontier"],
         "fits": {name: f"{fit['transform']} n={fit['n']} loo_rmse={fit['loo_rmse']}" for name, fit in fits.items()},
@@ -379,7 +495,13 @@ def fetch_aa(root: Path) -> str:
     token = load_yaml_map(key_path).get("token", "")
     if not token:
         raise BenchError(f"aa: {key_path} has no 'token' value")
-    return http_get(SOURCES["aa"]["url"], {"x-api-key": token})
+    data: list[Any] = []
+    for page in range(1, AA_MAX_PAGES + 1):
+        payload = json.loads(http_get(f"{SOURCES['aa']['url']}?page={page}", {"x-api-key": token}))
+        data.extend(payload.get("data") or [])
+        if not (payload.get("pagination") or {}).get("has_more"):
+            return json.dumps({"tier": payload.get("tier"), "data": data})
+    raise BenchError(f"aa: more than {AA_MAX_PAGES} pages; raise AA_MAX_PAGES")
 
 
 AA_EFFORT_SUFFIX_RE = re.compile(r"-(?:max|xhigh|high|medium|low|non-reasoning|reasoning)$")
@@ -392,20 +514,18 @@ def parse_aa(raw: str) -> list[dict[str, Any]]:
     out = []
     for row in data:
         require(row, ("slug", "name", "evaluations"), "aa")
-        evals = row["evaluations"] or {}
-        coding = evals.get("artificial_analysis_coding_index")
-        intel = evals.get("artificial_analysis_intelligence_index")
-        tb4 = evals.get("terminalbench_v4_0")
-        if coding is None and intel is None and tb4 is None:
+        intel = (row["evaluations"] or {}).get("artificial_analysis_intelligence_index")
+        if intel is None:
             continue
+        pricing = row.get("pricing") or {}
+        in_price, out_price = pricing.get("price_1m_input_tokens"), pricing.get("price_1m_output_tokens")
         out.append({
             "model": AA_EFFORT_SUFFIX_RE.sub("", row["slug"]),
             "effort": aa_effort(row["name"]),
-            "score": coding,
+            "score": intel,
             "cost_usd": None,
             "intelligence_index": intel,
-            "terminalbench_v4_0": pct(tb4),
-            "price_1m_blended": (row.get("pricing") or {}).get("price_1m_blended_3_to_1"),
+            "price_1m_blended": None if in_price is None or out_price is None else round((3 * in_price + out_price) / 4, 4),
             "release_date": row.get("release_date"),
         })
     return out
@@ -431,11 +551,11 @@ SOURCES: dict[str, dict[str, Any]] = {
         "parse": parse_tbench,
     },
     "aa": {
-        "url": "https://artificialanalysis.ai/api/v2/data/llms/models",
+        "url": "https://artificialanalysis.ai/api/v2/language/models/free",
         "ext": "json",
-        "score": "Artificial Analysis Coding Index (attribution: https://artificialanalysis.ai/)",
+        "score": "Artificial Analysis Intelligence Index v5, free tier (attribution: https://artificialanalysis.ai/)",
         "cost": "not published per task; see price_1m_blended",
-        "merge_extra": ("terminalbench_v4_0", "intelligence_index", "price_1m_blended"),
+        "merge_extra": ("intelligence_index", "price_1m_blended"),
         "fetch": fetch_aa,
         "parse": parse_aa,
     },
@@ -533,16 +653,22 @@ def read_role_models(path: Path, aliases: dict[str, str]) -> list[str]:
 
 def role_gaps(role_models: list[str], rows: list[dict[str, Any]], limit: int) -> dict[str, Any]:
     columns = sorted({k[: -len("_score")] for r in rows for k in r if k.endswith("_score")})
+    # A source covers a model through any column `place` reads, not only `<source>_score`.
+    evidence = {c for family in FAMILIES.values() for c in family}
     by_model: dict[str, dict[str, float]] = {}
+    covered: dict[str, set[str]] = {}
     for row in rows:
         best = by_model.setdefault(row["model"], {})
         for col in columns:
             value = row.get(f"{col}_score")
             if value is not None and value > best.get(col, -1):
                 best[col] = value
+            keys = {f"{col}_score"} | {e for e in evidence if e.startswith(f"{col}_")}
+            if any(row.get(k) is not None for k in keys):
+                covered.setdefault(row["model"], set()).add(col)
     listed = [
         {"model": m, "vendor": vendor_of(m), "best": by_model.get(m, {}),
-         "missing": [c for c in columns if c != "guess" and c not in by_model.get(m, {})]}
+         "missing": [c for c in columns if c != "guess" and c not in covered.get(m, set())]}
         for m in role_models
     ]
     unlisted = [
@@ -596,8 +722,10 @@ def fit_families(rows: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
     return fits
 
 
-def consolidate(rows: list[dict[str, Any]], fits: dict[str, dict[str, Any]]) -> dict[tuple, dict[str, Any]]:
-    costs = estimate_costs(rows)
+def consolidate(
+    rows: list[dict[str, Any]], fits: dict[str, dict[str, Any]], cost_rows: list[dict[str, Any]] | None = None
+) -> dict[tuple, dict[str, Any]]:
+    costs = estimate_costs(cost_rows or rows)
     out: dict[tuple, dict[str, Any]] = {}
     for row in rows:
         estimates: dict[str, tuple[float, float]] = {}
@@ -656,7 +784,6 @@ def place_roles(scored: dict[tuple, dict[str, Any]], harness: list[dict[str, Any
     if not measured:
         raise BenchError("no measured scores to set the frontier")
     top = max(measured, key=lambda v: v["score"])
-    tie_sigma = float(bands.get("tie_sigma", 2))
     cells = []
     for role in ROLE_ORDER:
         band = bands.get(role)
@@ -666,11 +793,11 @@ def place_roles(scored: dict[tuple, dict[str, Any]], harness: list[dict[str, Any
             options = []
             for config in (h for h in harness if h["vendor"] == vendor):
                 found = scored.get((vendor, config["model"], config["effort"]))
-                if found is None:
+                if found is None or config["effort"] in IGNORED_EFFORTS:
                     continue
                 # The conservative score (one SE below) must clear the floor, so a wide
                 # estimate cannot ride its own uncertainty into a band.
-                floor = top["score"] - tie_sigma * top["se"] if band == "tie" else float(band) * top["score"]
+                floor = float(band)
                 options.append((config, found, found["score"] - found["se"] >= floor, floor))
             cells.append(_pick_cell(role, vendor, options))
     return {"frontier": top["score"], "cells": cells}
@@ -854,6 +981,14 @@ def estimate_costs(rows: list[dict[str, Any]]) -> dict[tuple, tuple[float, str]]
             costs[key] = (round(known[anchor] * ladder[row["effort"]] / ladder[anchor], 4), "ladder")
         elif row.get("aa_price_1m_blended") and row["effort"] in per_price:
             costs[key] = (round(row["aa_price_1m_blended"] * per_price[row["effort"]], 4), "price")
+        elif row.get("aa_price_1m_blended") and row["effort"] in ladder and per_price:
+            # Fewer than MIN_BRIDGE priced samples at this effort: scale the nearest priced effort.
+            anchor = min((e for e in per_price if e in ladder), key=lambda e: abs(effort_rank(e) - effort_rank(row["effort"])), default=None)
+            if anchor:
+                costs[key] = (
+                    round(row["aa_price_1m_blended"] * per_price[anchor] * ladder[row["effort"]] / ladder[anchor], 4),
+                    "price",
+                )
     return costs
 
 

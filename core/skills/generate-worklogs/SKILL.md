@@ -1,6 +1,6 @@
 ---
 name: generate-worklogs
-description: "Build copy-paste Jira/Tempo worklogs for a date from Cursor, git, Slack, and Jira evidence. | recommendedRole: follow | aliases: worklogs-for-today, daily-worklogs, jira-worklogs, tempo-worklogs."
+description: "Build copy-paste Jira/Tempo worklogs for a date from Cursor, git, Slack, and Jira evidence."
 metadata:
   recommendedRole: follow
   aliases: worklogs-for-today, daily-worklogs, jira-worklogs, tempo-worklogs

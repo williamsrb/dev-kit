@@ -20,7 +20,7 @@ Save to `~/.agents/plans/<TASK-ID>/evidence.md` (legacy `~/.agents/plans/<TASK-I
 `plan-task-evidence` stops after writing this file; capture / tracker comment / KB steps run
 only when someone later follows that Execution section (e.g. `run-plan`).
 
-```markdown
+````markdown
 # Evidence Plan — <TASK-ID>: <summary>
 
 **Mode:** jira | local
@@ -29,7 +29,8 @@ only when someone later follows that Execution section (e.g. `run-plan`).
 **Change type:** <user-visible | user-transparent | mixed>
 **Evidence folder:** ~/.agents/prds/<TASK-ID>/evidence
 **Browser MCP:** `playwright-<TASK-ID>` — planning session already spawned this HTTP instance; `run-plan` is a fresh chat that captures on it (skill default; do not start with `cursor-ide-browser` or `user-browser-control` unless the user names a different tool)
-**Auth required:** <yes | no | yes (unknown — treat as required)> — <surfaces: preview / Content Studio / `/admin` / GitLab / app login / none>
+**Auth required:** <yes | no | yes (unknown — treat as required)> — <surfaces: preview / Content Studio / `/admin` / git host / app login / none>
+**Scheduled run:** <none | wait for <cron> server time | substitute: <slot UTC>; build <note>; revert by <UTC>; wording: <text>>
 **Evidence sink:** jira-comment (Mode jira) | chat-and-local-folder (Mode local)
 **Jira evidence comment:** <!-- Mode jira only --> post a **new** comment unless an evidence comment on this issue was **created today** (then that one may be edited in place). A prior comment id is history, not an edit target, unless the user strictly asks to edit it. <!-- Mode local: omit this line; do not post. -->
 **Status:** planned — do not execute until explicitly approved
@@ -60,7 +61,7 @@ end-to-end verification. Otherwise: "Single scope — no cross-scope warning.">
 ## Authentication map
 | Realm | Steps | Mode | Storage state | Status |
 |-------|-------|------|---------------|--------|
-| <app login / admin / gitlab / external / none> | <step #s> | <user fills: find storage state or codegen → headless capture> | `<absolute path from find-auth-storage, else ~/.agents/.auth/<env>.json>` | <pending/ready> |
+| <app login / admin / git host / external / none> | <step #s> | <user fills: find storage state or codegen → headless capture> | `<absolute path from find-auth-storage, else ~/.agents/.auth/<env>.json>` | <pending/ready> |
 
 ## Steps
 <!-- Goal = what the screenshot will prove toward a requirement/AC (feeds the Jira comment
@@ -88,6 +89,7 @@ end-to-end verification. Otherwise: "Single scope — no cross-scope warning.">
 
 > **Gate:** Do not start this section until the user explicitly says to execute
 > (e.g. "go", "execute", "run the plan"). Planning alone is not approval.
+> **Scheduled run:** `none` means no schedule. `wait for <cron>` means wait for that server-time slot. `substitute: <slot UTC>` means run-plan performs the single substitute run before its revert deadline, treats it as the scheduled run, and uses the `wording` text in the Jira body.
 > Prerequisites: ImageMagick (`mogrify`, `identify`), browser MCP. Atlassian MCP for uploads only when **Mode** is `jira`.
 > Detail recipes: `~/.agents/skills/plan-task-evidence/reference.md` and
 > `~/.agents/skills/plan-task-evidence/templates.md` (Jira comment / HTML media embed — jira mode).
@@ -95,7 +97,7 @@ end-to-end verification. Otherwise: "Single scope — no cross-scope warning.">
 
 ### E1 — Capture
 
-0. **Assert `playwright-<TASK-ID>` is already up** (planning spawned it). Discover
+0. **Assert `playwright-<TASK-ID>` is already up** (planning spawned it). Before the first navigation, if the bound tools are another `playwright-*` namespace, stop, report that instance, and navigate nowhere. Discover
    `user-playwright-<TASK-ID>` / `mcp__playwright-<TASK-ID>__*`. If those tools are
    missing: `python3 ~/.agents/mcp/playwright.py list`. Process dead → spawn
    `--enable` (and `--storage-state` when auth is yes), then **stop this chat** and
@@ -312,13 +314,16 @@ chat report.
 After E1 (and E2 when Mode is `jira`), if this run taught reusable how-to knowledge (and it was not already
 fully covered by existing How-Tos):
 
+In a factory run (`called_from: factory` or `AGENTCTL_FACTORY` set), write the How-to content below to
+`kb-proposals.md` beside the report path instead, one `## <target path>` heading per file with `- kind: new` or `- kind: edit` and `- evidence: <what in this run showed the need>` (format: `run-plan` SKILL.md, section 5), list it in the report's `artifacts`, and change nothing under `~/.agents/kb/`.
+
 1. Scope: `_shared` for Enonic/CMS/Guillotine/Data Toolbox; `<project>` for app-specific flows.
 2. Create/update the smallest set of `How-to-*.md` under `~/.agents/kb/testing/…`
    (merge when topic fits; split when mixing concerns). Format: `kb-format.md`.
    For part notes: `How-to-capture-<part>-part-evidence.md` next to that project's persistent-content How-to. Never a `disposable-content/` folder.
 3. Procedure + stable selectors only — no screenshot dumps or Jira comment text.
 4. Optional short **Sample data** (minimum examples). Report files touched in chat.
-```
+````
 
 ---
 
@@ -367,6 +372,7 @@ requirements and meets the acceptance criteria. A screenshot without explanation
 meaning** — never post one.
 
 **Attachments (placement rules):**
+
 - **Uploaded (required when E1 upload succeeded):** embed each image with a
   `<figure data-type="media-single">` / `<div data-type="media">` node using the upload's
   `fileId`/`collection`. Place it **immediately under** that step's explanation.
@@ -460,6 +466,7 @@ Never: questions, a/b/c option lists, “my recommendation”, local folders, at
 ```
 
 ### Notes
+
 - **Explanation + image stay together** as one unit. Never orphan a screenshot (no
   description) and never dump all images at the bottom after the prose.
 - Each explanation must state **what the image proves** toward requirements / ACs — not just

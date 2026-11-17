@@ -21,14 +21,14 @@ prose: caveman-lite
 <a data-th-if="${obj.url} and ${not obj.useTarget}" ...>
 ```
 
-3. Or keep branches exclusive with `th:if` / `th:unless` (no compound negation):
+1. Or keep branches exclusive with `th:if` / `th:unless` (no compound negation):
 
 ```html
 <a data-th-if="${obj.useTarget}" ...>
 <a data-th-unless="${obj.useTarget}" ...>
 ```
 
-4. When changing an existing `th:unless` to a compound `th:if`, re-verify with content where the negated flag is **true** (e.g. external link with `useTarget: true`).
+1. When changing an existing `th:unless` to a compound `th:if`, re-verify with content where the negated flag is **true** (e.g. external link with `useTarget: true`).
 
 ## Forbidden
 

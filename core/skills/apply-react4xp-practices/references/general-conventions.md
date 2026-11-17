@@ -11,7 +11,7 @@ General conventions and best practices for Enonic React4XP 6 projects.
 
 All XP schema resources are placed under `/xp/src/main/resources/`:
 
-```
+```text
 xp/src/main/resources/
 ├── i18n/
 │   ├── phrases.properties           # Default/fallback translations (usually in English)
@@ -68,12 +68,14 @@ xp/src/main/resources/
 Every new component requires two registration steps.
 
 **1. Add to `react4xp/dataFetcher.ts`:**
+
 ```typescript
 import { myPartProcessor } from './components/parts/my-part/processor';
 dataFetcher.addPart(`${app.name}:my-part`, { processor: myPartProcessor });
 ```
 
 **2. Add to `react4xp/componentRegistry.tsx`:**
+
 ```typescript
 import { MyPart } from './components/parts/my-part/my-part';
 componentRegistry.addPart('com.example.{PROJECT_SHORT_NAME}:my-part', { View: MyPart });

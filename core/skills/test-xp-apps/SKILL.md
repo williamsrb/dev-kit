@@ -1,6 +1,7 @@
 ---
 name: test-xp-apps
-description: "Enonic XP testing: XP Test Framework (JUnit + JS), Jest with Mock XP, structure and checklists. Use when changing xp/ code, adding tests, or writing test plans. | recommendedRole: build | aliases: enonic-xp-testing, xp-testing, enonic-testing."
+description: "Enonic XP testing: XP Test Framework (JUnit + JS), Jest with Mock XP, structure and checklists. Use when changing xp/ code, adding tests, or writing test plans."
+paths: "**/src/main/resources/**, **/xp/**, **/build.gradle, **/gradle.properties"
 metadata:
   recommendedRole: build
   aliases: enonic-xp-testing, xp-testing, enonic-testing

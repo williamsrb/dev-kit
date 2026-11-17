@@ -142,6 +142,10 @@ class ExportScrubTests(unittest.TestCase):
         if rules is not None:
             (source / scrub.RULES_PATH).parent.mkdir()
             (source / scrub.RULES_PATH).write_text(json.dumps(rules), encoding="utf-8")
+        # The export ships only work committed in its source.
+        for argv in (("init", "-q"), ("add", "."), ("commit", "-q", "-m", "base")):
+            subprocess.run(["git", "-C", str(source), "-c", "user.name=t", "-c", "user.email=t@t", *argv],
+                           check=True, capture_output=True)
         kit.mkdir()
         (kit / "export-allowlist.json").write_text(
             json.dumps({"source": str(source), "target": "core", "skills": {"core": ["demo"]}}),

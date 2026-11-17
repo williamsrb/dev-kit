@@ -19,7 +19,8 @@ write separate FR entries for each.
 The spec description should name the component. Derive candidate file paths based on the component type:
 
 **Part:**
-```
+
+```text
 site/parts/{name}/{name}.xml
 site/parts/{name}/{name}.d.ts
 react4xp/components/parts/{name}/{name}.tsx
@@ -27,7 +28,8 @@ react4xp/components/parts/{name}/processor.ts
 ```
 
 **Layout:**
-```
+
+```text
 site/layouts/{name}/{name}.xml
 site/layouts/{name}/{name}.d.ts
 react4xp/components/layouts/{name}/{name}.tsx
@@ -35,7 +37,8 @@ react4xp/components/layouts/{name}/processor.ts
 ```
 
 **Content Type / Mixin / X-Data:**
-```
+
+```text
 site/{type}/{name}/{name}.xml
 site/{type}/{name}/{name}.d.ts
 ```
@@ -111,12 +114,14 @@ actually affected by this task.
 Write the following in the `Suggested Technical Approach` section:
 
 **For bug fixes:**
+
 - **Root cause hypothesis**: which layer is responsible — XML schema misconfiguration, incorrect processor mapping, wrong field processing, React rendering issue
 - **Affected files**: list files with one-line rationale each
 - **Minimal change principle**: the fix must touch only what is strictly necessary — no refactoring of unrelated code
 - **Similar pattern check**: the implementer should search for the same bug pattern in other components and list findings without auto-fixing
 
 **For feature additions:**
+
 - **Affected files**: list all files that need changes with one-line rationale each
 - **Schema delta**: describe new XML fields to add (name, input type, required/optional)
 - **Interface delta**: describe new `*Data` / `*Props` properties to add
@@ -125,6 +130,7 @@ Write the following in the `Suggested Technical Approach` section:
 - **i18n delta**: list new keys needed in both property files
 
 **Shared:**
+
 - **Guillotine/headless impact**: if the processor return shape changes, flag it — downstream API consumers may be affected
 - **Registration check**: verify the component is already registered in both `dataFetcher.ts` and `componentRegistry.tsx`; include a note if registration needs updating
 

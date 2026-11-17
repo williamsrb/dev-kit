@@ -1,0 +1,4 @@
+interface:
+  display_name: "Find Related Issues"
+  short_description: "Find related and parallel issues, and brief their status"
+  default_prompt: "Use $find-related-issues to find issues related to this task (tracker, unreleased branches, released history) and brief the ones that matter. Report only: do not post to the tracker or fetch."

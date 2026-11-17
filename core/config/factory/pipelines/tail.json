@@ -1,0 +1,169 @@
+{
+  "schema_version": 1,
+  "steps": [
+    {
+      "id": "validate-plan",
+      "skill": "validate-plan",
+      "args": "Validate the implementation plan (kind implementation).",
+      "reviews": "plan-implementation",
+      "post": [
+        "plan_valid",
+        "tbd_empty"
+      ]
+    },
+    {
+      "id": "plan-rehearsal",
+      "skill": "plan-data-rehearsal",
+      "role": "plan",
+      "args": "Draft the rehearsal for the data-mutating job: rehearsal.md and rehearsal.json in the plan folder, backups and simulator under the review-backup folder. Make no server write and call no endpoint that starts a task. Adds no tool.",
+      "post": [
+        "rehearsal_valid"
+      ]
+    },
+    {
+      "id": "sync-inbox",
+      "kind": "builtin",
+      "builtin": "sync-inbox",
+      "modes": [
+        "tracker"
+      ]
+    },
+    {
+      "id": "related-impl",
+      "skill": "find-related-issues",
+      "role": "follow",
+      "args": "Phase implement. Rescan with the plan's files, brief every parallel candidate with --hunks, assess against the plan. Report status blocked with one blocker per unacknowledged contradiction (key, their file, our AC), else ok with one summary line per finding. Do not edit the plan or the code.",
+      "pre": [
+        "branch_is_task"
+      ]
+    },
+    {
+      "id": "run-plan",
+      "skill": "run-plan",
+      "args": "Execute the implementation plan.",
+      "pre": [
+        "branch_is_task",
+        "release_order"
+      ],
+      "post": [
+        "foreign_checks"
+      ]
+    },
+    {
+      "id": "validate-impl",
+      "skill": "validate-impl",
+      "args": "Review the delivery against the plan. List unresolved blockers in report.blockers.",
+      "reviews": "run-plan"
+    },
+    {
+      "id": "lint-commit",
+      "skill": "lint-and-draft-commit-message",
+      "args": "Lint and draft the commit message to a file. Do not commit or stage. List the draft path in report.artifacts.",
+      "post": [
+        "artifacts_exist"
+      ]
+    },
+    {
+      "id": "commit",
+      "kind": "builtin",
+      "builtin": "commit"
+    },
+    {
+      "id": "integrate",
+      "kind": "builtin",
+      "builtin": "integrate"
+    },
+    {
+      "id": "sync-outbox",
+      "kind": "builtin",
+      "builtin": "sync-outbox",
+      "modes": [
+        "tracker"
+      ]
+    },
+    {
+      "id": "sync-notice",
+      "kind": "builtin",
+      "builtin": "sync-notice",
+      "modes": [
+        "tracker"
+      ]
+    },
+    {
+      "id": "push",
+      "kind": "builtin",
+      "builtin": "push"
+    },
+    {
+      "id": "rehearsal-gate",
+      "kind": "builtin",
+      "builtin": "rehearsal-gate"
+    },
+    {
+      "id": "deploy-review",
+      "kind": "builtin",
+      "builtin": "deploy-review"
+    },
+    {
+      "id": "plan-evidence",
+      "skill": "plan-task-evidence",
+      "args": "Write the evidence plan.",
+      "post": [
+        "plan_valid_evidence"
+      ]
+    },
+    {
+      "id": "validate-plan-evidence",
+      "skill": "validate-plan",
+      "args": "Validate the evidence plan (kind evidence).",
+      "reviews": "plan-evidence",
+      "post": [
+        "plan_valid_evidence"
+      ]
+    },
+    {
+      "id": "await-review",
+      "kind": "builtin",
+      "builtin": "await-review"
+    },
+    {
+      "id": "run-evidence",
+      "skill": "run-plan",
+      "args": "Execute the evidence plan (kind evidence), capture only (E1). Do NOT post to Jira: skip E2 and E2b, write the comment draft into the evidence folder and stop. Posting is a later step after validate-evidence.",
+      "pre": [
+        "auth_state"
+      ],
+      "post": [
+        "evidence_pass",
+        "evidence_folder"
+      ],
+      "park_on_fail": true,
+      "allowed_tools_extra": [
+        "mcp__playwright-{task}"
+      ]
+    },
+    {
+      "id": "validate-evidence",
+      "skill": "validate-evidence",
+      "args": "Validate the captured evidence against the evidence plan (report only). Retakeable FAIL: report status ok with each failed shot as one entry in report.blockers (run-plan retakes them). INCOMPLETE (a check could not run): report status blocked with the unrun checks in report.blockers.",
+      "reviews": "run-evidence"
+    },
+    {
+      "id": "post-evidence",
+      "skill": "run-plan",
+      "modes": [
+        "tracker"
+      ],
+      "args": "Evidence is captured and validated. Execute only the posting part of the evidence plan (E2, and E2b if its condition holds). Do not retake shots.",
+      "allowed_tools_extra": [
+        "@tracker.post_tools"
+      ]
+    },
+    {
+      "id": "kb-harvest",
+      "skill": "harvest-kb",
+      "role": "follow",
+      "args": "Read digest.json in the folder of your report path: the friction signals of this run. Follow the harvest-kb skill. Write kb-proposals.md (knowledge) and harness-proposals.md (skill lessons) in that folder, run agentctl kb proposals check on each file, and list them in report.artifacts. Report status ok with one line per signal group, also when nothing is proposed. Never report blocked."
+    }
+  ]
+}

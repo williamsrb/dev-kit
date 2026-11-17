@@ -57,14 +57,14 @@ def _cli_reference() -> str:
     from .cli import build_parser
     parser = build_parser()
     _pin_help_formatter(parser)
-    lines = ["```", parser.format_help().rstrip(), "```", ""]
+    lines = ["```text", parser.format_help().rstrip(), "```", ""]
 
     # Only a subparser action maps names to parsers. A flag with a choices
     # *list* is an ordinary option, not a group to recurse into.
     actions = [a for a in parser._actions if isinstance(getattr(a, "choices", None), dict)]
     for action in actions:
         for name, sub in action.choices.items():
-            lines += [f"### `devkit {name}`", "", "```",
+            lines += [f"## `devkit {name}`", "", "```text",
                       sub.format_help().rstrip(), "```", ""]
             nested = [a for a in sub._actions
                       if isinstance(getattr(a, "choices", None), dict)]
@@ -72,7 +72,7 @@ def _cli_reference() -> str:
                 for sub_name, sub_parser in inner.choices.items():
                     if sub_name not in _listed(inner):
                         continue
-                    lines += [f"#### `devkit {name} {sub_name}`", "", "```",
+                    lines += [f"### `devkit {name} {sub_name}`", "", "```text",
                               sub_parser.format_help().rstrip(), "```", ""]
     return "\n".join(lines)
 

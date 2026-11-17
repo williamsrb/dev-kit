@@ -1,0 +1,4 @@
+[codespell]
+# Real words, not typos: the DoubleClick ad domain, the bootstrap plan's package-source tag,
+# and Norwegian, Swedish and Portuguese UI strings quoted in client kb notes.
+ignore-words-list = aktive,alle,doubleclick,makro,mapp,noe,noen,nome,tekst,thirdparty

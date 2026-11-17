@@ -77,8 +77,8 @@ forever. XP 8 renders components from HTML **comment placeholders**:
 var content = portal.getContent()
 var region = content.page.regions.main || { components: [] }
 var placeholders = region.components
-	.map(function (c) { return '<!--# COMPONENT ' + c.path + ' -->' })
-	.join('\n')
+ .map(function (c) { return '<!--# COMPONENT ' + c.path + ' -->' })
+ .join('\n')
 ```
 
 This cost the most time to find: the page returned 200 with a correct-looking empty
@@ -93,19 +93,19 @@ projectLib.create({ id: 'default', displayName: 'Default', publicRead: true })  
 
 // then, in context repository 'com.enonic.cms.default' branch 'draft':
 contentLib.create({ name: 'mysite', parentPath: '/', contentType: 'portal:site',
-	data: { siteConfig: [ { applicationKey: '<app under test>', config: { ... } },
-	                      { applicationKey: '<host app>', config: {} } ] } })
+ data: { siteConfig: [ { applicationKey: '<app under test>', config: { ... } },
+                       { applicationKey: '<host app>', config: {} } ] } })
 ```
 
 Then attach the page via `contentLib.update` (`modify` is deprecated in XP 8):
 
 ```javascript
 c.page = {
-	type: 'page', descriptor: '<host>:main', config: {}, path: '/',
-	regions: { main: { name: 'main', components: [
-		{ type: 'part', path: '/main/0', descriptor: '<app>:<part>', config: {} },
-		{ type: 'text', path: '/main/1', text: '<p>[<macroname>/]</p>' }
-	] } }
+ type: 'page', descriptor: '<host>:main', config: {}, path: '/',
+ regions: { main: { name: 'main', components: [
+  { type: 'part', path: '/main/0', descriptor: '<app>:<part>', config: {} },
+  { type: 'text', path: '/main/1', text: '<p>[<macroname>/]</p>' }
+ ] } }
 }
 ```
 

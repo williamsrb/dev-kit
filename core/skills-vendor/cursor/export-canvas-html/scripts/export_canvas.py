@@ -171,7 +171,7 @@ def ensure_install(force: bool) -> Path:
         cmd = [str(npm_bin), "install", "--omit=dev", "--no-fund", "--no-audit"]
 
     print(f"Installing npm dependencies into {CACHE_DIR} …", file=sys.stderr)
-    result = subprocess.run(cmd, cwd=CACHE_DIR, capture_output=True, text=True)
+    result = subprocess.run(cmd, cwd=CACHE_DIR, capture_output=True, text=True, check=False)
     if result.returncode != 0:
         detail = (result.stderr or result.stdout).strip()
         raise ExportError(f"npm install failed:\n{detail}")
@@ -293,6 +293,7 @@ def transform_canvas(canvas: Path) -> str:
         input=source,
         capture_output=True,
         text=True,
+        check=False,
     )
     if result.returncode != 0:
         detail = (result.stderr or result.stdout).strip()

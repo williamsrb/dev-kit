@@ -27,7 +27,7 @@ import sqlite3
 import subprocess
 import sys
 from collections import defaultdict
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 HOME = Path.home()
@@ -116,7 +116,7 @@ def load_threads(db_path: Path) -> list[dict]:
             title,
             name,
             archived,
-            archived_at,
+            _archived_at,
             last_activity,
             rollout_path,
             thread_source,
@@ -141,7 +141,7 @@ def plan(
     sessions: list[dict], keep: int, min_age_minutes: int,
     older_than_days: int | None = None,
 ) -> tuple[list[dict], list[dict], dict]:
-    now_ms = datetime.now(tz=timezone.utc).timestamp() * 1000
+    now_ms = datetime.now(tz=UTC).timestamp() * 1000
     cutoff_ms = now_ms - (min_age_minutes * 60 * 1000)
     if older_than_days is not None:
         cutoff_ms = min(cutoff_ms, now_ms - (older_than_days * 24 * 60 * 60 * 1000))
@@ -268,7 +268,7 @@ def stamp_of(ms: int) -> str:
         return "----------"
     # Codex stores ms; tolerate accidental seconds.
     ts = ms / 1000 if ms > 10_000_000_000 else ms
-    return datetime.fromtimestamp(ts, tz=timezone.utc).strftime("%Y-%m-%d")
+    return datetime.fromtimestamp(ts, tz=UTC).strftime("%Y-%m-%d")
 
 
 def main() -> int:

@@ -89,7 +89,7 @@ so it warrants explicit confirmation. Phrase it as a yes/no question, e.g. "Buil
 `enonic project deploy`?"
 
 If the user says yes, run the deployment **purely via the Enonic CLI** — no direct gradle invocations — and follow the non-interactive
-discipline from "Running the Enonic CLI non-interactively" above: list the candidates, let the *user* pick, then run with everything
+discipline in `~/.agents/kb/implementation/How-to-run-xp8migrator.md` ("Non-interactive CLI without deciding for the user"): list the candidates, let the *user* pick, then run with everything
 pinned as explicit flags.
 
 ```sh

@@ -2,7 +2,7 @@
 
 Form field types and structure for Enonic XP schema descriptors (.xml files).
 
-Reference: https://developer.enonic.com/docs/xp/stable/cms/schemas/input-types
+Reference: <https://developer.enonic.com/docs/xp/stable/cms/schemas/input-types>
 
 ## Universal Input Wrapper
 
@@ -29,6 +29,7 @@ All input types share this structure:
 ## Input Types
 
 ### TextLine
+
 Single-line text input.
 
 ```xml
@@ -46,6 +47,7 @@ Single-line text input.
 TypeScript type: `string`
 
 ### TextArea
+
 Multi-line plain text input.
 
 ```xml
@@ -62,6 +64,7 @@ Multi-line plain text input.
 TypeScript type: `string`
 
 ### HtmlArea
+
 Rich text editor. **Not allowed in macro config forms.**
 
 ```xml
@@ -81,6 +84,7 @@ Rich text editor. **Not allowed in macro config forms.**
 TypeScript type: `string` (raw HTML) in `*Data` interfaces; `ExtendedRichTextData` from `@enonic/react-components` in `*Props` interfaces.
 
 ### Long
+
 Integer number input.
 
 ```xml
@@ -97,6 +101,7 @@ Integer number input.
 TypeScript type: `number`
 
 ### Double
+
 Decimal number input.
 
 ```xml
@@ -113,6 +118,7 @@ Decimal number input.
 TypeScript type: `number`
 
 ### CheckBox
+
 Boolean checkbox.
 
 ```xml
@@ -130,6 +136,7 @@ Boolean checkbox.
 TypeScript type: `boolean`
 
 ### RadioButton
+
 Single-select from a fixed list.
 
 ```xml
@@ -147,6 +154,7 @@ Single-select from a fixed list.
 TypeScript type: `string` (use a union type when values are known, e.g. `'draft' | 'published'`)
 
 ### ComboBox
+
 Dropdown, supports multiple selections.
 
 ```xml
@@ -165,6 +173,7 @@ Dropdown, supports multiple selections.
 TypeScript type: `string` (single) or `string[]` (multiple)
 
 ### Tag
+
 Free-text tags with autocomplete.
 
 ```xml
@@ -177,6 +186,7 @@ Free-text tags with autocomplete.
 TypeScript type: `string[]`
 
 ### Date
+
 Date picker.
 
 ```xml
@@ -192,6 +202,7 @@ Date picker.
 TypeScript type: `string`
 
 ### DateTime
+
 Date + time picker.
 
 ```xml
@@ -207,6 +218,7 @@ Date + time picker.
 TypeScript type: `string`
 
 ### Time
+
 Time picker.
 
 ```xml
@@ -220,6 +232,7 @@ Time picker.
 TypeScript type: `string`
 
 ### GeoPoint
+
 Geographic coordinate picker.
 
 ```xml
@@ -232,6 +245,7 @@ Geographic coordinate picker.
 TypeScript type: `string` (stored as `"lat,lon"`)
 
 ### ContentSelector
+
 Reference to any content node.
 
 ```xml
@@ -249,6 +263,7 @@ Reference to any content node.
 TypeScript type: `string` (single) or `string[]` (multiple)
 
 ### ImageSelector
+
 Reference to an image (`media:image`).
 
 ```xml
@@ -265,6 +280,7 @@ Reference to an image (`media:image`).
 TypeScript type: `string`
 
 ### MediaSelector
+
 Reference to a media node.
 
 ```xml
@@ -281,6 +297,7 @@ Reference to a media node.
 TypeScript type: `string`
 
 ### AttachmentUploader
+
 Upload file(s) as attachments on the content node.
 
 ```xml
@@ -297,6 +314,7 @@ TypeScript type: `string[]`
 ## Grouping Elements
 
 ### field-set
+
 Visual grouping only — does not affect data structure.
 
 ```xml
@@ -312,6 +330,7 @@ Visual grouping only — does not affect data structure.
 ```
 
 ### item-set
+
 Repeatable group of fields. Produces object (single) or array (multiple) in stored data. **Not allowed in macro config forms.**
 
 ```xml
@@ -332,6 +351,7 @@ Repeatable group of fields. Produces object (single) or array (multiple) in stor
 ```
 
 TypeScript type:
+
 ```typescript
 links?: {
     label: string;
@@ -340,6 +360,7 @@ links?: {
 ```
 
 ### option-set
+
 Conditional blocks with single-select (radio) or multi-select (checkbox) modes.
 
 ```xml
@@ -373,6 +394,7 @@ Conditional blocks with single-select (radio) or multi-select (checkbox) modes.
 - `<options minimum="0" maximum="0">` → multi-select (checkboxes), unlimited.
 
 ### mixin reference
+
 Inline fields from a mixin file.
 
 ```xml
@@ -386,6 +408,7 @@ Fields are inlined directly into the parent form's data — no nesting in output
 ## Additional Input Types
 
 ### ContentTypeFilter
+
 Selector for choosing a content type.
 
 ```xml
@@ -401,6 +424,7 @@ Selector for choosing a content type.
 TypeScript type: `string`
 
 ### CustomSelector
+
 Selector with a customizable data source (e.g., external API or service).
 
 ```xml

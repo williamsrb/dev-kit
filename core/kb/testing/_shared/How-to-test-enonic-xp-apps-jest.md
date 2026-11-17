@@ -9,7 +9,7 @@ prose: caveman-lite
 
 Faster, no XP server needed. Supports TypeScript natively via `ts-jest`.
 
-### @enonic/mock-xp (optional, for richer XP API mocking)
+## @enonic/mock-xp (optional, for richer XP API mocking)
 
 ```bash
 npm install --save-dev @enonic/mock-xp
@@ -57,6 +57,7 @@ See [Testing with Jest and Mock XP](https://developer.enonic.com/docs/testing-wi
 The project uses `xp/jest.config.ts` with two projects: **CLIENT** (jsdom) and **SERVER** (node). Both use `ts-jest` for TypeScript transformation.
 
 Key config details:
+
 - `passWithNoTests: true` — no failure on empty test suites
 - `coverageProvider: 'v8'` — for correct line numbers under jsdom
 - Test file patterns: `*.{spec,test}.{ts,tsx}`
@@ -184,7 +185,7 @@ jest.mock('/lib/xp/content', () => ({
 
 ## Client-Side Tests (React Components)
 
-### Location
+### Location (client)
 
 `xp/src/jest/client/` — organize by component type.
 
@@ -224,7 +225,7 @@ moduleNameMapper: {
 }
 ```
 
-### Path Aliases (tsconfig)
+### Path Aliases (tsconfig, client)
 
 ```json
 {
@@ -249,4 +250,3 @@ npx jest --selectProjects SERVER path/to/test.test.ts
 ```
 
 Do **not** use `npx jest --projects <path>` — it overrides project isolation.
-

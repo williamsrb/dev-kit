@@ -11,7 +11,7 @@ component is used**, so you can build a real page URL to screenshot.
 
 **Tool URLs** (need `/admin` auth):
 
-```
+```text
 # XP 8:
 <base>/admin/com.enonic.app.contentstudio/main#/english/widget/guillotine/guillotine
 # XP 7:
@@ -46,10 +46,11 @@ get the canonical URL.
 |-------|----------|--------------|-------|
 | App login | `/minside`, `/min-side`, `/user`, `/profile`, "My Page" | User fills (find storage / codegen → headless capture) | Often SSO/social login |
 | XP admin / Content Studio | `/admin`, Content Studio, Guillotine, or Data Toolbox | User fills (find storage / codegen → headless capture) | Admin session reused across tools |
-| GitLab web | self-hosted GitLab (`git_host` in `client-overlay.json`) screenshots | User fills (find storage / codegen → headless capture) | git CLI uses ssh-agent; **web UI still needs login** |
+| Git host web | the self-hosted git host (`git_host` in `client-overlay.json`; flavor in `.agentctl [git_host]`) screenshots | User fills (find storage / codegen → headless capture) | git CLI uses ssh-agent; **web UI still needs login** |
 | External system | Tourplan, Ticketco, etc. | User fills (find storage / codegen → headless capture) | May be unreachable from the agent → mark impossible |
 
 **Modes** (see plan **Authentication map** / skill Phase 4):
+
 - *User fills* — find or create a Playwright storage-state JSON, spawn `playwright-<TASK-ID>` with `--storage-state`, then run every capture step on that instance. Full procedure: *Login when auth is required* below.
 - Do not try to log in silently with stored passwords. Do not use the Cursor IDE embedded browser as the login path unless the user overrides.
 
@@ -74,6 +75,19 @@ Pick per operation; don't reuse one global value.
 | Auth wait (user logs in) | until ready | ask, then re-check session |
 
 Prefer short polling loops (snapshot / `browser_evaluate`) over a single long sleep.
+
+---
+
+## Scheduled jobs
+
+Use when the change is a cron or scheduled job. The evidence plan header carries `**Scheduled run:**`; `agentctl plan validate` warns when a scheduled job is mentioned without it.
+
+- **Single slot.** Capture one run, not a repeating short schedule. A short schedule blurs the canary: one run changes the data once, so the before and after are readable.
+- **Uncommitted build.** The operator installs a build from the working tree for one slot, then reverts it. The commit is not needed for the rehearsal.
+- **Watcher deadline.** Revert by the stated UTC time whether or not the slot ran. Record the deadline in the field.
+- **Server time.** Write the slot and the deadline in server time (name the zone) and in UTC.
+- **Canary.** Use the canary from the rehearsal (`plan-data-rehearsal`) so the run shows a change the job makes on every run.
+- **Substitute run.** When the slot cannot be waited for, the field's `substitute:` form names the run that stands in. run-plan performs it, records it as the scheduled run, and uses the field's `wording` in the Jira body.
 
 ---
 
@@ -271,7 +285,8 @@ Under each step's explanation, place:
   become broken external blobs.
 
 Text `[Attachment: <basename>]` is **fallback only** when that file never uploaded. Full HTML
-shape (and the legacy ADF alternative) is in [templates.md](templates.md).
+shape (and the legacy ADF alternative) is in [templates.md](templates.md)
+
 ---
 
 ## curl evidence (non-UI)

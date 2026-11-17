@@ -143,7 +143,7 @@ regions:
 the failure surfaces far from the descriptor — the app deploys fine, the page renders, but the first
 `portal.getContent()` inside a response processor throws:
 
-```
+```text
 IllegalArgumentException: key can not be empty
   at ...ScriptObjectMirror.checkKey
   at ...RegionMapper.serialize(RegionMapper.java:28)
@@ -151,6 +151,7 @@ IllegalArgumentException: key can not be empty
 ```
 
 Switching the descriptor to the string form fixes it with no other change. Measured on cookiebot-app
+
 + a scratch host app, 2026-08-25. If you see `key can not be empty` from `RegionMapper`, check the
 page/layout descriptor's `regions:` shape before suspecting your page data.
 

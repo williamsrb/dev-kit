@@ -4,6 +4,7 @@ Layout, under `${XDG_DATA_HOME:-$HOME/.local/share}/devkit/`:
 
     releases/<release-id>/   immutable copy of the payload plus .devkit-install.json
     current                  symlink to one release
+    refs/<profile>           symlink to the release a profile follows or is pinned to
 
 Every projection devkit writes points through `current`, so an upgrade installs
 a new release and flips one symlink; none of the links in a profile is rewritten.
@@ -59,6 +60,19 @@ def releases_dir(home: Path) -> Path:
 
 def current_link(home: Path) -> Path:
     return kit_home(home) / "current"
+
+
+def refs_dir(home: Path) -> Path:
+    return kit_home(home) / "refs"
+
+
+def ref_link(home: Path, name: str) -> Path:
+    return refs_dir(home) / name
+
+
+def ref_release(home: Path, name: str) -> Path | None:
+    link = ref_link(home, name)
+    return link.resolve() if link.is_symlink() and link.exists() else None
 
 
 def current_release(home: Path) -> Path | None:
@@ -197,7 +211,7 @@ def describe_tree(src: Path) -> dict:
 # ---------------------------------------------------------------- install
 
 def _now() -> str:
-    return _dt.datetime.now(_dt.timezone.utc).isoformat(timespec="microseconds")
+    return _dt.datetime.now(_dt.UTC).isoformat(timespec="microseconds")
 
 
 def copy_payload(src: Path, dest_root: Path, files: list[str]) -> None:
@@ -340,6 +354,41 @@ def flip_current(home: Path, release: Path) -> None:
     os.replace(temp, current_link(home))
 
 
+def flip_ref(home: Path, name: str, release: Path) -> None:
+    """Point `refs/<name>` at a release, the way `flip_current` does."""
+    refs = refs_dir(home)
+    ensure_dir(refs)
+    temp = refs / f".{name}-{os.getpid()}"
+    temp.unlink(missing_ok=True)
+    temp.symlink_to(Path("..") / "releases" / release.name)
+    os.replace(temp, ref_link(home, name))
+
+
+def drop_ref(home: Path, name: str) -> None:
+    ref_link(home, name).unlink(missing_ok=True)
+
+
+def referenced_releases(home: Path) -> set[Path]:
+    """Releases a ref link names, and the previous release an instance on a ref
+    records for its rollback. `prune` never removes these."""
+    from . import instances
+
+    found: set[Path] = set()
+    refs = refs_dir(home)
+    if refs.is_dir():
+        found |= {link.resolve() for link in refs.iterdir()
+                  if link.is_symlink() and link.exists()}
+    try:
+        rows = instances.discover_instances(home)
+    except DevkitError:  # an unreadable provenance must not stop a prune
+        rows = []
+    for _name, _vendor, _config_dir, prov in rows:
+        previous = (prov.get("kit_ref") or {}).get("previous_release")
+        if previous:
+            found.add((releases_dir(home) / previous).resolve())
+    return found
+
+
 def _installed_at(release: Path) -> str:
     return (read_stamp(release) or {}).get("installed_at") or ""
 
@@ -360,9 +409,11 @@ def _release_dirs(home: Path) -> list[Path]:
 
 
 def prune(home: Path, keep: int = RETAIN) -> list[str]:
-    """Remove every release except current and the newest others, up to `keep`."""
+    """Remove every release except current, the ones refs hold, and the newest
+    others, up to `keep`."""
     current = current_release(home)
-    others = sorted((r for r in _release_dirs(home) if r != current),
+    held = referenced_releases(home)
+    others = sorted((r for r in _release_dirs(home) if r != current and r not in held),
                     key=_installed_at, reverse=True)
     spare = max(keep - (1 if current else 0), 0)
     removed = []
@@ -410,7 +461,7 @@ def ensure_installed(src: Path, home: Path, plan: Plan,
 # Where a profile holds links into the kit. Data and session dirs are never
 # walked: they are large and hold nothing the kit wrote as a projection.
 _PROJECTION_DIRS = ("skills", "rules", "kb", "hooks", "bin", "bin-vendor", "mcp",
-                    "share", "config", "benchmarks")
+                    "share", "config", "benchmarks", "docs")
 
 
 def _outside_kit(link: Path, home: Path) -> Path | None:
@@ -436,7 +487,7 @@ def legacy_links(home: Path, config_dir: Path) -> list[tuple[Path, Path]]:
         roots += [base / name for name in _PROJECTION_DIRS]
     found: list[tuple[Path, Path]] = []
     for root in roots:
-        # agents/bin|bin-vendor|benchmarks|mcp|share|config are links themselves; skills/rules/kb/hooks
+        # agents/bin|bin-vendor|benchmarks|mcp|share|config|docs are links themselves; skills/rules/kb/hooks
         # are directories of per-entry links.
         entries = [root] if root.is_symlink() else (
             sorted(root.iterdir()) if root.is_dir() else [])

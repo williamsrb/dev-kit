@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "name": "release-review",
+  "mode": "local",
+  "steps": [
+    {
+      "id": "review-impl",
+      "skill": "validate-impl",
+      "role": "impl-review",
+      "args": "Report only: apply the review standards (fit, impact, security, tests, quality, less code, deslop, performance) without the fix loop and edit nothing. Review exactly the range and requirements named in the context file. Write the JSON the context file describes to the output path it names and list that path in report.artifacts.",
+      "post": [
+        "artifacts_exist"
+      ]
+    },
+    {
+      "id": "review-evidence",
+      "skill": "validate-evidence",
+      "role": "impl-review",
+      "args": "Report only. Run only when the context file names a replay copy that captured shots; validate it against its evidence plan, write the evidence JSON the context file describes, and list it in report.artifacts. When there is no replay copy, write the JSON with verdict INCOMPLETE and total 0.",
+      "post": [
+        "artifacts_exist"
+      ]
+    }
+  ]
+}

@@ -1,8 +1,8 @@
 ---
 name: download-jira-task
-description: "Download a Jira issue (description + comments + attachments) to ~/.agents/prds/<KEY>.md via agentctl jira fetch (API token) or Atlassian MCP fallback. Use to fetch, export, or save a Jira task by key or URL. | recommendedRole: deterministic | aliases: fetch-jira-task, export-jira-task, save-jira-task, jira-task-offline."
+description: "Download a Jira issue (description + comments + attachments) to ~/.agents/prds/<KEY>.md via agentctl jira fetch (API token) or Atlassian MCP fallback. Use to fetch, export, or save a Jira task by key or URL."
 metadata:
-  recommendedRole: deterministic
+  recommendedRole: follow
   aliases: fetch-jira-task, export-jira-task, save-jira-task, jira-task-offline
   cliDependencies:
     required: [agentctl, python3]
@@ -10,7 +10,7 @@ metadata:
 ---
 ## Local deterministic first
 
-Resolve the key with `agentctl task resolve --cwd <repo> --text <request> --json`. If `~/.agents/.auth/jira-api-token.yaml` exists, fetch with one CLI call and stop:
+Resolve the key with `agentctl task resolve --cwd <repo> --text <request> --json`. If `~/.agents/.auth/jira-api-token.yaml` exists, fetch with one CLI call, then run Step 3b (requirement changes) and stop:
 
 ```bash
 agentctl jira fetch <KEY>
@@ -110,24 +110,36 @@ If `user-atlassian-rovo-preview` is missing: still write the PRD from whatever `
 
 ### Markdown template
 
+Shared PRD format: `~/.agents/kb/implementation/How-to-format-a-prd.md`. Jira exports hold Description, Comments, Attachments only.
+
 ```markdown
 # <ISSUE-KEY> — <summary>
 
+**Source:** jira
+**WORK-ID:** <ISSUE-KEY>
+**Type:** <issuetype>
+**Created:** <created>
+**Updated:** <updated>
 **Jira:** https://example.atlassian.net/browse/<ISSUE-KEY>
 **Project:** <project name> (<project key>)
-**Type:** <issuetype>
 **Status:** <status>
 **Priority:** <priority>
 **Reporter:** <reporter>
 **Assignee:** <assignee>
-**Created:** <created>
-**Updated:** <updated>
 
 ---
 
 ## Description
 
 <fields.description — preserve markdown as-is>
+
+---
+
+## Requirement Changes
+
+<"None detected." when no comment is kept; else "Not extracted yet." until Step 3b replaces it>
+
+Checked through: <none until Step 3b; then the last kept comment id>
 
 ---
 
@@ -155,15 +167,23 @@ Directory: `~/.agents/prds/<ISSUE-KEY>/attachments`
 **Formatting rules:**
 
 - Preserve description and comment bodies verbatim.
-- **Omit Git automated Jira comments:** skip any comment whose `author.displayName` is `Solutions Jira x GitLab` (GitLab commit/MR mention spam). Do not write them to the PRD. `<count>` is the number of **kept** comments only.
+- **Omit Git automated Jira comments:** skip any comment whose `author.displayName` is listed in `.agentctl [tracker.jira] skip_comment_authors` (the Jira git-host integration's commit and review-request mention spam; today `Solutions Jira x GitLab`). Do not write them to the PRD. `<count>` is the number of **kept** comments only.
 - Strip Jira-only blob image URLs (`blob:https://media.staging.atl-paas.net/...`) — note `(image attachment — see ## Attachments)`.
 - Convert `<custom data-type="smartlink" ...>` wrappers to plain URLs when visible.
 - Do not invent acceptance criteria or implementation plans.
 - Attachment stored names come from `render_issue.py` (`<id>-<basename>`). Do not rename after download.
 
+## Step 3b — Extract requirement changes
+
+Run after every write of `<KEY>.md`, and when a nested run skipped the fetch but `python3 ~/.agents/skills/write-prd/scripts/requirement_changes.py ~/.agents/prds/<KEY>.md` exits 1 (stale).
+
+1. `agentctl markdown slice ~/.agents/prds/<KEY>.md --sections description,comments --json`.
+2. Pick the comments that change the request, per `~/.agents/kb/implementation/How-to-format-a-prd.md` § Requirement Changes. Each entry cites the comment id, author, and date, and names what it supersedes in the Description.
+3. Replace only the body of `## Requirement Changes` with the entries, or `None detected.`, and end it with `Checked through: <last kept comment id>` (`none` when there are no comments). Leave Description and Comments verbatim. Re-run the check script; it must exit 0. Extracting is not inventing: no entry without a comment that states it.
+
 ## Step 4 — Confirm
 
-Reply with issue key + Jira link, saved PRD path, attachments directory, kept comment count, and attachment download counts (ok / failed / none).
+Reply with issue key + Jira link, saved PRD path, attachments directory, kept comment count, requirement-change count, and attachment download counts (ok / failed / none).
 
 ## Step 5 — Cascade into `plan-implementation` (standalone only)
 
@@ -174,7 +194,11 @@ When standalone and the file is ready, ask (prefer `AskQuestion`):
 > Offline copy saved. Continue into **plan-implementation** to draft the implementation spec under the agent plans dir (`~/.agents/plans/<ISSUE-KEY>/`)?
 
 - **Yes** — follow `plan-implementation` next (must **not** re-download).
-- **No** — stop.
+- **No** — stop. End the reply with this block, right after the 👉 line, for a fresh session:
+
+  ```text
+  /plan-implementation <ISSUE-KEY>
+  ```
 
 Do **not** auto-start `plan-implementation` without approval.
 

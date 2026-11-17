@@ -1,6 +1,6 @@
 ---
 name: handoff
-description: "Compact this conversation into a Context Summary or persist it as a PRD at ~/.agents/prds/<slug>.md. Use when handing off to another agent, saving a local brief, or turning chat into task context for plan/implement/validate. | recommendedRole: inherit | aliases: persist-local-task, persist-prd, context-summary."
+description: "Compact this conversation into a Context Summary or persist it as a PRD at ~/.agents/prds/<slug>.md. Use when handing off to another agent, saving a local brief, or turning chat into task context for plan/implement/validate."
 argument-hint: "Context Summary or PRD — optional slug or next-session focus"
 metadata:
   recommendedRole: inherit
@@ -29,7 +29,7 @@ If the user named a format, use that name verbatim. If both could apply, ask onc
 
 Do not duplicate content already in specs, plans, ADRs, issues, commits, or diffs — reference those paths.
 
-Templates: [references/formats.md](references/formats.md). Load only the chosen format.
+Context Summary template: [references/formats.md](references/formats.md). The PRD format is written by `write-prd`.
 
 ## Context Summary
 
@@ -40,10 +40,6 @@ Templates: [references/formats.md](references/formats.md). Load only the chosen 
 
 ## PRD
 
-`<slug>` is the `<TASK-ID>`. Kebab-case. Never a fabricated `PROJ-123`.
+Follow `../write-prd/SKILL.md` with **this conversation** as the source (`called_from: handoff`). It owns the slug rules, the Feature/Bug/Report templates, and validation. Pass along any slug or title from the arguments.
 
-1. Resolve the slug: user-supplied kebab → else derive from the title/focus (lowercase, hyphenate, strip junk) → else ask once.
-2. If the slug matches `[A-Z][A-Z0-9]+-\d+` (ignore case), **stop**. That path is a Jira PRD (`download-jira-task`). Do not overwrite it from chat.
-3. If `~/.agents/prds/<slug>.md` exists and the user did not ask to replace it, update in place only the sections this conversation changed. Do not re-download Jira.
-4. Write the PRD template from `references/formats.md`. Required H2s: `## Description`, `## Acceptance Criteria`. Keep `## Comments` even when empty so `agentctl markdown slice` stays compatible with the shared PRD template (Jira exports use the same H2s).
-5. Confirm the absolute path. Nested `called_from: plan-implementation`: confirm only — do not prompt to cascade. Standalone: ask whether to continue into `plan-implementation`.
+Then apply this skill's cascade: nested `called_from: plan-implementation` → confirm the path only. Standalone → ask whether to continue into `plan-implementation`. On no, end the reply with `/plan-implementation <slug>` in a `text` block, right after the 👉 line, for a fresh session.

@@ -16,6 +16,7 @@ import math
 import os
 import re
 import sys
+from itertools import pairwise
 from pathlib import Path
 
 
@@ -77,7 +78,7 @@ def terms(text: str) -> set[str]:
         w for w in words
         if w not in STOP and (len(w) >= MIN_TERM_LEN or any(c.isdigit() for c in w))
     ]
-    compounds = [f"{left}-{right}" for left, right in zip(base, base[1:])]
+    compounds = [f"{left}-{right}" for left, right in pairwise(base)]
     return set(base) | {c for c in compounds if c not in STOP}
 
 
@@ -111,7 +112,7 @@ def index_rows() -> list[tuple[str, str, str]]:
 
 
 def skill_rows() -> list[tuple[str, str]]:
-    """(label, haystack) for every installed skill's frontmatter description."""
+    """(label, haystack) for every installed skill: name, description and metadata aliases."""
     rows = []
     for skill in sorted(SKILLS.glob("*/SKILL.md")):
         head = skill.read_text(encoding="utf-8", errors="replace")[:1200]
@@ -119,7 +120,9 @@ def skill_rows() -> list[tuple[str, str]]:
         match = re.search(r"^description:\s*(.+)$", head, re.MULTILINE)
         if match:
             desc = match.group(1).strip().strip('"').strip("'")
-        rows.append((f"skill: {skill.parent.name}", f"{skill.parent.name} {desc}"))
+        aliases = re.search(r"^  aliases:\s*(.+)$", head, re.MULTILINE)
+        alias_text = aliases.group(1).strip() if aliases else ""
+        rows.append((f"skill: {skill.parent.name}", f"{skill.parent.name} {desc} {alias_text}"))
     return rows
 
 

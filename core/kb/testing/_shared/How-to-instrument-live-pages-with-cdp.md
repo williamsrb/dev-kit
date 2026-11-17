@@ -24,6 +24,7 @@ DOM.querySelector          → nodeId of the element
 CSS.forcePseudoState       { nodeId, forcedPseudoClasses: ['hover'] }
 // capture, then clear with forcedPseudoClasses: []
 ```
+
 Read the effect with `CSS.getComputedStyleForNode` (or `Runtime.evaluate` +
 `getComputedStyle`) **before and after** so the report can state the actual values.
 
@@ -34,6 +35,7 @@ Read the effect with `CSS.getComputedStyleForNode` (or `Runtime.evaluate` +
 ```js
 row.dispatchEvent(new MouseEvent('mouseover', { bubbles: true, relatedTarget: otherRow }))
 ```
+
 With `relatedTarget: document.body` React's synthetic `mouseenter` is often computed as
 "already inside" and the handler never fires. Verify the state actually changed (class,
 `src`, panel height) before capturing — do not assume the dispatch worked.
@@ -51,7 +53,7 @@ Grepping deployed CSS for a Tailwind arbitrary-value class **as it appears in th
 false-negative machine. Tailwind escapes the selector, so the class `decoration-[length:7%]`
 is emitted as:
 
-```
+```css
 .decoration-\[length\:7\%\]{text-decoration-thickness:.0700001em}
 ```
 
@@ -75,6 +77,7 @@ Emulation.setDeviceMetricsOverride { width: 390, height: 844, deviceScaleFactor:
 // capture
 Emulation.clearDeviceMetricsOverride
 ```
+
 Always clear it — a leftover override silently poisons every later desktop capture.
 
 ## Motion
@@ -82,10 +85,12 @@ Always clear it — a leftover override silently poisons every later desktop cap
 - Reduced motion: `Emulation.setEmulatedMedia { features: [{ name: 'prefers-reduced-motion', value: 'reduce' }] }`,
   then assert the animation stopped (`getAnimations().length`, or `playState`).
 - Auto-scrolling / marquee: sample the moving value twice with a delay and show it changed:
+
   ```js
   const t1 = getComputedStyle(el).transform; await new Promise(r => setTimeout(r, 600));
   [t1, getComputedStyle(el).transform]
   ```
+
   `element.getAnimations()` gives `animationName`, `duration`, `iterations`, `playState` —
   better proof than a still image.
 
@@ -100,6 +105,7 @@ box.setAttribute('style', 'position:fixed;inset:0;z-index:99999;background:#fff;
 box.innerHTML = '<p>Live DOM of ' + location.href + '</p>' + tableBuiltFromQuerySelectorAll
 document.body.appendChild(box)
 ```
+
 Same trick for navigation proof: after a click, inject a fixed banner containing
 `location.href` and capture it, since the embedded browser screenshot has no address bar.
 Keep the values **read from the page** — never hand-typed.
@@ -166,7 +172,6 @@ and only on the branch where the condition is false. Rewrite as two object liter
 - Content Studio's page-editor surface is an iframe; snapshots do not see inside it. Use
   `Runtime.evaluate` against `iframe.contentDocument` (same origin) or drive the outer panel.
 - Overlays and injected banners must be removed (or the tab reloaded) before the next capture.
-
 
 ## Sample data (minimal)
 

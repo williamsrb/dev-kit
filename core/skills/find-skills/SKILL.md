@@ -1,6 +1,6 @@
 ---
 name: find-skills
-description: "Find and install agent skills from skills.sh (`npx skills`). Use when the user asks to find a skill, or a plan/run/test/validate step needs a capability that is not installed. | recommendedRole: follow."
+description: "Find and install agent skills from skills.sh (`npx skills`). Use when the user asks to find a skill, or a plan/run/test/validate step needs a capability that is not installed."
 metadata:
   recommendedRole: follow
   cliDependencies:
@@ -10,7 +10,7 @@ metadata:
 
 # Find Skills
 
-Discover and install skills from the open agent skills ecosystem (`npx skills`, https://skills.sh/). Commands: `npx skills find [query] [--owner <owner>]`, `npx skills add <owner/repo@skill> -g -y`, `npx skills update`.
+Discover and install skills from the open agent skills ecosystem (`npx skills`, <https://skills.sh/>). Commands: `npx skills find [query] [--owner <owner>]`, `npx skills add <owner/repo@skill> -g -y`, `npx skills update`.
 
 ## Nested / auxiliary use
 
@@ -59,6 +59,7 @@ When a user asks for help with something, identify:
 Before running a CLI search, check the [skills.sh leaderboard](https://skills.sh/) to see if a well-known skill already exists for the domain. The leaderboard ranks skills by total installs, surfacing the most popular and battle-tested options.
 
 For example, top skills for web development include:
+
 - `vercel-labs/agent-skills` — React, Next.js, web design (100K+ installs each)
 - `anthropics/skills` — Frontend design, document processing (100K+ installs)
 
@@ -96,7 +97,7 @@ When you find relevant skills **in a user-initiated find** (not nested), present
 
 Example response:
 
-```
+```text
 I found a skill that might help! The "react-best-practices" skill provides
 React and Next.js performance optimization guidelines from Vercel Engineering.
 (185K installs)
@@ -171,7 +172,7 @@ If no relevant skills exist:
 
 Example:
 
-```
+```text
 I searched for skills related to "xyz" but didn't find any matches.
 I can still help you with this task directly! Would you like me to proceed?
 

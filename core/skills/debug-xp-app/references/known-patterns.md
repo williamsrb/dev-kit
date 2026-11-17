@@ -31,3 +31,23 @@ never registered.
 **Cause**: The app JAR was never deployed to the directory XP reads from. The deploy target path doesn't match `$XP_HOME/deploy/`.
 **Fix**: Verify where the build tool places the JAR vs. where XP actually reads from. Check project deploy configuration and `$XP_HOME`.
 **Key insight**: Actual app errors (bad code, version mismatch) always produce log entries. Complete absence means XP never saw the JAR.
+
+---
+
+## Nashorn TypeError: X is not a function (ES2015+ API in server bundle)
+
+**Symptom**: `TypeError: Object.values is not a function` (or similar ES2015+ API) at module scope in a `_chunks/*.js` file.
+**Cause**: A dependency ships untranspiled ES2015+ API calls; esbuild/tsup `target: es5` only transpiles syntax, NOT APIs. Module-scope calls crash at chunk load, before any polyfill can run.
+**Fix**: Rewrite with ES5 APIs at the source (e.g. `Object.keys(o).map(k=>o[k])` instead of `Object.values(o)`), or ensure a core-js polyfill loads first. Check `git log -L` — such fixes get regressed by dep-update commits.
+**Applies to**: All XP versions running Nashorn server-side.
+
+---
+
+## Fragment preview 404 — logless, from a site mapping
+
+**Symptom**: A `portal:fragment` won't preview in Content Studio — "No preview available", or a 404 in the panel. Nothing in `server.log`.
+**Cause**: A site controller mapping (`match: "type:'portal:fragment'"`) routes the fragment to a controller path left stale by the
+`site/` → `cms/` migration, e.g. `/site/pages/default/default.js` when the controller now lives at `/cms/pages/default/default.js`.
+**Fix**: Correct the controller path in `cms/site.yaml`. The real reason is only in the admin-site response body (`Controller [...] not found`),
+not the log — see `runtime-http-probing.md`.
+**Applies to**: XP 8 apps migrated from the `site/` to the `cms/` resource layout.

@@ -3,6 +3,7 @@
 Use this file when implementing or reviewing schema fields in content types, mixins, or x-data.
 
 Base docs:
+
 - Input types root: <https://developer.enonic.com/docs/xp/stable/cms/schemas/input-types>
 - Field set: <https://developer.enonic.com/docs/xp/stable/cms/schemas/field-set>
 - Item set: <https://developer.enonic.com/docs/xp/stable/cms/schemas/item-set>
@@ -10,6 +11,7 @@ Base docs:
 - Localization: <https://developer.enonic.com/docs/xp/stable/cms/schemas/localization>
 
 Input types:
+
 - AttachmentUploader: <https://developer.enonic.com/docs/xp/stable/cms/schemas/input-types/attachmentuploader>
 - Checkbox: <https://developer.enonic.com/docs/xp/stable/cms/schemas/input-types/checkbox>
 - Combobox: <https://developer.enonic.com/docs/xp/stable/cms/schemas/input-types/combobox>

@@ -11,7 +11,7 @@ prose: caveman-lite
 
 Purge old node versions and optionally unused blobs.
 
-```
+```bash
 enonic vacuum [flags]
 ```
 

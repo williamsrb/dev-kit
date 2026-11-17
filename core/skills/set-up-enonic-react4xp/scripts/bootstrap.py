@@ -28,6 +28,7 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
+from typing import NoReturn
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 # scripts -> <skill> -> skills -> .claude -> project root
@@ -65,7 +66,7 @@ def error(msg: str) -> None:
     print(f"[ERROR] {msg}", file=sys.stderr)
 
 
-def fail(msg: str) -> "NoReturn":  # type: ignore[name-defined]
+def fail(msg: str) -> NoReturn:
     error(msg)
     raise SystemExit(1)
 
@@ -84,13 +85,13 @@ def ensure_enonic_cli() -> None:
     info("Checking Enonic CLI...")
     if have_command("enonic"):
         version = subprocess.run(
-            ["enonic", "-v"], capture_output=True, text=True
+            ["enonic", "-v"], capture_output=True, text=True, check=False
         ).stdout.strip()
         info(f"Enonic CLI is already installed: {version}")
         return
 
     info("Enonic CLI not found. Installing...")
-    subprocess.run(["npm", "install", "-g", "@enonic/cli"])
+    subprocess.run(["npm", "install", "-g", "@enonic/cli"], check=False)
     if not have_command("enonic"):
         fail("Failed to install Enonic CLI")
     info("Enonic CLI installed successfully!")
@@ -112,7 +113,7 @@ def create_project(display_name: str, short_name: str, commit_version: str | Non
         info(f"Using commit version: {commit_version}")
 
     info(f"Running: {shlex.join(cmd)}")
-    if subprocess.run(cmd).returncode != 0:
+    if subprocess.run(cmd, check=False).returncode != 0:
         fail("Failed to create Enonic project")
 
     info(f"Project '{display_name}' created successfully!")
@@ -129,10 +130,10 @@ def update_gradle_and_package(display_name: str, short_name: str) -> None:
         fail(f"gradle.properties not found at {gradle_props}")
 
     info("Updating gradle.properties...")
-    sub_in_file(gradle_props, r"^projectName[ \t]*=.*", f"projectName = {short_name}", flags=re.M)
-    sub_in_file(gradle_props, r"^appDisplayName[ \t]*=.*", f"appDisplayName = {display_name}", flags=re.M)
-    sub_in_file(gradle_props, r"^vendorName[ \t]*=.*", "vendorName = Example", flags=re.M)
-    sub_in_file(gradle_props, r"^vendorUrl[ \t]*=.*", "vendorUrl = https://example.com", flags=re.M)
+    sub_in_file(gradle_props, r"^projectName[ \t]*=.*", f"projectName = {short_name}", flags=re.MULTILINE)
+    sub_in_file(gradle_props, r"^appDisplayName[ \t]*=.*", f"appDisplayName = {display_name}", flags=re.MULTILINE)
+    sub_in_file(gradle_props, r"^vendorName[ \t]*=.*", "vendorName = Example", flags=re.MULTILINE)
+    sub_in_file(gradle_props, r"^vendorUrl[ \t]*=.*", "vendorUrl = https://example.com", flags=re.MULTILINE)
     info("gradle.properties updated successfully!")
 
     package_json = ROOT_DIR / "xp" / "package.json"

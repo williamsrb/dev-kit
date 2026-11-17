@@ -23,10 +23,12 @@ import logging
 import os
 import sys
 import time
+from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Dict, Iterable, Iterator, Optional, Tuple
+
+logger = logging.getLogger(__name__)
 
 HOME = Path.home()
 DEFAULT_PROJECTS = HOME / ".claude" / "projects"
@@ -52,12 +54,12 @@ GENERIC_TITLES = frozenset(
 class JsonlTitles:
     session_id: str
     ai_title: str = ""
-    ai_line_index: Optional[int] = None
+    ai_line_index: int | None = None
     custom_title: str = ""
 
 
 def iso_z(ts: datetime) -> str:
-    return ts.astimezone(timezone.utc).isoformat(timespec="milliseconds").replace(
+    return ts.astimezone(UTC).isoformat(timespec="milliseconds").replace(
         "+00:00", "Z"
     )
 
@@ -80,7 +82,7 @@ def iter_org_dirs(root: Path) -> Iterator[Path]:
     try:
         accounts = list(root.iterdir())
     except OSError as e:
-        logging.warning("skip unreadable %s: %s", root, e)
+        logger.warning("skip unreadable %s: %s", root, e)
         return
     for account in accounts:
         try:
@@ -92,27 +94,27 @@ def iter_org_dirs(root: Path) -> Iterator[Path]:
                         continue
                     yield org
                 except OSError as e:
-                    logging.warning("skip %s: %s", org, e)
+                    logger.warning("skip %s: %s", org, e)
         except OSError as e:
-            logging.warning("skip unreadable %s: %s", account, e)
+            logger.warning("skip unreadable %s: %s", account, e)
 
 
-def load_index_titles(root: Path) -> Dict[str, str]:
-    out: Dict[str, str] = {}
+def load_index_titles(root: Path) -> dict[str, str]:
+    out: dict[str, str] = {}
     if not root.is_dir():
-        logging.warning("index root missing: %s", root)
+        logger.warning("index root missing: %s", root)
         return out
     for org in iter_org_dirs(root):
         try:
             paths = org.glob("local_*.json")
         except OSError as e:
-            logging.warning("skip unreadable %s: %s", org, e)
+            logger.warning("skip unreadable %s: %s", org, e)
             continue
         for path in paths:
             try:
                 data = json.loads(path.read_text(encoding="utf-8"))
             except (OSError, UnicodeDecodeError, json.JSONDecodeError) as e:
-                logging.warning("unreadable index %s: %s", path, e)
+                logger.warning("unreadable index %s: %s", path, e)
                 continue
             if not isinstance(data, dict):
                 continue
@@ -121,21 +123,20 @@ def load_index_titles(root: Path) -> Dict[str, str]:
                 continue
             for key in (data.get("cliSessionId"), data.get("sessionId"), path.stem):
                 sid = str(key or "").strip()
-                if sid.startswith("local_"):
-                    sid = sid[len("local_") :]
+                sid = sid.removeprefix("local_")
                 if sid and sid not in out:
                     out[sid] = title
     return out
 
 
-def iter_jsonl(root: Path, session_id: Optional[str] = None) -> Iterator[Path]:
+def iter_jsonl(root: Path, session_id: str | None = None) -> Iterator[Path]:
     if not root.is_dir():
-        logging.warning("projects dir missing: %s", root)
+        logger.warning("projects dir missing: %s", root)
         return
     try:
         paths = root.glob("*/*.jsonl")
     except OSError as e:
-        logging.warning("skip unreadable %s: %s", root, e)
+        logger.warning("skip unreadable %s: %s", root, e)
         return
     for path in sorted(paths):
         if path.parent.name.startswith("."):
@@ -173,13 +174,13 @@ def scan_jsonl(path: Path) -> JsonlTitles:
                 if found.ai_line_index is not None and found.custom_title:
                     break
     except OSError as e:
-        logging.warning("skip unreadable %s: %s", path, e)
+        logger.warning("skip unreadable %s: %s", path, e)
     return found
 
 
 def choose_title(
-    scanned: JsonlTitles, index_titles: Dict[str, str], stems: Iterable[str]
-) -> Tuple[str, str]:
+    scanned: JsonlTitles, index_titles: dict[str, str], stems: Iterable[str]
+) -> tuple[str, str]:
     existing = useful_title(scanned.ai_title)
     if existing:
         return "", "unchanged"
@@ -198,7 +199,7 @@ def build_ai_title_line(session_id: str, title: str) -> str:
     return json.dumps(rec, ensure_ascii=False, separators=(",", ":")) + "\n"
 
 
-def apply_ai_title(path: Path, session_id: str, title: str, ai_line_index: Optional[int]) -> None:
+def apply_ai_title(path: Path, session_id: str, title: str, ai_line_index: int | None) -> None:
     text = path.read_text(encoding="utf-8")
     newline = "\r\n" if "\r\n" in text[:4096] else "\n"
     lines = text.splitlines()
@@ -226,7 +227,7 @@ def apply_ai_title(path: Path, session_id: str, title: str, ai_line_index: Optio
 
 def acquire_lock(lock_path: Path):
     lock_path.parent.mkdir(parents=True, exist_ok=True)
-    fh = open(lock_path, "w", encoding="utf-8")
+    fh = open(lock_path, "w", encoding="utf-8")  # noqa: SIM115 - held open to keep the lock
     try:
         fcntl.flock(fh.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
     except OSError as e:
@@ -267,7 +268,7 @@ def main(argv: Iterable[str] | None = None) -> int:
     by_source = {"custom-title": 0, "index": 0}
     try:
         index_titles = load_index_titles(args.index_root.expanduser())
-        logging.info(
+        logger.info(
             "backfill start dry_run=%s projects=%s index_titles=%d",
             args.dry_run,
             args.projects.expanduser(),
@@ -284,9 +285,9 @@ def main(argv: Iterable[str] | None = None) -> int:
                 continue
             if source == "skip-no-title":
                 skip_no_title += 1
-                logging.debug("SKIP no-title %s", path)
+                logger.debug("SKIP no-title %s", path)
                 continue
-            logging.info(
+            logger.info(
                 "%s %s source=%s title=%s",
                 "DRY" if args.dry_run else "WRITE",
                 path,
@@ -301,13 +302,13 @@ def main(argv: Iterable[str] | None = None) -> int:
                 apply_ai_title(path, sid, title, scanned.ai_line_index)
             except OSError:
                 failed += 1
-                logging.exception("write failed %s", path)
+                logger.exception("write failed %s", path)
                 continue
             wrote += 1
             by_source[source] += 1
         if args.session_id and not seen:
-            logging.warning("no jsonl for session-id %s", args.session_id)
-        logging.info(
+            logger.warning("no jsonl for session-id %s", args.session_id)
+        logger.info(
             "backfill done wrote=%d custom-title=%d index=%d unchanged=%d "
             "skip-no-title=%d failed=%d elapsed=%.2fs",
             wrote,
@@ -320,7 +321,7 @@ def main(argv: Iterable[str] | None = None) -> int:
         )
         return 1 if failed else 0
     except Exception:
-        logging.exception("backfill failed")
+        logger.exception("backfill failed")
         return 1
     finally:
         try:

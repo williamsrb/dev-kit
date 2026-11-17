@@ -1,0 +1,6 @@
+# LLM_INDEX|machine|v2|path<TAB>tokens<TAB>topic<TAB>skills<TAB>keywords
+# Chooser rows end in llm-index.md — open that folder index, not sibling files.
+
+classes/llm-index.md	550365	classes	develop-godot	class @gdscript class-@gdscript gdscript @globalscope class-@globalscope globalscope animatablebody2d class-animatablebody2d animatablebody3d class-animatablebody3d animatedsprite2d class-animatedsprite2d animatedsprite3d class-animatedsprite3d animationmixer class-animationmixer animationplayer class-animationplayer animationtree class-animationtree area2d class-area2d area3d
+getting_started/llm-index.md	44415	getting_started	develop-godot	01.project setup 01.project-setup setting project setting-project 02.player scene 02.player-scene creating player creating-player player-scene 03.coding 03.coding-player coding coding-player 04.creating enemy 04.creating-enemy creating-enemy 05.the main game
+tutorials/llm-index.md	552357	tutorials	develop-godot	2d antialiasing 2d-antialiasing lights shadows 2d-lights lights-shadows meshes 2d-meshes movement 2d-movement overview movement-overview parallax 2d-parallax sprite animation 2d-sprite sprite-animation transforms 2d-transforms viewport canvas viewport-canvas

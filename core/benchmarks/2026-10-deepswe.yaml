@@ -1,0 +1,292 @@
+# DeepSWE (v1.1) — filtered for available agent vendors
+# Score = pass_rate * 100; cost_usd = mean_cost_usd
+# Cursor: composer + grok only. Claude: latest Anthropic. Codex: GPT-5.6 + GPT-6 families.
+# composer-2.5 score/cost are guessed midpoints between gpt-5.6-luna HIGH and MEDIUM.
+# claude-4.5-haiku score/cost are guessed clones of gpt-5.6-luna MEDIUM.
+# 2026-10: official leaderboard not yet published. Rows marked `source:` were collected
+# from vendor/third-party pages (all percent 0-100, same scale as pass_rate*100).
+# No DeepSWE values found for claude-opus-5.5, claude-sonnet-5.5, gpt-6.1-luna.
+# 2026-10-09 fix: `vendorvendor:` keys -> `vendor:`; unsourced rows relabeled opus-5.5 /
+# fable-5.1 / grok-4.7 restored to claude-opus-5 / claude-fable-5 / grok-4.6 (their DeepSWE
+# origin); `copied_from:` rows removed; grok-4.7 costs borrowed from grok-4.6 set to null.
+# Superseded by `agentctl bench collect` -> benchmarks/latest.yaml.
+schema_version: 1
+benchmark: deepswe
+benchmark_version: "1.1"
+generated_at: "2026-10-01T15:09:12.432512+00:00"
+n_tasks: 113
+source: "https://deepswe.datacurve.ai/artifacts/v1.1/leaderboard-live.json"
+october_sources:
+  - "https://emergent.sh/learn/gpt-6-1-sol-benchmarks"
+  - "https://emergent.sh/learn/gpt-6-sol-benchmarks"
+  - "https://x.ai/news/grok-4-7"
+  - "https://artificialanalysis.ai/articles/benchmarking-grok-4-7"
+filters:
+  vendors: [cursor, claude, codex]
+  cursor_models: [composer-2.5, grok-4.6, grok-4.7]
+  claude_models: [claude-opus-5, claude-sonnet-5, claude-fable-5, claude-4.5-haiku]
+  codex_models: [gpt-5.6-luna, gpt-5.6-terra, gpt-5.6-sol, gpt-6-luna, gpt-6-sol, gpt-6.1-sol]
+  latest_only: true
+composer_2_5_guess:
+  method: midpoint
+  between: [gpt-5.6-luna/HIGH, gpt-5.6-luna/MEDIUM]
+  from_scores: [44.25, 11.28]
+  from_costs: [0.78, 0.22]
+claude_4_5_haiku_guess:
+  method: clone
+  from: gpt-5.6-luna/MEDIUM
+  score: 11.28
+  cost_usd: 0.22
+rows:
+- vendor: codex
+  model: "gpt-6.1-sol"
+  effort: HIGH
+  score: 75.2
+  cost_usd: 0.65
+  source: "emergent.sh gpt-6-1-sol Table 2 (OpenAI vendor-reported)"
+- vendor: claude
+  model: "claude-opus-5"
+  effort: MAX
+  score: 73.65
+  cost_usd: 11.84
+- vendor: claude
+  model: "claude-opus-5"
+  effort: XHIGH
+  score: 73.15
+  cost_usd: 9.07
+- vendor: codex
+  model: "gpt-6.1-sol"
+  effort: MEDIUM
+  score: 73.0
+  cost_usd: 0.42
+  source: "emergent.sh gpt-6-1-sol Table 2 (OpenAI vendor-reported)"
+- vendor: cursor
+  model: "grok-4.7"
+  effort: XHIGH
+  score: 73.0
+  cost_usd: null
+  source: "artificialanalysis.ai (Grok Build harness, integer-rounded)"
+  cost_note: "cost not published"
+- vendor: claude
+  model: "claude-opus-5"
+  effort: HIGH
+  score: 72.83
+  cost_usd: 6.08
+- vendor: codex
+  model: "gpt-5.6-sol"
+  effort: MAX
+  score: 72.67
+  cost_usd: 8.39
+- vendor: codex
+  model: "gpt-6.1-sol"
+  effort: XHIGH
+  score: 71.9
+  cost_usd: 0.79
+  source: "emergent.sh gpt-6-1-sol Table 2 (OpenAI vendor-reported)"
+- vendor: codex
+  model: "gpt-6.1-sol"
+  effort: MAX
+  score: 71.9
+  cost_usd: 1.57
+  source: "emergent.sh gpt-6-1-sol Table 2 (OpenAI vendor-reported)"
+- vendor: cursor
+  model: "grok-4.7"
+  effort: HIGH
+  score: 71.0
+  cost_usd: null
+  source: "x.ai/news/grok-4-7"
+  cost_note: "cost not published"
+- vendor: codex
+  model: "gpt-5.6-sol"
+  effort: XHIGH
+  score: 70.73
+  cost_usd: 4.7
+- vendor: claude
+  model: "claude-fable-5"
+  effort: XHIGH
+  score: 69.91
+  cost_usd: 13.41
+- vendor: claude
+  model: "claude-fable-5"
+  effort: MAX
+  score: 69.72
+  cost_usd: 21.63
+- vendor: codex
+  model: "gpt-5.6-terra"
+  effort: MAX
+  score: 69.62
+  cost_usd: 4.95
+- vendor: codex
+  model: "gpt-5.6-sol"
+  effort: HIGH
+  score: 69.4
+  cost_usd: 3.47
+- vendor: claude
+  model: "claude-opus-5"
+  effort: MEDIUM
+  score: 68.9
+  cost_usd: 3.29
+- vendor: codex
+  model: "gpt-6-sol"
+  effort: MAX
+  score: 68.8
+  cost_usd: 2.74
+  source: "emergent.sh gpt-6-1-sol Table 2 (OpenAI vendor-reported)"
+- vendor: claude
+  model: "claude-fable-5"
+  effort: HIGH
+  score: 68.6
+  cost_usd: 9.18
+- vendor: cursor
+  model: "grok-4.6"
+  effort: MEDIUM
+  score: 67.48
+  cost_usd: 3.45
+- vendor: codex
+  model: "gpt-5.6-luna"
+  effort: MAX
+  score: 67.19
+  cost_usd: 3.03
+- vendor: codex
+  model: "gpt-6-luna"
+  effort: DEFAULT
+  score: 66.6
+  cost_usd: 0.22
+  source: "emergent.sh gpt-6-sol (effort not stated)"
+- vendor: codex
+  model: "gpt-6-sol"
+  effort: XHIGH
+  score: 66.6
+  cost_usd: 1.0
+  source: "emergent.sh gpt-6-1-sol Table 2 (OpenAI vendor-reported)"
+- vendor: claude
+  model: "claude-fable-5"
+  effort: MEDIUM
+  score: 65.37
+  cost_usd: 6.09
+- vendor: codex
+  model: "gpt-6-sol"
+  effort: HIGH
+  score: 65.3
+  cost_usd: 0.64
+  source: "emergent.sh gpt-6-1-sol Table 2 (OpenAI vendor-reported)"
+- vendor: codex
+  model: "gpt-6.1-sol"
+  effort: LOW
+  score: 64.4
+  cost_usd: 0.17
+  source: "emergent.sh gpt-6-1-sol Table 2 (OpenAI vendor-reported)"
+- vendor: codex
+  model: "gpt-5.6-sol"
+  effort: MEDIUM
+  score: 61.06
+  cost_usd: 1.86
+- vendor: codex
+  model: "gpt-5.6-terra"
+  effort: XHIGH
+  score: 60.18
+  cost_usd: 2.13
+- vendor: claude
+  model: "claude-fable-5"
+  effort: LOW
+  score: 59.58
+  cost_usd: 3.76
+- vendor: claude
+  model: "claude-opus-5"
+  effort: LOW
+  score: 58.13
+  cost_usd: 1.66
+- vendor: codex
+  model: "gpt-5.6-luna"
+  effort: XHIGH
+  score: 56.86
+  cost_usd: 1.54
+- vendor: codex
+  model: "gpt-6-sol"
+  effort: MEDIUM
+  score: 56.6
+  cost_usd: 0.38
+  source: "emergent.sh gpt-6-1-sol Table 2 (OpenAI vendor-reported)"
+- vendor: claude
+  model: "claude-sonnet-5"
+  effort: MAX
+  score: 53.85
+  cost_usd: 26.4
+- vendor: codex
+  model: "gpt-5.6-terra"
+  effort: HIGH
+  score: 53.76
+  cost_usd: 1.13
+- vendor: claude
+  model: "claude-sonnet-5"
+  effort: XHIGH
+  score: 49.67
+  cost_usd: 11.89
+- vendor: claude
+  model: "claude-sonnet-5"
+  effort: HIGH
+  score: 48.23
+  cost_usd: 7.43
+- vendor: codex
+  model: "gpt-5.6-sol"
+  effort: LOW
+  score: 45.35
+  cost_usd: 1.07
+- vendor: codex
+  model: "gpt-5.6-luna"
+  effort: HIGH
+  score: 44.25
+  cost_usd: 0.78
+- vendor: cursor
+  model: "grok-4.6"
+  effort: LOW
+  score: 41.65
+  cost_usd: 1.04
+- vendor: claude
+  model: "claude-sonnet-5"
+  effort: MEDIUM
+  score: 39.78
+  cost_usd: 4.08
+- vendor: codex
+  model: "gpt-6-sol"
+  effort: LOW
+  score: 37.2
+  cost_usd: 0.16
+  source: "emergent.sh gpt-6-1-sol Table 2 (OpenAI vendor-reported)"
+- vendor: codex
+  model: "gpt-5.6-terra"
+  effort: MEDIUM
+  score: 35.11
+  cost_usd: 0.58
+- vendor: claude
+  model: "claude-sonnet-5"
+  effort: LOW
+  score: 30.51
+  cost_usd: 2.19
+- vendor: cursor
+  model: "composer-2.5"
+  effort: DEFAULT
+  score: 27.77
+  cost_usd: 0.5
+  guessed: true
+- vendor: codex
+  model: "gpt-5.6-terra"
+  effort: LOW
+  score: 24.05
+  cost_usd: 0.43
+- vendor: codex
+  model: "gpt-5.6-luna"
+  effort: MEDIUM
+  score: 11.28
+  cost_usd: 0.22
+- vendor: claude
+  model: "claude-4.5-haiku"
+  effort: DEFAULT
+  score: 11.28
+  cost_usd: 0.22
+  guessed: true
+- vendor: codex
+  model: "gpt-5.6-luna"
+  effort: LOW
+  score: 1.55
+  cost_usd: 0.07

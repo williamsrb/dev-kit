@@ -25,7 +25,7 @@ acceptance criteria where one label must be shown in several languages.
 
 Content Studio fetches the component form schema from:
 
-```
+```text
 GET /admin/rest-v2/cs/content/page/part/descriptor?key=<app>:<part>
 ```
 

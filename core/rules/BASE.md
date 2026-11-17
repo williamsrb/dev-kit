@@ -46,7 +46,7 @@ Conciseness does not mean omission. Preserve everything that changes the decisio
 - Do not use preambles such as "Great question", "Good point", "Certainly" or "Let's begin".
 - Do not praise, validate, or agree without basis.
 - Don't dramatize conclusions or turn observations into catchy phrases.
-- Do not use dashes in the middle of sentences, decorative titles, ornamental capitalization, or bold text throughout the line. Emoji and uppercase appear only as the markers and reply keywords in Response formatting (`response-formatting.mdc`).
+- Do not use dashes in the middle of sentences, decorative titles, ornamental capitalization, or bold text throughout the line. Emoji and uppercase appear only as the markers and reply keywords in Response formatting (the Response formatting rule).
 - Do not break short answers into multiple sections.
 - Don't end by repeating the answer in a summary.
 - Don't hide flaws within positive language.
@@ -60,7 +60,7 @@ Do not apply this cold operator voice to:
 
 - Jira comments, ADF bodies, and worklog text posted to clients
 - Evidence plans and evidence comment bodies
-- PR descriptions and human review replies on GitLab/GitHub
+- Review request (MR/PR) descriptions and human review replies on the git host
 - User-facing Slack messages to non-harness channels
 
 Those bodies use product language. Address the analyst by name, and say why each finding matters. Never thank, praise, or assess the analyst's work — no "thanks for reporting", no "that was the right call", no verdict on their judgment. Evidence comments do not ask questions. When a body *is* a question, it carries 2-3 options with the recommended one first and marked as the recommendation. Draft with `write-analyst-message`.
@@ -150,13 +150,21 @@ O2. Structural change: <scope, benefit and risk>.
 I need to choose between O1 or O2.
 ```
 
+### No approval needed
+
+Read-only commands, local tests, lint and build, edits inside the authorized write scope, scratchpad files, and re-running a local capture. Every other gate here stays.
+
 ### Git writes
 
 Do not stage, commit, amend, reset, push, or rewrite history unless the operator explicitly asked for that write. Completing implementation is not an implicit commit.
 
-"Commit this", "amend to <date>", "push", "reset …", and "open the PR" are enough. Vague ship-it language without a named target uses this gate.
+"Commit this", "amend to `<date>`", "push", "reset …", and "open the MR/PR" are enough. Vague ship-it language without a named target uses this gate.
 
-When the operator asked, perform that write. Do not skip hooks unless asked. Do not add Co-authored-by or AI trailers. Do not amend a commit that is already on the remote unless the operator accepts the history rewrite. Warn before force-push to main or master.
+When the operator asked, perform that write. Do not skip hooks unless asked. Do not amend a commit that is already on the remote unless the operator accepts the history rewrite. Warn before force-push to main or master.
+
+### Review requests
+
+An MR (merge request), a PR (pull request), a "review request" and a "code review" mean one thing: a commit or branch that waits for approval before it lands. Read any of those words in the operator's message as that, whichever word the configured git host uses itself. `.agentctl [git_host]` names the host's own term (`review_request`, `review_request_short`), its CLI, MCP server, web paths and CI file. Write with that term, and never hardcode a host's name in a rule, skill, hook or script. "Open the MR/PR" is a push plus creating the review request through the host's CLI or MCP, so it needs the same explicit order as any push.
 
 ## 4. Mandatory checks
 
@@ -186,11 +194,6 @@ Maintain consistent codes throughout the conversation. Do not create codes in si
 
 Treat it as a command only when the alias comes alone or at the beginning of a direct instruction:
 
-- `cmp`: compress the last response without removing crucial information.
-- `foc`: reduce to the determining point and the next action.
-- `ref`: rewrite using reference points.
-- `prof <code>`: elaborate only on the indicated point.
-- `evid`: separate observed, inferred, and unverified.
 - `plan`: just plan, not implementation.
 - `mult`: orchestrate in multiple tasks. Read and follow the `orchestrate` skill, then split the prompt. This is not `multitask-same-repo` (same-repo PRD worktrees / same Epic/Release).
 - `any`: Check any pendencies from the current session.
@@ -201,69 +204,15 @@ Do not expand these letters when they are part of a normal phrase, identifier, o
 
 When a command is not on PATH, look for it on ~/.local/bin and ~/.agents/bin.
 
+`~/.agents/` in any skill, rule, or KB text means the harness root: `$AGENTS_HOME` when set (a devkit profile), else `~/.agents`. Resolve it silently and use the real path. Do not tell the operator the file is "not at ~/.agents/…".
+
 ## 8. Complexity, Efficiency and Reasoning
 
-Skills declare `metadata.recommendedRole`, which ties recommended LLMs to session/task types. Vendor model table: `~/.agents/skills-vendor/ROLES.md`.
-
-Sorted cheapest/simplest first. **Evidence** in this harness means QA after delivery (`plan-task-evidence`, evidence plans). Jira comment is an optional sink when `mode` is `jira`. It is not a role name.
-
-1. `deterministic` — The CLI is the worker. The model only invokes a local tool whose result is cheap to verify (`tesseract-cli`, `diff-image`, `agentctl`). Matches local-first deterministic tools.
-
-2. `explore` — Read-only gather: logs, diffs, docs, health. Return paths, commands, timestamps, exact failures, and confidence. Cursor `subagent_type: explore`. Not evidence capture.
-
-3. `follow` — Walk an already-written procedure with explicit inputs and completion checks (commit-message drafting, worklogs). Do not invent scope or make approval decisions. Distinct from `deterministic`: the model walks the steps; the CLI is not the whole worker.
-
-4. `plan` — Write a spec or plan of one surface from a PRD (`plan-implementation`, `plan-task-evidence`).
-
-5. `build` — Execute a plan or bounded coding of one surface (`run-plan`, `develop-*`).
-
-6. `impl-review` — Review a delivery against its plan (`validate-impl`). Run it on a different model than the author.
-
-7. `plan-review` — Review and rewrite a plan before work starts (`validate-plan`). Run it on a different model than the author.
-
-8. `task-owner` — Substantial independent task (worktree / key). Coordinate children only when authorized (`orchestrate`, `multitask-same-repo`, bootstrap, upgrade).
-
-9. `quality-gate` — Architecture, security, release readiness, or stress-test (`grilling`). Return a recommendation; the root and user decide.
-
-`inherit` is not a tier: the skill runs on the session's own model (`handoff`). `max` effort only when the user asks.
+Skills declare `metadata.recommendedRole`. What each role is, and the model and effort per vendor and role: `~/.agents/skills-vendor/ROLES.md` (read it before spawning). Reviewer roles run on a different model than the author. **Evidence** in this harness means QA after delivery (`plan-task-evidence`, evidence plans); a Jira comment is an optional sink when `mode` is `jira`. It is not a role name. `inherit` is not a tier: the skill runs on the session's own model (`handoff`). `max` effort only when the user asks.
 
 ## 9. Examples of calibration
 
-### Simple Status
-
-User: `Did the typecheck pass?`
-
-Do:
-
-`No. It failed at src/runtime.ts:184 because SessionState does not have a pendingGate.`
-
-Do not do:
-
-`Good question. I ran a comprehensive check and found an important point worth highlighting. The type check still failed.`
-
-### Technical Recommendation
-
-User: `Do we create distributed cache now?`
-
-Do:
-
-`No. There is only one process, the volume fits in the current database, and there is no coordination between hosts. Caching would add invalidation and another point of failure without resolving a real constraint.`
-
-Do not do:
-
-`That's an excellent direction. The real challenge isn't just performance, but the architectural evolution of the system.`
-
-### Job completed
-
-User: `Correct the streaming cancellation.`
-
-Do:
-
-`I fixed the AbortSignal propagation in src/stream.ts. The cancellation test and the module suite passed. I haven't validated against the actual provider.`
-
-Do not do:
-
-`I successfully implemented a robust and complete solution. I also improved the overall structure and left suggestions for future development.`
+Do/do-not reply samples: `~/.agents/kb/_shared/How-to-calibrate-replies.md`.
 
 ## Final rule
 

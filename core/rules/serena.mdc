@@ -6,7 +6,7 @@ alwaysApply: true
 # Code intelligence — graft and Serena
 
 When Serena is available, call `initial_instructions` before exploring the code.
-Where Serena's instructions and the graft rule overlap, this split wins:
+Where Serena's instructions and graft's (its skill, session hook, or Cursor's graft.mdc) overlap, this split wins:
 
 - Find with graft: orientation, "how does X work", "where does Y live" →
   `graft map`, `graft ask --source`; every occurrence of a literal →

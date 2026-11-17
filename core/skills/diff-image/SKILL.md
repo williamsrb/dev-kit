@@ -1,6 +1,6 @@
 ---
 name: diff-image
-description: "Pixel-diff two local images: changed-pixel count/ratio, visible diff, optional mask. Crop localized before/after sidecars and optional labeled compose. Same dimensions required; not a semantic pass/fail gate. | recommendedRole: deterministic."
+description: "Pixel-diff two local images: changed-pixel count/ratio, visible diff, optional mask. Crop localized before/after sidecars and optional labeled compose. Same dimensions required; not a semantic pass/fail gate."
 metadata:
   recommendedRole: deterministic
   cliDependencies:

@@ -10,7 +10,7 @@ prose: caveman-lite
 
 # Compact KB, skills, and offline-reference
 
-Canonical tree is `~/.agents`. Harness homes (`~/.cursor`, `~/.claude`, `~/.codex`, `~/.claude_personal`) consume it via skill link-farms and `kb` → `~/.agents/kb`. Edit here only. Do not copy files into vendor folders.
+Canonical tree is `~/.agents`. Harness homes (`~/.cursor`, `~/.claude`, `~/.codex`, `~/.agents-profiles/<profile>/<vendor>`) consume it via skill link-farms and `kb` → `~/.agents/kb`. Edit here only. Do not copy files into vendor folders.
 
 Prose register: caveman-lite (`How-to-author-ai-howtos.md`). Stock Caveman full/ultra is forbidden.
 
@@ -25,8 +25,14 @@ The win is **loaded tokens per task**, not corpus size. Slices and indexes can g
 | Skills | Routing, not a corpus rewrite. `run-plan` uses testing/implementation `llm-index.md`. `apply-react4xp-practices` load table only. Descriptions lost install-provenance suffixes only |
 | Lazy-load split (2026-09-28) | Fat `SKILL.md` routers (`graphify`, `humanize-text`, `plan-task-evidence`, `run-plan`). Catalog How-tos split by family (`enonic-cli/*.md`, `xp7-to-xp8-upgrade/changes-*.md`, `schemes-*.md`). `agentctl` groups extracted to siblings + `agentctl_common.py`. Sequential QA How-tos and autonomy criteria left whole |
 | Lint merge (2026-09-30) | `lint-and-draft-commit-message` router + `references/{python,php,enonic,generic}.md`. Old enonic/generic skill dirs removed; names kept as aliases |
+| Caveman-lite pilots (2026-10-21), task closed | Plan `~/.agents/plans/optimize-token-markdown-caveman/`. Pilot 1 (`response-formatting.mdc`, `plan-implementation/SKILL.md`, `plan-task-evidence/references/draft-and-evaluate.md`): prose 5,080 → 5,047 (0.6%). Pilot 2 (`plan-task-evidence/SKILL.md`, `run-plan/SKILL.md`, two untagged How-tos: `testing/client/How-to-reach-client-review-admin.md`, `validation/How-to-verify-structured-data-with-the-rich-results-test.md`): prose 12,438 → 12,281 after register rewrite (1.3%) → 12,191 after say-it-once (0.7% more; 2.0% total). Bar was 10%. Both pilots' edits were reverted; only the guard and baseline scripts stayed |
+| `markdown-compression` pilot 3 (2026-10-21), task closed | Same 4 files as pilot 2, levers from `skills/markdown-compression/references/lossy-techniques.md` applied in order, whole-file tokens 14,662 → 13,857: within-file dedupe −5.3% (5.9–7.2% on the large `SKILL.md`, 2.5–3.7% on How-tos), prose-to-table **+0.8%** (headers and pipes cost more than terse prose), illustrative-example triage −0.2%, implied-knowledge deletion −0.8%; total −5.5%. The guard passed all stages with 100 duplicate/example waivers, all confirmed by the reviewer. The reviewer agent still found 1 LOSS (a merged `run-plan` step made Constraints/Non-Goals reading optional) and 10 RISKs (rules moved away from the step that uses them, a scope widened by a merge). Edits were not applied |
 
 Do **not** re-run `compact_owned_kb.py` `main()`. It splits worklog and adds frontmatter to files that lack `---`. A second run is messy even when it skips files that already have frontmatter.
+
+Do **not** start another prose-register pass (caveman-lite rewrite or say-it-once dedupe) over rules, skills or How-tos. The 2026-10-21 pilots showed the owned prose is already near caveman-lite: with every negation, limiter and number kept, a rewrite only drops filler. Say-it-once is capped because most repeated rules (Jira posting, screenshot consistency, comment backup) are `client` layer and cannot own a pointer, and a pointer is often as long as the sentence it replaces. To cut always-on tokens, change what loads (remove, merge or lazy-load a rule); that is a content decision for the operator, not compaction.
+
+Within-file dedupe is the only lever that reached about 5%, and only on large `SKILL.md` files. It rewrites rules, so the guard is not enough: every file also needs an independent reviewer agent comparing original and result, plus a fix round. Do not convert terse prose to tables for size; it grows the file.
 
 ## Guardrails (hard)
 
@@ -42,6 +48,8 @@ Do **not** re-run `compact_owned_kb.py` `main()`. It splits worklog and adds fro
 
 All under `~/.agents/kb/_shared/scripts/`.
 
+The four scripts that write (`compact_owned_kb.py`, `compact_offline_reference.py`, `compact_skills.py`, `llm_index.py`) take `--apply`. Bare invocation and `--help` print the script doc and exit 0, so probing one never rewrites the KB (`apply_gate.py`). Do not pass `--apply` to `compact_owned_kb.py`.
+
 | Script | Safe to re-run? | Effect |
 |--------|-----------------|--------|
 | `compact_owned_kb.py` `main()` | **No** | Split + frontmatter (already applied) |
@@ -49,6 +57,8 @@ All under `~/.agents/kb/_shared/scripts/`.
 | `compact_owned_kb.write_llm_index(bucket)` | No for new work | v1 columns. Do not use after 2026-09 |
 | `compact_offline_reference.py` | Yes after a docs sync | Chrome strip + per-catalog index. Idempotent on already-stripped pages |
 | `compact_skills.py` | Yes for blank-line / standalone `Adapted from [url].` lines | Skips templates, scripts, `playwright-cli`. Does **not** rewrite `name` or `description` |
+| `compaction_baseline.py` | Yes | Writes in-scope pre-images and `baseline.json` (tokens per file split into prose, code, table, frontmatter) to `--out`. Run before any rewrite |
+| `compaction_guard.py` | Yes | Compares files with their pre-images; fails on a lost fence, inline code, URL, link target, number, path, issue key, referenced heading, frontmatter item, or negation/limiter word. `--waivers` declares removed items: `owner` (a `rules/` source now carries it), `reason: duplicate` + `kept` (text still in the file), or `reason: example` + `note`. It cannot detect a weakened rule; pair it with a reviewer. Tests: `tests/test_compaction_guard.py` |
 
 Regenerate owned indexes only. Call `write_bucket_indexes` per existing bucket. Do **not** call `write_owned_indexes()` from a tool that takes `--root`: it hardcodes `KB = Path("${HOME}/.agents/kb")` and walks `calibration`.
 
@@ -87,7 +97,7 @@ PY
 | `plan-task-evidence/templates.md` | Load-bearing evidence/Jira template |
 | `plan-implementation/references/write-and-validate.md` fenced template | Plan file shape |
 | `enonic-cli/commands.md`, xp8 change catalogs | Chooser + one family file (`project.md`, `changes-build-files.md`, …) |
-| One-off project How-tos (client) | Operational evidence constraints |
+| One-off project How-tos (client/AS/acme) | Operational evidence constraints |
 
 ## Pitfalls
 

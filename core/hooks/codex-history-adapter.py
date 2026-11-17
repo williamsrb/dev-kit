@@ -41,6 +41,7 @@ def main() -> int:
                 'conversation_id': session_id,
                 'generation_id': turn_id,
                 'hook_event_name': event_name or 'UserPromptSubmit',
+                'harness': 'codex',
                 'workspace_roots': [cwd] if cwd else [],
             }
             sys.stdout.write(run_history('prompt', mapped) or '{"continue": true}\n')
@@ -50,13 +51,14 @@ def main() -> int:
                 'conversation_id': session_id,
                 'generation_id': turn_id,
                 'hook_event_name': event_name or 'Stop',
+                'harness': 'codex',
                 'status': 'completed',
             }
             sys.stdout.write(run_history('response', mapped) or '{}\n')
         else:
             sys.stdout.write('{}\n')
         return 0
-    except Exception:
+    except Exception:  # noqa: BLE001 - a failing hook must never block the session
         sys.stdout.write('{"continue": true}\n' if mode == 'prompt' else '{}\n')
         return 0
 

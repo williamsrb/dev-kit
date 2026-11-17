@@ -1,3 +1,10 @@
+---
+id: calibration-runs-of-classify-ticket-autonomy-anonymized
+when_skills: []
+read: section
+prose: caveman-lite
+---
+
 # Calibration runs (anonymized)
 
 Opaque ids `R<run>-<nn>`. The host file with Jira keys is not in this kit. Do not reverse-map these ids in shipped docs.

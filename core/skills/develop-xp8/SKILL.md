@@ -1,6 +1,6 @@
 ---
 name: develop-xp8
-description: "Enonic XP 8 offline docs (platform, CMS, code kit). Use for XP 8 APIs, CMS, frontend integration, or when XP7 docs are the wrong version. | recommendedRole: build | aliases: xp8-docs, enonic-xp8, develop-xp8-backend."
+description: "Enonic XP 8 offline docs (platform, CMS, code kit). Use for XP 8 APIs, CMS, frontend integration, or when XP7 docs are the wrong version."
 metadata:
   recommendedRole: build
   aliases: xp8-docs, enonic-xp8, develop-xp8-backend
@@ -29,7 +29,7 @@ Docs live under `~/.agents/kb/offline-reference/xp8` (not under this skill).
 
 1. Route via `~/.agents/kb/offline-reference/xp8/llm-index.md` (chooser: `cms` / `code` / `platform`).
 2. Open the matching subtree `llm-index.md`, then the page under `~/.agents/kb/offline-reference/xp8/docs/{platform,cms,code}/stable/...`.
-3. Online source of truth: https://developer.enonic.com/docs/platform/stable (and sibling `cms` / `code` trees).
+3. Online source of truth: <https://developer.enonic.com/docs/platform/stable> (and sibling `cms` / `code` trees).
 
 ## Shared `docs/*` base
 

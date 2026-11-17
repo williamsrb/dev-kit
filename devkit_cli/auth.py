@@ -13,7 +13,7 @@ import os
 import subprocess
 import sys
 from collections.abc import Mapping
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -46,7 +46,7 @@ def desktop_id(scheme: str) -> str:
 
 
 def _now() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 def write_pending(home: Path, profile: str, vendor: str,
@@ -75,7 +75,7 @@ def read_pending(home: Path, now: datetime | None = None) -> dict | None:
     if not stamp:
         return None
     try:
-        written = datetime.strptime(stamp, "%Y%m%dT%H%M%SZ").replace(tzinfo=timezone.utc)
+        written = datetime.strptime(stamp, "%Y%m%dT%H%M%SZ").replace(tzinfo=UTC)
     except ValueError:
         return None
     if (now or _now()) - written > PENDING_TTL:

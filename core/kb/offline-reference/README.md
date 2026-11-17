@@ -11,8 +11,7 @@ LLM-dense documentation snapshots used by Cursor skills. Skills point here; they
 | React4XP 5.x (XP 7, legacy maintenance) | `react4xp-5.x/` | `develop-react4xp-v5` |
 | Content Studio stable (6.x) | `content-studio-stable/` | `plan-task-evidence` (CMS create/edit/publish evidence) |
 | Content Studio 5.x | `content-studio-5.x/` | `plan-task-evidence` (XP7 / CS 5.x hosts) |
-| Godot 4 — 2D | `godot-2d/` | `develop-godot-2d` |
-| Godot 4 — 3D | `godot-3d/` | `develop-godot-3d` |
+| Godot 4.7 | `godot/` | `develop-godot` |
 
 **React4XP routing:** stable/7.x → XP 8; 6.x → new XP 7 work; 5.x → XP 7 legacy maintenance only. 5.x and 6.x are XP 7 exclusive.
 
@@ -34,3 +33,15 @@ python3 ~/.agents/skills/develop-react4xp-v5/scripts/sync-react4xp-docs.py
 python3 ~/.agents/kb/offline-reference/scripts/sync-content-studio-docs.py --channel stable
 python3 ~/.agents/kb/offline-reference/scripts/sync-content-studio-docs.py --channel 5.x
 ```
+
+## Refresh Godot
+
+Needs `beautifulsoup4` (`bs4`). A source flag is required.
+
+```bash
+python3 ~/.agents/skills/develop-godot/scripts/sync-godot-docs.py --version 4.7 --crawl --cache-dir ~/.local/share/godot/docs-src/<date>/html
+# or: ... sync-godot-docs.py --version 4.7 --zip <godot-docs-html-stable.zip|url>
+~/.agents/bin/agentctl docs index $(for d in ~/.agents/kb/offline-reference/*/; do n=$(basename $d); [ $n = scripts ] || echo --root ${d%/}; done) --db ~/.agents/.cache/offline-docs.sqlite
+```
+
+Do NOT run `compact_offline_reference.py` on `godot/`: it blanks the skills column of `llm-index.md` (repair: `sync-godot-docs.py --reindex`).

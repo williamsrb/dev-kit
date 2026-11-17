@@ -1,0 +1,28 @@
+// House style: long lines, compact tables, and frontmatter name/id as the page title.
+// llm-index.md files are generated tab-separated indexes, and rules/agents.d holds AGENTS.md body fragments; neither is a page.
+// A repeated heading such as "Do" is fine under different parents.
+// Vendored trees under core/ keep their upstream style; lint changes there would be lost on the next update.
+{
+  "config": {
+    "MD013": false,
+    "MD060": false,
+    "MD024": { "siblings_only": true },
+    "MD041": { "front_matter_title": "^\\s*(title|name|id)\\s*[:=]" }
+  },
+  "gitignore": true,
+  "ignores": [
+    "core/skills/archify/**",
+    "core/skills/debug-xp-app/**",
+    "core/skills/draw-diagram/**",
+    "core/skills/humanize-text/**",
+    "core/skills/upgrade-xp-app/**",
+    "core/skills/use-enonic-cli/**",
+    "core/skills-vendor/*/impeccable/**",
+    "core/vendor/tgrep-cursor/**",
+    "core/kb/offline-reference/**",
+    "**/llm-index.md",
+    "core/rules/agents.d/**",
+    "**/node_modules/**",
+    "graft/**"
+  ]
+}

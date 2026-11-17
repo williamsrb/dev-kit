@@ -16,7 +16,7 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-from . import appfork, kithome
+from . import appfork, kithome, pyfloor
 from .common import FILE_MODE, REPO_ROOT, STAMP_NAME, ensure_dir, timestamp
 from .errors import DevkitError
 
@@ -65,7 +65,11 @@ PROFILE_SKIP_DIRS = ("core", "bin", "agents", "hooks")
 PROFILE_PATH_TOOLS = ("agentctl",)
 # Credential files that may be shared across profiles. Browser storage-state
 # JSON in .auth stays profile-local so sessions do not leak.
-SHARED_AUTH_FILES = ("jira-api-token.yaml", "nvidia-api-key.yaml")
+SHARED_AUTH_FILES = (
+    "jira-api-token.yaml",
+    "nvidia-api-key.yaml",
+    "gitlab-access-token.yaml",
+)
 
 # Instance names are one filesystem path segment. Nested names would break
 # uniqueness and the ~/.agents-profiles/<name>/ layout.
@@ -515,6 +519,18 @@ def resolve_stock_cli(name: str, extra: list[str] | None = None) -> str:
     return name
 
 
+def profile_python() -> str:
+    """`python3` when the one on PATH meets the floor, else an absolute interpreter.
+
+    Keeping the bare name where it already works leaves rendered files
+    byte-identical on every distribution that ships 3.12 or newer.
+    """
+    path = shutil.which("python3")
+    if path and pyfloor.meets_floor(path):
+        return "python3"
+    return pyfloor.find_python() or "python3"
+
+
 def render_tokens(profile: dict, vendor: str, home: Path) -> dict[str, str]:
     """Every ${PROFILE_*} a template may reference, resolved for this context."""
     layout = paths_for(profile["name"], vendor, home)
@@ -545,6 +561,7 @@ def render_tokens(profile: dict, vendor: str, home: Path) -> dict[str, str]:
         "PROFILE_CURSOR_AGENT": resolve_stock_cli(
             "cursor-agent", VENDOR_CLI_CANDIDATES["cursor"]),
         "PROFILE_KIT_ROOT": str(kithome.current_link(home)),
+        "PROFILE_PYTHON": profile_python(),
         "PROFILE_AUTH_LAUNCH": str(auth["launch"]),
         "PROFILE_AUTH_DISPATCH": str(auth["dispatch"]),
         "PROFILE_AUTH_SCHEME": "claude",
@@ -561,7 +578,8 @@ def render(text: str, tokens: dict[str, str]) -> str:
 
 
 def provenance(profile: dict, vendor: str, home: Path, kit: dict,
-               source_commit: str, history: list | None = None) -> dict:
+               source_commit: str, history: list | None = None,
+               kit_ref: dict | None = None) -> dict:
     layout = paths_for(profile["name"], vendor, home)
     prov = {
         "_comment": "Written by devkit. Describes the tree beside it; never edit by hand.",
@@ -577,6 +595,8 @@ def provenance(profile: dict, vendor: str, home: Path, kit: dict,
         "installed_at": timestamp(),
         "config_dir": str(layout["config_dir"]),
     }
+    if kit_ref:
+        prov["kit_ref"] = kit_ref
     if profile.get("headless"):
         prov["headless"] = True
     else:

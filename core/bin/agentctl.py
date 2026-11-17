@@ -25,13 +25,23 @@ if str(_BIN_DIR) not in sys.path:
     sys.path.insert(0, str(_BIN_DIR))
 import agentctl_bench
 import agentctl_code
+import agentctl_config
+import agentctl_disk
 import agentctl_docs
+import agentctl_factory
+import agentctl_git
+import agentctl_githost
+import agentctl_harness
 import agentctl_image
 import agentctl_jira
 import agentctl_kb
 import agentctl_plan
+import agentctl_release
 import agentctl_security
 import agentctl_skills
+import agentctl_subagents
+import agentctl_sync
+import agentctl_tools
 from agentctl_common import (
     agents_home,
     argsafe_limit,
@@ -44,7 +54,6 @@ from agentctl_common import (
 )
 from agentctl_skills import public_nvidia_auth
 
-ISSUE_RE = re.compile(r"(?<![A-Z0-9])([A-Z][A-Z0-9]+-\d+)(?![A-Z0-9])", re.IGNORECASE)
 SLUG_RE = re.compile(r"(?<![A-Za-z0-9-])([a-z][a-z0-9]*(?:-[a-z0-9]+)+)(?![A-Za-z0-9-])")
 LOG_START_RE = re.compile(
     r"^(?:\d{4}-\d{2}-\d{2}[T ][^ ]+\s+)?(?:\[[^]]+\]\s*)?"
@@ -64,8 +73,16 @@ RECOMMENDED_TOOLS = (
 
 RECOMMENDED_PYTHON_PACKAGES = ("PIL", "numpy")
 
+def issue_re() -> re.Pattern[str]:
+    """Issue keys of the tracker named in .agentctl, matched case-insensitively inside text."""
+    try:
+        return agentctl_config.key_pattern(ignore_case=True)
+    except agentctl_config.ConfigError as exc:
+        raise ValueError(str(exc)) from exc
+
+
 def _is_jira_token(token: str) -> bool:
-    match = ISSUE_RE.search(token)
+    match = issue_re().search(token)
     return bool(match) and match.group(1).lower() == token.lower()
 
 
@@ -91,7 +108,7 @@ def _unique(items: list[dict[str, str]]) -> list[dict[str, str]]:
 
 def _issues_from(source: str, value: str) -> list[dict[str, str]]:
     found: list[dict[str, str]] = []
-    for match in ISSUE_RE.finditer(value):
+    for match in issue_re().finditer(value):
         found.append({"key": match.group(1).upper(), "source": source, "value": value[:300], "mode": "jira"})
     return _unique(found)
 
@@ -343,7 +360,7 @@ def cmd_tools_audit(args: argparse.Namespace) -> int:
             "available": probe.returncode == 0,
             "version": probe.stdout.strip() if probe.returncode == 0 else None,
         })
-    token_path = agentctl_jira.TOKEN_PATH
+    token_path = agentctl_jira.default_token_path()
     jira_token: dict[str, Any] = {"path": str(token_path), "present": token_path.is_file()}
     if token_path.is_file():
         try:
@@ -476,12 +493,16 @@ def build_parser() -> argparse.ArgumentParser:
             "  agentctl evidence inspect screenshot.png --ocr --expected-text 'Saved'\n"
             "  agentctl jira fetch PROJ-1\n"
             "  agentctl bench collect && agentctl bench gaps\n"
+            "  agentctl disk report home --min-size 1GB --older-than 180d --limit 10\n"
+            "  agentctl disk scan root --background && agentctl disk status\n"
+            "  agentctl factory start FOO-1 --dry-run && agentctl factory status FOO-1\n"
             "  agentctl playwright spawn PROJ-101 --enable\n"
             "  agentctl playwright revive --default\n"
             "  agentctl security detect --cwd .\n"
             "  agentctl security scan --check secrets,deps --fail-on HIGH\n"
             "  agentctl skills scan ~/.agents/skills/find-skills\n"
-            "  agentctl tools audit --versions\n\n"
+            "  agentctl tools audit --versions\n"
+            "  agentctl tools update --apply\n\n"
             "Run 'agentctl GROUP --help' or 'agentctl GROUP COMMAND --help' for details."
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -608,7 +629,7 @@ def build_parser() -> argparse.ArgumentParser:
     collect.add_argument("--json", action="store_true", help=argparse.SUPPRESS)
     collect.set_defaults(func=cmd_worklog_collect)
 
-    tools = group("tools", "Audit availability of local deterministic CLI dependencies.")
+    tools = group("tools", "Audit and update local deterministic CLI dependencies.")
     audit = tools.add_parser(
         "audit",
         help="Report available and missing executables.",
@@ -617,6 +638,7 @@ def build_parser() -> argparse.ArgumentParser:
     audit.add_argument("--versions", action="store_true", help="Probe bounded version output.")
     audit.add_argument("--json", action="store_true", help=argparse.SUPPRESS)
     audit.set_defaults(func=cmd_tools_audit)
+    agentctl_tools.add_tools_update_parser(tools)
 
     checks = group("checks", "Run applicable local validators with bounded output.")
     check_run = checks.add_parser(
@@ -646,7 +668,13 @@ def build_parser() -> argparse.ArgumentParser:
     )
     agentctl_skills.add_skills_parsers(skills)
 
-    local = group("local", "Use bounded Ollama inference for low-risk local synthesis.")
+    harness = group(
+        "harness",
+        "Read-only usage, bloat and drift scan over Claude transcripts and factory events.",
+    )
+    agentctl_harness.add_harness_parsers(harness)
+
+    local = group("local", "Bounded low-risk inference: Ollama first, ROLES.md deterministic model as fallback.")
     agentctl_docs.add_local_parsers(local)
 
     docs = group("docs", "Index and search local Markdown documentation with SQLite FTS.")
@@ -655,17 +683,47 @@ def build_parser() -> argparse.ArgumentParser:
     kb = group("kb", "Import and export the local harness knowledge base.")
     agentctl_kb.add_kb_parsers(kb)
 
+    git_group = group("git", "Git helpers: amend a commit's date.")
+    agentctl_git.add_git_parsers(git_group)
+
     jira = group(
         "jira",
         "Call Jira and Confluence Cloud REST with the local API token (no MCP/model loop).",
     )
     agentctl_jira.add_jira_parsers(jira)
 
+    disk = group(
+        "disk",
+        "Read-only disk clean-up report: ranked, bounded JSON with suggested commands (never deletes).",
+    )
+    agentctl_disk.add_disk_parsers(disk)
+
     bench = group(
         "bench",
         "Collect model benchmarks into benchmarks/latest.yaml and compare with ROLES.md.",
     )
     agentctl_bench.add_bench_parsers(bench)
+
+    factory = group(
+        "factory",
+        "Run the standard task pipelines in fresh headless sessions with state, gates and resume.",
+    )
+    agentctl_factory.add_factory_parsers(factory)
+
+    release = group("release", "Release dependency graph and notification drafts.")
+    agentctl_release.add_release_parsers(release)
+
+    sync = group(
+        "sync",
+        "Parallel issues: read-only inbox and outbox scan over review requests, sync events of a factory run.",
+    )
+    agentctl_sync.add_sync_parsers(sync)
+
+    subagents = group(
+        "subagents",
+        "Find Claude Code subagents stopped by a usage limit or crash and write resume briefs.",
+    )
+    agentctl_subagents.add_subagents_parsers(subagents)
     return parser
 
 
@@ -692,6 +750,12 @@ def main() -> int:
         agentctl_jira.JiraError,
         agentctl_kb.KbError,
         agentctl_bench.BenchError,
+        agentctl_disk.DiskError,
+        agentctl_harness.HarnessError,
+        agentctl_factory.FactoryError,
+        agentctl_sync.SyncError,
+        agentctl_githost.HostError,
+        agentctl_release.ReleaseError,
     ) as exc:
         emit({"status": "error", "error": str(exc), "type": type(exc).__name__})
         return 1

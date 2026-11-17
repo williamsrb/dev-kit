@@ -29,7 +29,7 @@
     },
     "atlassian-rovo-preview": {
       "transport": "http",
-      "url": "https://mcp.atlassian.com/v1/mcp/preview",
+      "url": "https://mcp.atlassian.com/v2/mcp",
       "auth": "oauth",
       "vendors": [
         "cursor",
@@ -47,8 +47,24 @@
         "claude",
         "codex"
       ],
+      "env": {
+        "GITLAB_TOKEN_NAME": "pipelines_token",
+        "GITLAB_MCP_READ_ONLY": "true"
+      },
       "fetch": "gitlab-mcp-server",
-      "comment": "Wrapper injects GITLAB_TOKEN/URL from AGENTS_HOME/.auth; do not put the PAT in mcp.json."
+      "comment": "Read-only. Wrapper injects GITLAB_TOKEN/URL from AGENTS_HOME/.auth; do not put the PAT in mcp.json."
+    },
+    "gitlab-factory": {
+      "transport": "stdio",
+      "command": "${HOME}/.agents/bin/gitlab-mcp",
+      "args": [],
+      "env": {
+        "GITLAB_TOKEN_NAME": "factory_token",
+        "GITLAB_MCP_READ_ONLY": "false"
+      },
+      "vendors": ["claude"],
+      "fetch": null,
+      "comment": "Read-write, same binary as gitlab. Registered for Claude only (operator order 2026-10-27) so an interactive session can use it; the factory also passes it to its workers with --mcp-config."
     },
     "browser-control": {
       "transport": "stdio",
@@ -97,35 +113,6 @@
       "fetch": "playwright-mcp",
       "comment": "Parked. Spawn isolated HTTP instances with mcp/playwright.py; do not register this stub."
     },
-    "image-to-disk": {
-      "transport": "stdio",
-      "command": "python3",
-      "args": [
-        "${HOME}/.agents/mcp/image-to-disk/server.py"
-      ],
-      "vendors": [
-        "claude"
-      ],
-      "fetch": null
-    },
-    "filesystem": {
-      "transport": "stdio",
-      "command": "npx",
-      "args": [
-        "-y",
-        "@modelcontextprotocol/server-filesystem",
-        "${HOME}/.agents",
-        "${HOME}/.cursor",
-        "${HOME}/.codex",
-        "${HOME}/.claude",
-        "${HOME}/.config/Codex",
-        "${HOME}/.config/Claude"
-      ],
-      "vendors": [
-        "claude"
-      ],
-      "fetch": "filesystem-mcp"
-    },
     "serena": {
       "transport": "stdio",
       "command": "${HOME}/.agents/bin/serena-mcp",
@@ -169,21 +156,16 @@
     "browser-control": "on-demand; snippets in ${HOME}/.agents/.auth/mcp-on-demand/"
   },
   "plugins_not_user_mcp": {
-    "comment": "Marketplace plugins that also expose MCP tools. Installed via each vendor's plugin UI/CLI, not mcp add.",
-    "atlassian@claude-plugins-official": [
-      "claude",
-      "codex"
-    ],
+    "comment": "Marketplace plugins that also expose MCP tools. Installed via each vendor's plugin UI/CLI, not mcp add. A plain server in `servers` wins: do not install a plugin whose MCP duplicates one (atlassian plugins removed 2026-11-16 for atlassian-rovo-preview).",
     "slack@claude-plugins-official": [
-      "claude",
       "codex"
     ]
   },
   "fetch": {
     "gitlab-mcp-server": {
-      "version": "2.6.2",
+      "version": "3.6.0",
       "dest": "${HOME}/.local/bin/gitlab-mcp-server",
-      "url": "https://github.com/jmrplens/gitlab-mcp-server/releases/download/v2.6.2/gitlab-mcp-server-linux-amd64"
+      "url": "https://github.com/jmrplens/gitlab-mcp-server/releases/download/v3.6.0/gitlab-mcp-server-linux-amd64"
     },
     "browser-control-mcp": {
       "repo": "https://github.com/eyalzh/browser-control-mcp.git",
@@ -195,9 +177,6 @@
     },
     "playwright-mcp": {
       "npx_package": "@playwright/mcp@latest"
-    },
-    "filesystem-mcp": {
-      "npx_package": "@modelcontextprotocol/server-filesystem"
     },
     "serena-agent": {
       "uv_tool": "serena-agent",

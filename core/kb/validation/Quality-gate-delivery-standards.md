@@ -1,7 +1,7 @@
 ---
 id: quality-gate-delivery-standards
 when_skills: [validate-impl]
-inputs: [delivery diff, plan AC / Constraints / Non-Goals]
+inputs: [delivery diff, plan AC / Constraints / Non-Goals, sliced PRD sections]
 outputs: [findings, fixes, verdict]
 stop_if: [contract change required for a real fix]
 read: section
@@ -85,14 +85,25 @@ One finding per root cause. Further sites: `also applies: path:line`. Do not rep
 - User scope exclusions are respected. Violations are Blockers.
 - Deleted or renamed artifacts have no remaining references.
 - Config, routes, and shared modules stay consistent with the change.
-- When the resolved implementation plan lists acceptance criteria, tick each AC as PASS / FAIL / n/a. Use only that plan's AC / validation companion. Do not open the PRD or evidence plan for this checklist.
+- When the resolved implementation plan lists acceptance criteria, tick each AC as PASS / FAIL / n/a from that plan's AC / validation companion. A PASS carries its proof: `ran` (a test or command executed in this run) or `read` (traced at `file:line`). An AC with no proof is `unproven`, listed under Not verified, never PASS.
+- The PRD is opened only for **Spec alignment** below, sliced by section. Never open the evidence plan.
 - Missing a **DO** the AC cannot ship without (stack wiring, recorded project How-to) is a Blocker.
 
 Flag gaps as Blocker, Concern, or Note. Then fix Blockers and safe Concerns in code.
 
+## Spec alignment (PRD → plan → delivery)
+
+Apply `How-to-check-spec-alignment.md`: requirement list from the sliced PRD, states, authorized deviations. Delivery-side rules:
+
+- A **delivery gap** (the plan carries the statement, the code does not) on an explicit statement is a Blocker. Fix it under the fix policy when the change is local; otherwise it stays a Blocker for `run-plan`.
+- A **plan gap** (the plan dropped, narrowed or changed an explicit PRD statement with no authorized deviation) is a Blocker that this review cannot fix. Do not edit the plan and do not code past it. Report the statement, its source and the plan item that should carry it.
+- `waived` rows are not findings; list each with its deviation. An `open` row names its TBD: what the delivery shipped for it is an assumption, a Concern. `unproven` rows go under Not verified and point at the evidence plan.
+- A stale PRD is a Concern: alignment holds only up to the `Checked through:` marker. Name the unchecked comments. A legacy PRD with no marker is not a finding; its unextracted comments go under Not verified.
+- No PRD: `n/a`, under Not verified.
+
 ## Impact on other features
 
-Check imports/requires/exports, site mappings/services/cron/tasks, config keys, and shared constants left partially dead. State **PASS** only when unrelated features appear unaffected, or list concrete risks.
+For each exported symbol, route, config key, schema or content type, and i18n key the delivery changed, removed or renamed, list its users: `graft callers <symbol> --depth 2` when the repo has `graft/`, else `rg`. A user outside the delivery that was not updated is the finding. Also check site mappings/services/cron/tasks and shared constants left partially dead. State **PASS** only when unrelated features appear unaffected, or list concrete risks.
 
 ## Code quality
 
@@ -156,6 +167,7 @@ Hard-coded secrets are always a Blocker regardless of fix feasibility.
 Only when the delivery changes behavior in a layer that **already has tests**:
 
 - Missing coverage for the new behavior, or assertions weakened so they cannot fail, is a **Concern**.
-- Do not invent a test suite or add a framework. Do not run `xp-testing` unless that layer is already under test.
+- Run that layer's existing suite when a project-native command is known (the plan's Validation section or `agentctl repo detect`). Report the command and its result. A suite that was not run is listed under Not verified, not reported as passing.
+- Do not invent a test suite or add a framework. Do not run `test-xp-apps` unless that layer is already under test.
 
 If that layer has no tests: report `n/a` — not a finding.

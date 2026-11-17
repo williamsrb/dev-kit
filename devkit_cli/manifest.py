@@ -130,6 +130,11 @@ def load(name: str, _seen: set[str] | None = None,
     return composed
 
 
+def rules_layers(lineage: list[str]) -> list[str]:
+    """The rule layers a profile or built repo ships: core, plus client for client."""
+    return ["core"] + (["client"] if "client" in lineage else [])
+
+
 def available() -> list[str]:
     directory = REPO_ROOT / "profiles"
     return sorted(p.stem for p in directory.glob("*.json")) if directory.is_dir() else []

@@ -5,4 +5,4 @@
 set -eu
 PYTHONPATH="${PROFILE_KIT_ROOT}"
 export PYTHONPATH
-exec python3 -m devkit_cli.auth launch "$@"
+exec ${PROFILE_PYTHON} -m devkit_cli.auth launch "$@"

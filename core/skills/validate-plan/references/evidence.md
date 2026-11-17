@@ -8,7 +8,7 @@ Canonical template: `../../plan-task-evidence/templates.md`. Detail recipes live
 
 Keep **Execution** intact (update issue-specific paths only).
 
-Header fields: **Mode** (`jira` | `local`), TASK-ID, Jira URL when `jira` else `n/a`, testing base URL, change type, evidence folder, **Browser MCP: `playwright-<TASK-ID>`**, **Auth required** (yes/no/unknown→yes + surfaces), evidence sink, status `planned`.
+Header fields: **Mode** (`jira` | `local`), TASK-ID, Jira URL when `jira` else `n/a`, testing base URL, change type, evidence folder, **Browser MCP: `playwright-<TASK-ID>`**, **Auth required** (yes/no/unknown→yes + surfaces), **Scheduled run** (`none` unless the change is a cron or scheduled job), evidence sink, status `planned`.
 
 Required H2 slugs for `agentctl plan validate --kind evidence` (add/rename; do not delete Execution):
 
@@ -20,15 +20,18 @@ Required H2 slugs for `agentctl plan validate --kind evidence` (add/rename; do n
 | `artifacts` | `## Artifacts` (folder + screenshot names) |
 | `posting-gate` | `## Posting Gate` — all-pass tracker comment when `jira`; skip post when `local` |
 
-Also expect: authentication map, testing tips, sources, cut/impossible, scope warning.
+Also expect: **Product concept** (required; `plan-task-evidence` override 13), authentication map, testing tips, sources, cut/impossible, scope warning.
 
 ## Evaluate (then rewrite the file)
 
 From `plan-task-evidence` Phase 3:
 
 - Honor testing tips from description/comments (referer, prior navigation, session). Cite comment ids when present.
-- Auth-gated paths (`/admin`, `/minside`, `/min-side`, `/user`, `/profile`, data-toolbox, GitLab web UI) → Auth required yes + map row.
+- Auth-gated paths (`/admin`, `/minside`, `/min-side`, `/user`, `/profile`, data-toolbox, git host web UI) → Auth required yes + map row.
 - Each evidence step: goal (what it **proves** toward an AC), URL, auth y/n, timeout, expected result, screenshot filename. Cut unlabeled shots.
+- Expected result names what must be visible: a text token or element `validate-evidence` can check on the shot. "Page loads" or "no error" proves nothing.
+- Product concept: **Concept** is one sentence a visitor or editor would say, and **Expected paint** names the fields, iframe or player that must render (`~/.agents/kb/testing/_shared/How-to-gate-evidence-on-the-product-concept.md`). "Heading present" is a defect. The live or integration step's expected result asserts that paint.
+- Screenshot file names are the step ids for `agentctl plan progress --kind evidence`. Keep them unique and never rename one in a rewrite: a renamed shot looks uncaptured and forces a retake.
 - Timeouts: page / API / task / remote each get a budget (`plan-task-evidence/reference.md`).
 - Drop steps that prove nothing for this change. Impossible agent steps → Cut / impossible + manual follow-up. Screenshot upload is not “impossible” up front.
 - **WARNING** when evidence spans frontend↔backend (or another boundary). Name the layers. Otherwise: “Single scope — no cross-scope warning.”
@@ -70,6 +73,7 @@ Apply [realism-and-kb.md](realism-and-kb.md) **except** workspace / worktree `ls
 ## Fix policy
 
 - Rewrite the evidence plan on disk.
+- Never edit `evidence.progress.md` or files in the evidence folder.
 - Do not start Execution, login tiers, or tracker writes.
 - Do not invent example page URLs on a different host than the user-given testing base.
 - Do not store full screenshot sets or Jira comment prose in `kb/testing` from this skill.

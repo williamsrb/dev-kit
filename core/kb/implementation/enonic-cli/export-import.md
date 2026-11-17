@@ -11,7 +11,7 @@ prose: caveman-lite
 
 Export repository branch data to the exports directory.
 
-```
+```bash
 enonic export [flags]
 ```
 
@@ -29,7 +29,7 @@ enonic export [flags]
 
 Import data from the exports directory.
 
-```
+```bash
 enonic import [flags]
 ```
 

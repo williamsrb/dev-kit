@@ -2,7 +2,7 @@
 
 Create and update x-data schemas.
 
-Reference: https://developer.enonic.com/docs/xp/stable/cms/x-data
+Reference: <https://developer.enonic.com/docs/xp/stable/cms/x-data>
 
 ## Location and Files
 
@@ -10,6 +10,7 @@ Files are placed at `/xp/src/main/resources/site/x-data/{x-data-name}/`.
 The x-data name follows kebab-case (e.g., `social-media`, `macros`).
 
 For each x-data, generate:
+
 - `{x-data-name}.xml`: Descriptor following the rules below.
 
 ## Descriptor Structure (.xml)
@@ -70,7 +71,7 @@ X-data must be activated in `site.xml`:
 
 See [i18n.md](./i18n.md) for the full key pattern. X-data keys follow:
 
-```
+```text
 x-data.{name}.display_name
 x-data.{name}.{field-name}
 x-data.{name}.item-set.{item-set-name}

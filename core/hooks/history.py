@@ -4,13 +4,14 @@
 from __future__ import annotations
 
 import fcntl
+import hashlib
 import json
 import os
 import sys
 import tempfile
 import traceback
 from contextlib import contextmanager
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -32,16 +33,25 @@ ERROR_LOG = STATE_DIR / 'hook-errors.log'
 RETENTION_DAYS = 7
 STALE_PENDING_DAYS = 30
 
+# Claude Code hosted in Cursor fires both its own and Cursor's prompt hook for one prompt.
+DEDUP_WINDOW_SECONDS = 180
+
+# Codex background prompts that are not operator input.
+AMBIENT_PREAMBLES = (
+    '# Overview\n\nGenerate 0 to 3 hyperpersonalized suggestions',
+    'You are an expert at upholding safety and compliance standar',
+)
+
 
 def log_error(message: str) -> None:
     STATE_DIR.mkdir(parents=True, exist_ok=True)
-    stamp = datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
+    stamp = datetime.now(UTC).strftime('%Y-%m-%dT%H:%M:%SZ')
     with ERROR_LOG.open('a', encoding='utf-8') as fh:
         fh.write(f'[{stamp}] {message}\n')
 
 
 def utc_now() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 def iso_datetime(dt: datetime) -> str:
@@ -54,9 +64,43 @@ def path_slug(iso_dt: str) -> str:
 
 def parse_iso(value: str) -> datetime | None:
     try:
-        return datetime.strptime(value, '%Y-%m-%dT%H:%M:%SZ').replace(tzinfo=timezone.utc)
+        return datetime.strptime(value, '%Y-%m-%dT%H:%M:%SZ').replace(tzinfo=UTC)
     except (TypeError, ValueError):
         return None
+
+
+def prompt_digest(prompt: str) -> str:
+    return hashlib.sha1(' '.join(prompt.split()).encode('utf-8')).hexdigest()
+
+
+def is_ambient_prompt(prompt: str) -> bool:
+    stripped = prompt.strip()
+    return not stripped or stripped.startswith(AMBIENT_PREAMBLES)
+
+
+def harness_of(payload: dict[str, Any]) -> str:
+    explicit = str(payload.get('harness') or '').strip()
+    if explicit:
+        return explicit
+    event = str(payload.get('hook_event_name') or '')
+    return 'cursor' if event in ('beforeSubmitPrompt', 'afterAgentResponse', 'stop') else 'unknown'
+
+
+def find_duplicate(
+    state: dict[str, Any], digest: str, event: str, conversation_id: str, now: datetime
+) -> dict[str, Any] | None:
+    """The same prompt in the same conversation, already logged by a different hook event within the window."""
+    for entry in state['by_generation'].values():
+        stamp = parse_iso(str(entry.get('iso_datetime') or ''))
+        if (
+            entry.get('prompt_sha') == digest
+            and entry.get('event') != event
+            and entry.get('conversation_id') == conversation_id
+            and stamp is not None
+            and 0 <= (now - stamp).total_seconds() <= DEDUP_WINDOW_SECONDS
+        ):
+            return entry
+    return None
 
 
 def unique_slug(base_slug: str, day_dir: Path) -> str:
@@ -111,7 +155,7 @@ def load_state_unlocked() -> dict[str, Any]:
         data.setdefault('by_generation', {})
         data.setdefault('conversation_stack', {})
         return data
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - any unreadable state is quarantined and replaced
         log_error(f'load_state failed: {exc}')
         quarantine_state_file(str(exc))
         return empty_state()
@@ -209,6 +253,8 @@ def write_prompt_file(path: Path, payload: dict[str, Any], iso_dt: str, slug: st
         f'conversation_id: {payload.get("conversation_id", "")}\n'
         f'generation_id: {payload.get("generation_id", "")}\n'
         f'hook_event_name: {payload.get("hook_event_name", "beforeSubmitPrompt")}\n'
+        f'harness: {harness_of(payload)}\n'
+        f'agents_home: {agents_home()}\n'
         '---\n\n'
         '# Prompt\n\n'
         f'{prompt}\n\n'
@@ -230,6 +276,11 @@ def write_result_file(path: Path, text: str, entry: dict[str, Any], payload: dic
         f'generation_id: {payload.get("generation_id", entry.get("generation_id", ""))}\n'
         f'hook_event_name: {payload.get("hook_event_name", "")}\n'
         f'status: {payload.get("status", "completed")}\n'
+        f'harness: {entry.get("harness") or harness_of(payload)}\n'
+        f'model: {payload.get("model", "")}\n'
+        f'input_tokens: {payload.get("input_tokens", "")}\n'
+        f'output_tokens: {payload.get("output_tokens", "")}\n'
+        f'agents_home: {agents_home()}\n'
         '---\n\n'
         '# Result\n\n'
         f'{text if text else "_(empty response)_"}\n'
@@ -238,8 +289,29 @@ def write_result_file(path: Path, text: str, entry: dict[str, Any], payload: dic
 
 
 def register_prompt(payload: dict[str, Any]) -> None:
+    prompt = str(payload.get('prompt') or '')
+    if is_ambient_prompt(prompt):
+        return
     with state_lock():
         now = utc_now()
+        digest = prompt_digest(prompt)
+        event = str(payload.get('hook_event_name') or '')
+        generation_id = str(payload.get('generation_id') or '').strip()
+        conversation_id = str(payload.get('conversation_id') or '').strip()
+
+        state = load_state_unlocked()
+        duplicate = find_duplicate(state, digest, event, conversation_id, now)
+        if duplicate:
+            # Let the second hook's response events resolve to the entry already written.
+            if generation_id:
+                state['by_generation'][generation_id] = duplicate
+            if conversation_id:
+                stack = state['conversation_stack'].setdefault(conversation_id, [])
+                if duplicate['generation_id'] not in stack:
+                    stack.append(duplicate['generation_id'])
+            save_state_unlocked(state)
+            return
+
         iso_dt = iso_datetime(now)
         iso_date = now.strftime('%Y-%m-%d')
         base_slug = path_slug(iso_dt)
@@ -253,8 +325,6 @@ def register_prompt(payload: dict[str, Any]) -> None:
 
         write_prompt_file(prompt_path, payload, iso_dt, slug)
 
-        generation_id = str(payload.get('generation_id') or '').strip()
-        conversation_id = str(payload.get('conversation_id') or '').strip()
         if not generation_id:
             generation_id = f'no-generation-{slug}'
 
@@ -267,9 +337,11 @@ def register_prompt(payload: dict[str, Any]) -> None:
             'conversation_id': conversation_id,
             'generation_id': generation_id,
             'pending': True,
+            'prompt_sha': digest,
+            'event': event,
+            'harness': harness_of(payload),
         }
 
-        state = load_state_unlocked()
         prune_state(state, now)
         state['by_generation'][generation_id] = entry
         if conversation_id:
@@ -311,7 +383,10 @@ def mark_complete(generation_id: str | None) -> None:
         state = load_state_unlocked()
         entry = state['by_generation'].get(generation_id)
         if entry:
-            entry['pending'] = False
+            # Aliased duplicates share a result_path; settle them together.
+            for other in state['by_generation'].values():
+                if other.get('result_path') == entry.get('result_path'):
+                    other['pending'] = False
             save_state_unlocked(state)
 
 def handle_response(payload: dict[str, Any]) -> None:
@@ -366,7 +441,7 @@ def main() -> int:
             log_error(f'unknown mode: {mode!r}')
             sys.stdout.write('{}\n')
         return 0
-    except Exception:
+    except Exception:  # noqa: BLE001 - a failing hook must never block the session
         log_error(traceback.format_exc())
         if mode == 'prompt':
             sys.stdout.write('{"continue": true}\n')

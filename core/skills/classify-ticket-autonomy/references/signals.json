@@ -89,7 +89,7 @@
       "patterns": [
         "production|prod\\b",
         "live (site|page|content)",
-        "https?://(www\\.)?(?!review\\.|prototype\\.|localhost|git\\.|gitlab\\.|[a-z]+\\.atlassian\\.|figma\\.)[a-z0-9.-]+\\.(no|io|com|se)/",
+        "https?://(www\\.)?(?!review\\.|prototype\\.|localhost|git\\.|{git_host_kind}\\.|[a-z]+\\.atlassian\\.|figma\\.)[a-z0-9.-]+\\.(no|io|com|se)/",
         "customer (id|number)|booking (id|ref|number)|order (id|number)",
         "search console|analytics|logs? (from|on) prod",
         "only (works|happens) (in|on)",
@@ -130,7 +130,7 @@
         "permission|user roles?|access control|\\bauth(entication|orization)?\\b",
         "schema migration|data model change",
         "public api|endpoint (contract|change)|breaking change",
-        "\\.gitlab-ci|ci variable|pipeline config|helm|chart|dns|vhost",
+        "{ci_file}|ci variable|pipeline config|helm|chart|dns|vhost",
         "new (paid )?service|subscription"
       ]
     },

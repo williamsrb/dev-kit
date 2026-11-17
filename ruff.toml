@@ -1,0 +1,13 @@
+# Vendored trees under core/ keep their upstream style; lint changes there would be lost on the next update.
+target-version = "py312"
+extend-exclude = [
+    "core/skills/archify",
+    "core/skills/debug-xp-app",
+    "core/skills/draw-diagram",
+    "core/skills/humanize-text",
+    "core/skills/upgrade-xp-app",
+    "core/skills/use-enonic-cli",
+    "core/skills-vendor/*/impeccable",
+    "core/vendor/tgrep-cursor",
+    "core/kb/offline-reference",
+]

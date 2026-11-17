@@ -11,7 +11,7 @@ prose: caveman-lite
 
 Remove audit log records older than threshold.
 
-```
+```bash
 enonic auditlog cleanup [flags]
 ```
 

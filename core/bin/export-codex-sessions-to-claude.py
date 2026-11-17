@@ -35,10 +35,13 @@ import re
 import sys
 import time
 import uuid
+from collections.abc import Iterable, Iterator
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Any, Dict, Iterable, Iterator, List, Optional, Tuple
+from typing import Any
+
+logger = logging.getLogger(__name__)
 
 HOME = Path.home()
 DEFAULT_CODEX_SESSIONS = HOME / ".codex" / "sessions"
@@ -77,12 +80,12 @@ class CodexSession:
     path: Path
     thread_id: str
     cwd: str
-    thread_source: Optional[str]
-    originator: Optional[str]
+    thread_source: str | None
+    originator: str | None
     created: datetime
     mtime_ns: int
     sha256: str
-    turns: List[Turn] = field(default_factory=list)
+    turns: list[Turn] = field(default_factory=list)
 
 
 def sha256_file(path: Path, bufsize: int = 1024 * 1024) -> str:
@@ -96,7 +99,7 @@ def sha256_file(path: Path, bufsize: int = 1024 * 1024) -> str:
     return h.hexdigest()
 
 
-def parse_ts(value: object) -> Optional[datetime]:
+def parse_ts(value: object) -> datetime | None:
     if value is None:
         return None
     if isinstance(value, (int, float)):
@@ -105,18 +108,18 @@ def parse_ts(value: object) -> Optional[datetime]:
             raw /= 1e9
         elif raw > 1e11:
             raw /= 1e3
-        return datetime.fromtimestamp(raw, tz=timezone.utc)
+        return datetime.fromtimestamp(raw, tz=UTC)
     text = str(value).strip()
     if not text:
         return None
     try:
-        return datetime.fromisoformat(text.replace("Z", "+00:00"))
+        return datetime.fromisoformat(text)
     except ValueError:
         return None
 
 
 def iso_z(ts: datetime) -> str:
-    return ts.astimezone(timezone.utc).isoformat(timespec="milliseconds").replace(
+    return ts.astimezone(UTC).isoformat(timespec="milliseconds").replace(
         "+00:00", "Z"
     )
 
@@ -138,7 +141,7 @@ def project_slug(cwd: str) -> str:
     return cwd.replace("/", "-").replace(".", "-")
 
 
-def claude_ids(codex_thread_id: str) -> Tuple[str, str]:
+def claude_ids(codex_thread_id: str) -> tuple[str, str]:
     cli = str(uuid.uuid5(UUID_NS, f"codex:{codex_thread_id}"))
     return cli, f"local_{cli}"
 
@@ -153,7 +156,7 @@ def load_json(path: Path, default: Any) -> Any:
     try:
         return json.loads(path.read_text(encoding="utf-8"))
     except (OSError, UnicodeDecodeError, json.JSONDecodeError) as e:
-        logging.warning("unreadable json %s: %s", path, e)
+        logger.warning("unreadable json %s: %s", path, e)
         return default
 
 
@@ -178,7 +181,7 @@ def iter_org_dirs(root: Path) -> Iterator[Path]:
     try:
         accounts = list(root.iterdir())
     except OSError as e:
-        logging.warning("skip unreadable %s: %s", root, e)
+        logger.warning("skip unreadable %s: %s", root, e)
         return
     for account in accounts:
         try:
@@ -190,9 +193,9 @@ def iter_org_dirs(root: Path) -> Iterator[Path]:
                         continue
                     yield org
                 except OSError as e:
-                    logging.warning("skip %s: %s", org, e)
+                    logger.warning("skip %s: %s", org, e)
         except OSError as e:
-            logging.warning("skip %s: %s", account, e)
+            logger.warning("skip %s: %s", account, e)
 
 
 def pick_org_dir(root: Path) -> Path:
@@ -202,39 +205,39 @@ def pick_org_dir(root: Path) -> Path:
     return max(orgs, key=lambda org: sum(1 for _ in org.glob("local_*.json")))
 
 
-def load_import_ledger(path: Path) -> Dict[str, dict]:
+def load_import_ledger(path: Path) -> dict[str, dict]:
     data = load_json(path, {})
     records = data.get("records") if isinstance(data, dict) else None
     if not isinstance(records, list):
         return {}
-    out: Dict[str, dict] = {}
+    out: dict[str, dict] = {}
     for rec in records:
         if isinstance(rec, dict) and rec.get("imported_thread_id"):
             out[str(rec["imported_thread_id"])] = rec
     return out
 
 
-def load_export_ledger(path: Path) -> Dict[str, dict]:
+def load_export_ledger(path: Path) -> dict[str, dict]:
     data = load_json(path, {})
     records = data.get("records") if isinstance(data, dict) else None
     if not isinstance(records, list):
         return {}
-    out: Dict[str, dict] = {}
+    out: dict[str, dict] = {}
     for rec in records:
         if isinstance(rec, dict) and rec.get("codex_session_id"):
             out[str(rec["codex_session_id"])] = rec
     return out
 
 
-def save_export_ledger(path: Path, records: Dict[str, dict]) -> None:
+def save_export_ledger(path: Path, records: dict[str, dict]) -> None:
     payload = {
-        "updated_at": iso_z(datetime.now(timezone.utc)),
+        "updated_at": iso_z(datetime.now(UTC)),
         "records": [records[k] for k in sorted(records)],
     }
     atomic_write_text(path, json.dumps(payload, indent=2, ensure_ascii=False) + "\n")
 
 
-def first_session_meta(path: Path) -> Optional[dict]:
+def first_session_meta(path: Path) -> dict | None:
     with path.open(encoding="utf-8") as f:
         for i, line in enumerate(f):
             if i > 40:
@@ -256,7 +259,7 @@ def content_text(content: Any) -> str:
         return content
     if not isinstance(content, list):
         return ""
-    parts: List[str] = []
+    parts: list[str] = []
     for item in content:
         if not isinstance(item, dict):
             continue
@@ -266,9 +269,9 @@ def content_text(content: Any) -> str:
     return "\n".join(parts)
 
 
-def extract_turns(path: Path) -> List[Turn]:
-    event_turns: List[Turn] = []
-    item_turns: List[Turn] = []
+def extract_turns(path: Path) -> list[Turn]:
+    event_turns: list[Turn] = []
+    item_turns: list[Turn] = []
     with path.open(encoding="utf-8") as f:
         for line in f:
             line = line.strip()
@@ -307,8 +310,8 @@ def extract_turns(path: Path) -> List[Turn]:
     return _dedupe_turns(turns)
 
 
-def _dedupe_turns(turns: List[Turn]) -> List[Turn]:
-    out: List[Turn] = []
+def _dedupe_turns(turns: list[Turn]) -> list[Turn]:
+    out: list[Turn] = []
     for turn in turns:
         text = turn.text.strip()
         if not text:
@@ -319,10 +322,10 @@ def _dedupe_turns(turns: List[Turn]) -> List[Turn]:
     return out
 
 
-def claude_user_texts(path: Path) -> List[str]:
+def claude_user_texts(path: Path) -> list[str]:
     if not path.is_file():
         return []
-    texts: List[str] = []
+    texts: list[str] = []
     with path.open(encoding="utf-8") as f:
         for line in f:
             line = line.strip()
@@ -400,14 +403,14 @@ def claude_updated_since_import(import_rec: dict) -> bool:
 
 def codex_continuation_turns(
     session: CodexSession, import_rec: dict
-) -> List[Turn]:
+) -> list[Turn]:
     """Codex user/assistant turns not already present in the Claude import."""
     source = import_source_path(import_rec)
     claude_users = {
         norm_text(t)[:200] for t in claude_user_texts(source)
     }
     cutoff = (parse_ts(import_rec.get("imported_at")) or session.created) + FORK_SLACK
-    out: List[Turn] = []
+    out: list[Turn] = []
     i = 0
     while i < len(session.turns):
         turn = session.turns[i]
@@ -425,7 +428,7 @@ def codex_continuation_turns(
     return out
 
 
-def title_from_session(session: CodexSession, import_rec: Optional[dict], kind: str) -> str:
+def title_from_session(session: CodexSession, import_rec: dict | None, kind: str) -> str:
     raw = ""
     if import_rec and import_rec.get("title"):
         raw = str(import_rec["title"]).strip()
@@ -445,8 +448,8 @@ def title_from_session(session: CodexSession, import_rec: Optional[dict], kind: 
 
 
 def classify(
-    session: CodexSession, import_by_id: Dict[str, dict]
-) -> Tuple[str, Optional[dict]]:
+    session: CodexSession, import_by_id: dict[str, dict]
+) -> tuple[str, dict | None]:
     if session.thread_source == "subagent":
         return "skip-subagent", None
     import_rec = import_by_id.get(session.thread_id)
@@ -465,14 +468,14 @@ def classify(
 
 def iter_codex_sessions(root: Path) -> Iterator[CodexSession]:
     if not root.is_dir():
-        logging.warning("codex sessions dir missing: %s", root)
+        logger.warning("codex sessions dir missing: %s", root)
         return
     for path in sorted(root.rglob("rollout-*.jsonl")):
         try:
             st = path.stat()
             meta = first_session_meta(path)
         except OSError as e:
-            logging.warning("skip %s: %s", path, e)
+            logger.warning("skip %s: %s", path, e)
             continue
         if not meta:
             continue
@@ -481,7 +484,7 @@ def iter_codex_sessions(root: Path) -> Iterator[CodexSession]:
         if not thread_id:
             continue
         created = parse_ts(meta.get("timestamp")) or datetime.fromtimestamp(
-            st.st_mtime, tz=timezone.utc
+            st.st_mtime, tz=UTC
         )
         thread_source = meta.get("thread_source")
         if thread_source == "subagent":
@@ -501,7 +504,7 @@ def iter_codex_sessions(root: Path) -> Iterator[CodexSession]:
             turns = extract_turns(path)
             digest = sha256_file(path)
         except OSError as e:
-            logging.warning("skip %s: %s", path, e)
+            logger.warning("skip %s: %s", path, e)
             continue
         yield CodexSession(
             path=path,
@@ -518,10 +521,10 @@ def iter_codex_sessions(root: Path) -> Iterator[CodexSession]:
 
 def build_jsonl(session: CodexSession, cli_id: str, title: str) -> str:
     cwd = session.cwd
-    records: List[dict] = [
+    records: list[dict] = [
         {"type": "ai-title", "aiTitle": title, "sessionId": cli_id},
     ]
-    parent: Optional[str] = None
+    parent: str | None = None
     last_uuid = ""
     for i, turn in enumerate(session.turns):
         msg_id = message_uuid(session.thread_id, i)
@@ -556,14 +559,14 @@ def build_jsonl(session: CodexSession, cli_id: str, title: str) -> str:
     return "".join(json.dumps(r, ensure_ascii=False, separators=(",", ":")) + "\n" for r in records)
 
 
-def find_session_indexes(index_roots: Iterable[Path], cli_id: str) -> List[Path]:
+def find_session_indexes(index_roots: Iterable[Path], cli_id: str) -> list[Path]:
     """Locate Desktop indexes for a CLI transcript id.
 
     Native Claude chats are stored as local_<sessionId>.json with cliSessionId
     equal to the jsonl stem. Exports use local_<cliId>.json. Search both.
     """
     index_name = f"local_{cli_id}.json"
-    found: List[Path] = []
+    found: list[Path] = []
     seen: set[str] = set()
     for index_root in index_roots:
         for org in iter_org_dirs(index_root):
@@ -572,7 +575,7 @@ def find_session_indexes(index_roots: Iterable[Path], cli_id: str) -> List[Path]
             try:
                 extra = list(org.glob("local_*.json"))
             except OSError as e:
-                logging.warning("skip unreadable %s: %s", org, e)
+                logger.warning("skip unreadable %s: %s", org, e)
                 extra = []
             for candidate in candidates + extra:
                 if not candidate.is_file():
@@ -591,13 +594,13 @@ def find_session_indexes(index_roots: Iterable[Path], cli_id: str) -> List[Path]
     return found
 
 
-def find_session_index(index_root: Path, cli_id: str) -> Optional[Path]:
+def find_session_index(index_root: Path, cli_id: str) -> Path | None:
     found = find_session_indexes((index_root,), cli_id)
     return found[0] if found else None
 
 
-def read_transcript_lines(path: Path) -> List[dict]:
-    records: List[dict] = []
+def read_transcript_lines(path: Path) -> list[dict]:
+    records: list[dict] = []
     with path.open(encoding="utf-8") as f:
         for line in f:
             line = line.strip()
@@ -612,7 +615,7 @@ def read_transcript_lines(path: Path) -> List[dict]:
     return records
 
 
-def last_message_uuid(records: List[dict]) -> Tuple[Optional[str], Optional[dict]]:
+def last_message_uuid(records: list[dict]) -> tuple[str | None, dict | None]:
     for obj in reversed(records):
         if obj.get("type") in ("user", "assistant", "system") and obj.get("uuid"):
             return str(obj["uuid"]), obj
@@ -622,10 +625,10 @@ def last_message_uuid(records: List[dict]) -> Tuple[Optional[str], Optional[dict
 def build_turn_record(
     turn: Turn,
     msg_id: str,
-    parent: Optional[str],
+    parent: str | None,
     cli_id: str,
     cwd: str,
-    template: Optional[dict],
+    template: dict | None,
 ) -> dict:
     if turn.role == "user":
         message: dict = {"role": "user", "content": turn.text}
@@ -655,7 +658,7 @@ def build_turn_record(
 
 
 def remove_stale_fork_export(
-    previous: Optional[dict],
+    previous: dict | None,
     merge_dest: Path,
     dry_run: bool,
     projects_roots: tuple[Path, ...] = (DEFAULT_CLAUDE_PROJECTS,),
@@ -675,23 +678,23 @@ def remove_stale_fork_export(
         for root in projects_roots:
             candidate = root / stale_jsonl.parent.name / stale_name
             if candidate.is_file() and not same:
-                logging.info("REMOVE stale fork transcript %s", candidate)
+                logger.info("REMOVE stale fork transcript %s", candidate)
                 if not dry_run:
                     candidate.unlink()
         if stale_jsonl.is_file() and not same:
-            logging.info("REMOVE stale fork transcript %s", stale_jsonl)
+            logger.info("REMOVE stale fork transcript %s", stale_jsonl)
             if not dry_run:
                 stale_jsonl.unlink()
     for index_root in index_roots:
         for org in iter_org_dirs(index_root):
             candidate = org / stale_index_name
             if candidate.is_file():
-                logging.info("REMOVE stale fork index %s", candidate)
+                logger.info("REMOVE stale fork index %s", candidate)
                 if not dry_run:
                     candidate.unlink()
     stale_index = Path(str(previous.get("dest_index") or ""))
     if stale_index.is_file():
-        logging.info("REMOVE stale fork index %s", stale_index)
+        logger.info("REMOVE stale fork index %s", stale_index)
         if not dry_run:
             stale_index.unlink()
 
@@ -701,9 +704,9 @@ def write_merge(
     import_rec: dict,
     index_roots: Iterable[Path],
     dry_run: bool,
-    previous: Optional[dict],
+    previous: dict | None,
     projects_roots: tuple[Path, ...] = (DEFAULT_CLAUDE_PROJECTS,),
-) -> Tuple[str, Path, Optional[Path], str, int]:
+) -> tuple[str, Path, Path | None, str, int]:
     source = import_source_path(import_rec)
     if not source.is_file():
         raise RuntimeError(f"merge target missing: {source}")
@@ -715,7 +718,7 @@ def write_merge(
     index_paths = find_session_indexes(index_roots, cli_id)
     index_path = index_paths[0] if index_paths else None
     if dry_run:
-        logging.info(
+        logger.info(
             "DRY merge %s -> %s (%d appended turns) indexes=%d title=%s",
             session.thread_id,
             source,
@@ -759,9 +762,9 @@ def write_merge(
                 path,
                 json.dumps(index, ensure_ascii=False, separators=(",", ":")),
             )
-            logging.info("UPDATE merge index %s lastActivityAt=%s", path, activity_ms)
+            logger.info("UPDATE merge index %s lastActivityAt=%s", path, activity_ms)
     if not index_paths:
-        logging.warning("merge index missing for cliSessionId=%s", cli_id)
+        logger.warning("merge index missing for cliSessionId=%s", cli_id)
     remove_stale_fork_export(
         previous,
         source,
@@ -770,7 +773,7 @@ def write_merge(
         index_roots=tuple(index_roots),
     )
     dest_sha = sha256_file(source)
-    logging.info(
+    logger.info(
         "MERGE %s -> %s appended=%d title=%s",
         session.thread_id,
         source,
@@ -801,7 +804,7 @@ def build_index(
     }
 
 
-def transcript_entrypoint(path: Path) -> Optional[str]:
+def transcript_entrypoint(path: Path) -> str | None:
     if not path.is_file():
         return None
     try:
@@ -823,7 +826,7 @@ def transcript_entrypoint(path: Path) -> Optional[str]:
     return None
 
 
-def forbidden_dest(dest: Path, import_rec: Optional[dict]) -> bool:
+def forbidden_dest(dest: Path, import_rec: dict | None) -> bool:
     if not import_rec:
         return False
     source = import_rec.get("source_path")
@@ -835,7 +838,7 @@ def forbidden_dest(dest: Path, import_rec: Optional[dict]) -> bool:
         return dest == Path(str(source))
 
 
-def dest_was_edited(dest: Path, previous: Optional[dict]) -> bool:
+def dest_was_edited(dest: Path, previous: dict | None) -> bool:
     if previous is None or not dest.is_file():
         return False
     prev_dest = previous.get("dest_path")
@@ -855,11 +858,11 @@ def dest_was_edited(dest: Path, previous: Optional[dict]) -> bool:
 def write_export(
     session: CodexSession,
     kind: str,
-    import_rec: Optional[dict],
+    import_rec: dict | None,
     projects_root: Path,
     org_dir: Path,
     dry_run: bool,
-) -> Tuple[str, Path, Path, str]:
+) -> tuple[str, Path, Path, str]:
     cli_id, index_id = claude_ids(session.thread_id)
     title = title_from_session(session, import_rec, kind)
     jsonl_path = projects_root / project_slug(session.cwd) / f"{cli_id}.jsonl"
@@ -874,7 +877,7 @@ def write_export(
     jsonl = build_jsonl(session, cli_id, title)
     index = build_index(session, cli_id, index_id, title)
     if dry_run:
-        logging.info(
+        logger.info(
             "DRY %s %s -> %s (%d turns) title=%s",
             kind,
             session.thread_id,
@@ -888,7 +891,7 @@ def write_export(
         index_path, json.dumps(index, ensure_ascii=False, separators=(",", ":"))
     )
     dest_sha = sha256_file(jsonl_path)
-    logging.info(
+    logger.info(
         "EXPORT %s %s -> %s turns=%d title=%s",
         kind,
         session.thread_id,
@@ -901,7 +904,7 @@ def write_export(
 
 def acquire_lock(lock_path: Path):
     lock_path.parent.mkdir(parents=True, exist_ok=True)
-    fh = open(lock_path, "w", encoding="utf-8")
+    fh = open(lock_path, "w", encoding="utf-8")  # noqa: SIM115 - held open to keep the lock
     try:
         fcntl.flock(fh.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
     except OSError as e:
@@ -958,7 +961,7 @@ def main(argv: Iterable[str] | None = None) -> int:
     )
     args = p.parse_args(list(argv) if argv is not None else None)
 
-    since: Optional[datetime] = None
+    since: datetime | None = None
     if args.since:
         since = parse_ts(args.since)
         if since is None:
@@ -977,7 +980,7 @@ def main(argv: Iterable[str] | None = None) -> int:
         extra_index_roots = tuple(p.expanduser() for p in args.extra_index_root)
         projects_roots = (projects_root, *extra_projects)
         index_roots = (args.index_root.expanduser(), *extra_index_roots)
-        logging.info(
+        logger.info(
             "export start dry_run=%s org=%s projects=%s extra_projects=%s extra_index=%s imports=%d",
             args.dry_run,
             org_dir,
@@ -1000,7 +1003,7 @@ def main(argv: Iterable[str] | None = None) -> int:
                 continue
             if kind.startswith("skip-"):
                 skipped += 1
-                logging.debug("SKIP %s %s", kind, session.thread_id)
+                logger.debug("SKIP %s %s", kind, session.thread_id)
                 continue
             if kind in ("fork", "merge") and since is not None:
                 extra_ts = [
@@ -1010,7 +1013,7 @@ def main(argv: Iterable[str] | None = None) -> int:
                 ]
                 if extra_ts and min(extra_ts) < since:
                     skipped += 1
-                    logging.info(
+                    logger.info(
                         "SKIP %s-before-since %s title=%s",
                         kind,
                         session.thread_id,
@@ -1033,7 +1036,7 @@ def main(argv: Iterable[str] | None = None) -> int:
                     merge_dest = import_source_path(import_rec)
                     if dest_was_edited(merge_dest, previous):
                         skipped += 1
-                        logging.warning(
+                        logger.warning(
                             "SKIP claude-diverged %s dest=%s (will not overwrite)",
                             session.thread_id,
                             merge_dest,
@@ -1054,7 +1057,7 @@ def main(argv: Iterable[str] | None = None) -> int:
                     dest = projects_root / project_slug(session.cwd) / f"{cli_id}.jsonl"
                     if dest_was_edited(dest, previous):
                         skipped += 1
-                        logging.warning(
+                        logger.warning(
                             "SKIP claude-diverged %s dest=%s (will not overwrite)",
                             session.thread_id,
                             dest,
@@ -1071,7 +1074,7 @@ def main(argv: Iterable[str] | None = None) -> int:
                     appended = len(session.turns)
             except Exception:
                 failed += 1
-                logging.exception("export failed %s", session.thread_id)
+                logger.exception("export failed %s", session.thread_id)
                 continue
             exported += 1
             if args.dry_run:
@@ -1090,12 +1093,12 @@ def main(argv: Iterable[str] | None = None) -> int:
                 "imported_from_claude": (import_rec or {}).get("source_path"),
                 "title": title,
                 "appended_turns": appended,
-                "exported_at": iso_z(datetime.now(timezone.utc)),
+                "exported_at": iso_z(datetime.now(UTC)),
             }
 
         if not args.dry_run:
             save_export_ledger(args.export_ledger.expanduser(), export_by_id)
-        logging.info(
+        logger.info(
             "export done wrote=%d unchanged=%d failed=%d elapsed=%.2fs",
             exported,
             skipped,
@@ -1104,7 +1107,7 @@ def main(argv: Iterable[str] | None = None) -> int:
         )
         return 1 if failed else 0
     except Exception:
-        logging.exception("export failed")
+        logger.exception("export failed")
         return 1
     finally:
         try:

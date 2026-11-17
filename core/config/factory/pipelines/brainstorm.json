@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "name": "brainstorm",
+  "mode": "local",
+  "include": "tail",
+  "route_step": "route",
+  "head": [
+    {
+      "id": "route",
+      "skill": "classify-ticket-autonomy",
+      "args": "Write the verdict file and stop.",
+      "post": [
+        "autonomy_check"
+      ]
+    },
+    {
+      "id": "related-plan",
+      "skill": "find-related-issues",
+      "args": "Phase plan. Scan, brief at most 5 issues, assess them. Report status ok with one summary line per finding (key, class, one clause). Do not report blocked: plan-implementation turns the findings into plan constraints and local decisions."
+    },
+    {
+      "id": "plan-implementation",
+      "skill": "plan-implementation",
+      "args": "Write the implementation plan.",
+      "post": [
+        "plan_valid",
+        "tbd_empty"
+      ]
+    }
+  ]
+}

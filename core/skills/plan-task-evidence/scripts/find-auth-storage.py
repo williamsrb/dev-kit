@@ -25,8 +25,11 @@ def agents_home() -> Path:
 
 def search_specs() -> tuple[tuple[str, Path], ...]:
     home = agents_home()
+    # A profile's .auth only links some files; logins saved outside the profile live in the shared root.
+    shared = Path.home() / ".agents" / ".auth"
     return (
         (str(home / ".auth" / "*.json"), home / ".auth"),
+        *(((str(shared / "*.json"), shared),) if shared != home / ".auth" else ()),
         (str(home / ".playwright-mcp" / "*.json"), home / ".playwright-mcp"),
         (str(home / ".playwright-mcp" / "auth" / "*.json"), home / ".playwright-mcp" / "auth"),
         ("./playwright/.auth/*.json", Path("playwright") / ".auth"),

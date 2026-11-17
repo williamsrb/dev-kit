@@ -7,7 +7,6 @@ Exits non-zero if any required command is missing.
 from __future__ import annotations
 
 import shutil
-import sys
 
 REQUIRED_COMMANDS = (
     "enonic",

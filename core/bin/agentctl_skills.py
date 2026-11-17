@@ -19,17 +19,6 @@ EXISTING_DESC_SUFFIX = re.compile(
 )
 
 
-def metadata_description_suffix(role: str | None, aliases: str | None) -> str:
-    parts = []
-    if role:
-        parts.append(f"recommendedRole: {role}")
-    if aliases:
-        parts.append(f"aliases: {aliases}")
-    if not parts:
-        return ""
-    return " | " + " | ".join(parts) + "."
-
-
 def extract_description(fm_lines: list[str]) -> str:
     for index, line in enumerate(fm_lines):
         if not line.startswith("description:"):
@@ -93,13 +82,8 @@ def alias_bound_symlinks(root: Path) -> list[str]:
 
 
 def description_suffix_ok(data: dict[str, Any]) -> bool:
-    role = data.get("recommendedRole") or None
-    aliases = data.get("aliases") or None
-    expected = metadata_description_suffix(role, aliases)
-    description = (data.get("description") or "").rstrip()
-    if not expected:
-        return EXISTING_DESC_SUFFIX.search(description) is None
-    return description.endswith(expected)
+    """Role and aliases live in metadata only; a description carrying either suffix costs every session's skill list."""
+    return EXISTING_DESC_SUFFIX.search((data.get("description") or "").rstrip()) is None
 
 
 def public_nvidia_auth(path: Path) -> dict[str, Any]:
@@ -114,7 +98,7 @@ def public_nvidia_auth(path: Path) -> dict[str, Any]:
     expired = False
     if expires:
         try:
-            expired = dt.date.fromisoformat(expires[:10]) < dt.datetime.now(dt.timezone.utc).date()
+            expired = dt.date.fromisoformat(expires[:10]) < dt.datetime.now(dt.UTC).date()
         except ValueError:
             expired = False
     return {

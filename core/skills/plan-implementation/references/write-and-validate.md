@@ -82,6 +82,12 @@ When the user (or an elevated comment) says an element is out of scope except fo
 
 - **<decision>:** (a) <chosen>. Source: <ticket AC / chat / code path / How-to / doc>. Alternatives lose because <one line>.
 
+<jira or local, one line per technical decision point (decision-points.md). Gate: yes → operator confirms; never an analyst TBD:>
+
+### Technical decisions
+
+- **<decision>:** (a) <chosen>. Source: <precedent path | guide path + scenario | advisor>. Gate: yes|no. Rejected: <option> because <one line>.
+
 <local, after auto-select — audit trail only; not a coding stop:>
 
 ### Local PO decisions
@@ -236,7 +242,7 @@ After the nested run: surface TBD and implicit in chat (same Step 6 rules). **ji
 
 ## Quality Notes
 
-- **Offline first**: Prefer `~/.agents/prds/<TASK-ID>.md`. Missing + `mode` jira → nested `download-jira-task`. Missing + `mode` local → nested `handoff` (PRD). Mark nested runs with `called_from: plan-implementation`.
+- **Offline first**: Prefer `~/.agents/prds/<TASK-ID>.md`. Missing + `mode` jira → nested `download-jira-task`. Missing + `mode` local → nested `write-prd`. Mark nested runs with `called_from: plan-implementation`.
 - **Enonic offline docs**: For XP/React4XP work, route via Step 4c (`~/.agents/kb/offline-reference/…/llm-index.md` for XP7, XP8, React4XP v5, React4XP v6) before inventing API/framework details.
 - **Language**: The generated Markdown file must always be in English, even if the PRD or user messages are in another language. Translate descriptions, comments, and criteria as needed.
 - **Comments drive criteria**: Comments are the most recent source of truth for requirements when they clearly extend or supersede. Do not surface raw comments in the output — absorb their intent into the criteria. Comment conflicts with no clear winner: **jira** → **TBD**; **local** → auto-select the recommended/later winner and record it as a Local PO decision.

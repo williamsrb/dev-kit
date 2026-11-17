@@ -1,25 +1,31 @@
-# Review: <ISSUE-KEY> — <Task Title>
+# Review: `<ISSUE-KEY>` — `<Task Title>`
 
 **Reviewer**: AI Code Reviewer
-**Date**: <YYYY-MM-DD>
-**Task file**: .tasks/<ISSUE-KEY>.md
+**Date**: `<YYYY-MM-DD>`
+**Requirements**: PRD `<path or n/a>`, plan `<path or n/a>`
 **Status**: [APPROVED | APPROVED WITH OBSERVATIONS | CHANGES REQUESTED]
 
 ## Summary
 
-<Brief summary of what was implemented and the overall quality assessment.>
+`<Brief summary of what was implemented and the overall quality assessment.>`
 
 ## Acceptance criteria
 
-| AC | Result |
-|----|--------|
-| <from plan, or "n/a — no plan ACs"> | PASS / FAIL / n/a |
+| AC | Result | Proof |
+|----|--------|-------|
+| <from plan, or "n/a — no plan ACs"> | PASS / FAIL / n/a | <ran: command / read: file:line / none> |
+
+## Spec alignment
+
+| PRD statement | Plan item | State | Gap |
+|---------------|-----------|-------|-----|
+| `<id>`: `<short quote>`, or "n/a — no PRD" | <AC / FR / Constraint / decision> | met / waived / open / unproven / unmet / contradicted | <none / plan gap / delivery gap, with the authorized deviation when waived> |
 
 ## Reviewed Files
 
 | File | Status | Issues |
 |------|--------|--------|
-| <file path> | [OK / Warning / Critical] | <count> |
+| `<file path>` | [OK / Warning / Critical] | `<count>` |
 
 ## Issues Found
 
@@ -38,10 +44,6 @@
 <Each: file:line — description and suggested fix. Notes/nits do not change Status to CHANGES REQUESTED.>
 <If none: "No minor issues found.">
 
-## Positive Highlights
-
-<List things that were done well.>
-
 ## Standards Compliance
 
 | Standard | Status |
@@ -56,7 +58,7 @@
 
 ## Recommendations
 
-<Numbered list of prioritized recommendations for improvement.>
+`<Numbered list of prioritized recommendations for improvement.>`
 
 ## Verdict
 

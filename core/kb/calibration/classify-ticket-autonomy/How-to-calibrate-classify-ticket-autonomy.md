@@ -1,3 +1,10 @@
+---
+id: how-to-calibrate-classify-ticket-autonomy
+when_skills: []
+read: section
+prose: caveman-lite
+---
+
 # How to calibrate classify-ticket-autonomy
 
 Re-calibrate after any change to the criteria, the hard stops, or `references/signals.json` in `~/.agents/skills/classify-ticket-autonomy/`. The skill itself carries no ticket keys. The precedent corpus and the keyed run log stay on the host.

@@ -1,6 +1,6 @@
 ---
 name: render-diff-patch
-description: "Render a unified diff or patch as side-by-side HTML and a screenshot (diff2html). Use to visualize a git diff, patch file, or code-review diff. | recommendedRole: deterministic."
+description: "Render a unified diff or patch as side-by-side HTML and a screenshot (diff2html). Use to visualize a git diff, patch file, or code-review diff."
 metadata:
   recommendedRole: deterministic
   cliDependencies:

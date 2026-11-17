@@ -148,14 +148,14 @@ Unaffected: URL + **Enter** in the Applications install input (`initUrlEnteredHa
 **An unauthenticated `curl` cannot prove an admin tool is mounted.** The admin auth filter runs
 before tool resolution, so a nonexistent tool name returns the same **401** as a real one:
 
-```
+```text
 /admin/io.x99.app.applications/appinstaller     -> 401
 /admin/io.x99.app.applications/nosuchtool       -> 401
 ```
 
 Positive deploy evidence without credentials is limited to `server.log`:
 
-```
+```text
 ApplicationRegistryImpl  - Installed application <key> bundle <n>
 ApplicationServiceImpl   - Local application [<key>] installed successfully
 ApplicationRegistryImpl  - Started application <key> bundle <n>

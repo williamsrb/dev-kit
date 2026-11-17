@@ -24,7 +24,7 @@ import subprocess
 import sys
 import time
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 FORK_ROOT = Path("/usr/lib/devkit")
@@ -109,7 +109,7 @@ class Skip(Exception):
 
 
 def log(msg: str) -> None:
-    ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S%z")
+    ts = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S%z")
     print(f"{ts} {msg}", flush=True)
 
 

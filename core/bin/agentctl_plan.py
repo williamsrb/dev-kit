@@ -9,10 +9,12 @@ import argparse
 import datetime as dt
 import hashlib
 import json
+import os
 import re
 from pathlib import Path
 from typing import Any
 
+import agentctl_config
 from agentctl_common import (
     HEADING_RE,
     agents_home,
@@ -41,6 +43,15 @@ PLAN_HEADINGS = {
     "evidence": ("auth-required", "acceptance-criteria", "evidence-steps", "artifacts",
                  "posting-gate"),
 }
+
+
+def task_mode(key: str) -> str:
+    """The tracker kind (default `jira`) when `key` is one of its issue keys, else `local`."""
+    try:
+        return agentctl_config.key_kind(key, ignore_case=True) or "local"
+    except agentctl_config.ConfigError as exc:
+        raise ValueError(str(exc)) from exc
+
 
 def plans_root() -> Path:
     return agents_home() / "plans"
@@ -330,6 +341,20 @@ def resolve_plan_target(task_id: str, *, plans_dir: Path, kind: str | None = Non
     }
 
 
+SCHEDULED_MENTION_RE = re.compile(r"(?i)\b(cron|scheduled (job|task|run)|scheduler|scheduling)\b")
+SCHEDULED_RUN_RE = re.compile(r"^\*\*Scheduled run:\*\*", re.MULTILINE)
+
+
+def scheduled_run_warnings(paths: list[Path], kind: str) -> list[str]:
+    """A warning, never an error: an evidence plan that mentions a scheduled job must say how the run is obtained."""
+    if kind != "evidence":
+        return []
+    text = "\n".join(path.read_text(encoding="utf-8") for path in paths)
+    if SCHEDULED_MENTION_RE.search(text) and not SCHEDULED_RUN_RE.search(text):
+        return ["evidence plan mentions a scheduled job or cron but has no **Scheduled run:** line (see templates.md)"]
+    return []
+
+
 def validate_plan_paths(paths: list[Path], kind: str, label: str) -> dict[str, Any]:
     sections = collect_headings(paths)
     present = {slug for section in sections for slug in section["slugs"]}
@@ -346,6 +371,7 @@ def validate_plan_paths(paths: list[Path], kind: str, label: str) -> dict[str, A
         "kind": kind,
         "missing_sections": missing,
         "unresolved_placeholders": unresolved,
+        "warnings": scheduled_run_warnings(paths, kind),
     }
     return payload
 
@@ -866,6 +892,48 @@ def cmd_plan_resolve(args: argparse.Namespace) -> int:
 
 
 
+def resolve_from_neutral_cwd(task_id: str, plans_dir: Path, kind: str) -> dict[str, Any]:
+    """A multitask root holds a worktree folder named like the task; resolve against the plans dir, not CWD."""
+    if not plans_dir.is_dir():
+        return {"status": "unresolved"}
+    previous = Path.cwd()
+    os.chdir(plans_dir)
+    try:
+        return resolve_plan_target(task_id, plans_dir=plans_dir, kind=kind)
+    finally:
+        os.chdir(previous)
+
+
+def find_worktree(task_id: str, cwd: Path) -> str | None:
+    if cwd.name == task_id and (cwd / ".git").exists():
+        return str(cwd)
+    for root in (Path.home() / "Workspace" / "Projects").glob("*-multitask"):
+        if (root / task_id / ".git").exists():
+            return str((root / task_id).resolve())
+    return None
+
+
+def cmd_plan_context(args: argparse.Namespace) -> int:
+    key = args.task_id.strip()
+    plans_dir = (args.plans_dir or plans_root()).resolve()
+    prd = agents_home() / "prds" / f"{key}.md"
+    plan = resolve_from_neutral_cwd(key, plans_dir, "implementation")
+    evidence = resolve_from_neutral_cwd(key, plans_dir, "evidence")
+    evidence_entry = evidence.get("entry") if evidence["status"] == "ok" else None
+    if evidence_entry and not evidence_entry.endswith(("/evidence.md", "-evidence-plan.md")):
+        evidence_entry = None
+    emit({
+        "status": "ok" if plan["status"] == "ok" or evidence_entry or prd.is_file() else "unresolved",
+        "task_id": key,
+        "mode": task_mode(key),
+        "prd": str(prd) if prd.is_file() else None,
+        "plan": plan.get("entry") if plan["status"] == "ok" else None,
+        "evidence_plan": evidence_entry,
+        "worktree": find_worktree(key, Path.cwd()),
+    })
+    return 0 if prd.is_file() or plan["status"] == "ok" or evidence_entry else 2
+
+
 def add_plan_parsers(group) -> None:
     init = group.add_parser(
         "init",
@@ -957,6 +1025,18 @@ def add_plan_parsers(group) -> None:
                          help="Write the stub sections. Default is a dry run.")
     migrate.add_argument("--json", action="store_true", help=argparse.SUPPRESS)
     migrate.set_defaults(func=cmd_plan_migrate)
+    context = group.add_parser(
+        "context",
+        help="Resolve PRD, plan, evidence plan, worktree and mode for a task key or slug.",
+        description=(
+            "One call for what pipeline skills need first: PRD path, implementation plan entry, "
+            "evidence plan entry, multitask worktree and mode (jira or local). Resolves against the "
+            "plans dir, not the CWD, so a multitask root does not shadow the plan."
+        ),
+    )
+    context.add_argument("task_id", help="Jira key or kebab slug.")
+    context.add_argument("--plans-dir", type=Path, default=None, help="Plans root. Defaults to ~/.agents/plans.")
+    context.set_defaults(func=cmd_plan_context)
     plan_resolve = group.add_parser(
         "resolve",
         help="Resolve a task id to plan entry, kind, and section index.",

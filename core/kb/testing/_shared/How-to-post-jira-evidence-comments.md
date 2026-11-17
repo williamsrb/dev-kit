@@ -92,7 +92,7 @@ Do not delete first. Do not reuse ids across a delete.
   The same HTML conversion also turns the mention into plain `@Name` text, wraps
   `<pre><code>` content in literal backticks, and splits `1.`/`2.` units around a code
   block into separate lists that each restart at 1 (PROJ-257 534133). Build the whole
-  body in ADF, and use `N. ` paragraph text for evidence units rather than `orderedList`.
+  body in ADF, and use `N.` paragraph text for evidence units rather than `orderedList`.
 - Two screenshots stacked into one PNG without a banner, black bar, and per-part
   labels look like one empty shot. Flag the merge in the image (PROJ-435 `08-featured-cards`).
 

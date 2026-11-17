@@ -65,7 +65,7 @@ Do **not** mix roles: testing How-tos are not API docs; offline-reference is not
 - Invented click paths, Guillotine queries, or admin URLs with no How-to and no offline-reference page → **FAIL**.
 - Do not treat `kb/testing` as a dump for screenshots or Jira comment prose.
 
-### Pass / fail
+### Pass / fail (KB usage)
 
 | Result | When |
 |--------|------|

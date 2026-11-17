@@ -1,6 +1,6 @@
 ---
 name: export-canvas-html
-description: "Export a Cursor `.canvas.tsx` file to a self-contained HTML page using Cursor's official canvas-runtime.esm.js and the live canvas host stylesheet. Use when the user wants to export, share, publish, or dump a Cursor canvas as HTML. | recommendedRole: deterministic | aliases: canvas-html, export-canvas, canvas-to-html."
+description: "Export a Cursor `.canvas.tsx` file to a self-contained HTML page using Cursor's official canvas-runtime.esm.js and the live canvas host stylesheet. Use when the user wants to export, share, publish, or dump a Cursor canvas as HTML."
 metadata:
   recommendedRole: deterministic
   aliases: canvas-html, export-canvas, canvas-to-html

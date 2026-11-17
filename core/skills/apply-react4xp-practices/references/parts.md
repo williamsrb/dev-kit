@@ -2,19 +2,21 @@
 
 Create and update parts.
 
-Reference: https://developer.enonic.com/docs/xp/stable/cms/parts
+Reference: <https://developer.enonic.com/docs/xp/stable/cms/parts>
 
 ## Location and Files
 
 **Descriptor + interfaces** (site layer):
-```
+
+```text
 site/parts/{part-name}/
 ├── {part-name}.xml       # Descriptor
 └── {part-name}.d.ts      # TypeScript interfaces
 ```
 
 **React4XP 6 implementation** (react4xp layer):
-```
+
+```text
 react4xp/components/parts/{part-name}/
 ├── {part-name}.tsx       # React component
 └── processor.ts          # Data processor
@@ -27,12 +29,14 @@ The part name follows kebab-case (e.g., `info-card`, `hero`).
 After creating the files, register the component in both central files.
 
 **`react4xp/dataFetcher.ts`:**
+
 ```typescript
 import { myPartProcessor } from './components/parts/my-part/processor';
 dataFetcher.addPart(`${app.name}:my-part`, { processor: myPartProcessor });
 ```
 
 **`react4xp/componentRegistry.tsx`:**
+
 ```typescript
 import { MyPart } from './components/parts/my-part/my-part';
 componentRegistry.addPart('com.example.{PROJECT_SHORT_NAME}:my-part', { View: MyPart });
@@ -143,6 +147,7 @@ export const PartName = ({ component, meta, data, common }: ComponentProps<Layou
 ## Example
 
 **`info-card.xml`**
+
 ```xml
 <part>
     <display-name i18n="part.info-card.display_name">Info Card</display-name>
@@ -161,6 +166,7 @@ export const PartName = ({ component, meta, data, common }: ComponentProps<Layou
 ```
 
 **`info-card.d.ts`**
+
 ```typescript
 import type { ExtendedRichTextData } from '@enonic/react-components';
 
@@ -176,6 +182,7 @@ export interface InfoCardPartProps {
 ```
 
 **`processor.ts`**
+
 ```typescript
 import { Component, NestedRecord, PartComponent } from '@enonic-types/core';
 import type { ComponentProcessor, DataFetcher } from '@enonic-types/lib-react4xp/DataFetcher';
@@ -202,6 +209,7 @@ function getComponentProps(config: NestedRecord, component: Component, dataFetch
 ```
 
 **`info-card.tsx`**
+
 ```typescript
 import { type ComponentProps, type LayoutData, RichText } from '@enonic/react-components';
 import type { InfoCardPartProps } from '/site/parts/info-card/info-card.d';
@@ -226,7 +234,7 @@ export const InfoCardPart = ({ component, meta, data, common }: ComponentProps<L
 
 See [i18n.md](./i18n.md) for the full key pattern. Part keys follow:
 
-```
+```text
 part.{name}.display_name
 part.{name}.{field_name}
 part.{name}.{field_name}.help-text
